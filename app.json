@@ -4,10 +4,10 @@
     "slug": "rookie",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "../../src/assets/images/lg.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "../../src/assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -30,7 +30,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "../../src/assets/icon.png",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.ttyyy",
@@ -52,12 +52,12 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "../../src/assets/favicon.png"
     },
     "scheme": "com.ttyyy",
     "extra": {
       "eas": {
-        "projectId": "c26c5b62-a0d5-4a98-85de-a1831c6ae25c"
+        "projectId": "f784c912-7d8f-4153-be43-0f9180000e90"
       }
     }
   }

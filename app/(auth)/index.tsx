@@ -9,7 +9,7 @@ const Auth = () => {
   const gifDisplayTime = 3000; // Set the GIF display time in milliseconds (e.g., 5000 = 5 seconds)
 
   let navigate_to_welcome = () => {
-    router.push('/(auth)/Onboarding'); // Navigate to the Onboarding screen
+    router.push('/(auth)/Onboarding'); // Navigate to the Onboarding screen     ////     (auth)/Onboarding
   };
 
   let loading_timeout = () => {
