@@ -1,0 +1,560 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  StatusBar,
+  Alert,
+  Image,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import imagepath from '../../src/constants/imagepath';
+
+// Import your PNG icons
+import DeleteIcon from '../../src/assets/images/bin.png';
+import LogoutIcon from '../../src/assets/images/door.png';
+import TickIcon from '../../src/assets/images/ticck.png';
+
+const GENDER_OPTIONS = ['Male', 'Female', 'Other'];
+const EXAM_OPTIONS = ['JEE Main', 'JEE Advanced', 'NEET', 'CUET', 'Other'];
+
+const aiBuddies = [
+ {
+    id: 1,
+    name: 'Jeetu Bhaiya',
+    description: 'No description needed, he is the legend himself.',
+    image: imagepath.Jeetu,
+    prompts: {
+      onCorrect: "Give a short not more than 15 words, cheerful message for getting a question correct.you are jeetu bhaiya who talks in hinglish.you call your students as bhai or didi as sarcasm. as Jeetu Bhaiya in hinglish.encourage them to solve more questions.",
+      onWrong: " Give a short not more than 15 words, supportive message for getting a question wrong as Jeetu Bhaiya in hinglish.encourage them to solve more questions.",
+      solutionPrefix: "you are jeetu bhaiya who talks in hinglish.you call your students as bhai or didi as sarcasm. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+    },
+  },
+
+   {
+    id: 2,
+    name: 'Riya',
+    description: 'Fast, logical and straight to the point – no fluff, only facts.',
+    image: imagepath.Riya,
+    prompts: {
+      onCorrect: "You are Riya, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, cheerful message for getting a question correct.encourage them to solve more questions.",
+      onWrong: "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, supportive message for getting a question wrong. Encourage them casually.encourage them to solve more questions.",
+      solutionPrefix: "You are Riya, a fun, teenage girl who replies in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+    },
+  },
+
+
+ {
+  id: 3,
+  name: 'Rei',
+  description: 'A charming anime boy with a sharp mind and soft heart — flirty, focused, and everyone’s secret crush 💫',
+  image: imagepath.Rei, // Replace with your anime guy image
+  prompts: {
+    onCorrect: "You are Rei, a handsome anime boy with a calm voice and playful charm. Give a short not more than 15 words, cheerful message for getting a question correct. Keep it sweet and a bit cheeky — like a guy who’s lowkey impressed.encourage them to solve more questions.",
+    onWrong: "You are Rei, a supportive anime guy who never lets anyone feel down. Give a short not more than 15 words, supportive message for getting a question wrong. Sound gentle, as if you're cheering them up personally. Use casual Hindi-English mix.encourage them to solve more questions.",
+    solutionPrefix: "You are Rei, a cool and intelligent anime boy. Explain the solution not more than 15 lines in a calm, confident, and charming tone. Keep it clear, concise, and step-by-step. Use Unicode math symbols (like ½, √, ²). Avoid sounding robotic — you're like the guy who always helps his crush study before exams.",
+  },
+  prompt: "You are Rei, a handsome, intelligent anime boy who is charming, calm, and slightly flirty. Use Hindi-English like a modern teen. Speak naturally, be a bit teasing but always respectful and kind. You're the type who girls secretly admire in class.",
+  text: "Kya baat hai… aaj toh tum full focus mein ho 😏",
+},
+ 
+  {
+    id: 4,
+    name: 'Ritu',
+    description: 'A fun, Hinglish-speaking teenage girl who explains concepts like your bestie!',
+    image: imagepath.Ritu,
+    prompts: {
+      onCorrect: "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, cheerful message for getting a question correct.encourage them to solve more questions.", 
+      onWrong: "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, supportive message for getting a question wrong. Encourage them casually.encourage them to solve more questions.",
+      solutionPrefix: "You are Ritu, a fun, teenage girl who replies in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+    },
+    prompt: 'You are Ritu, a fun, teenage girl who replies in Hinglish.avoid giving long responses. You never give boring answers. Be informal and talk like a high school girl from India.',
+    text: 'hey bestie, kya haal chaal 😉 ?',
+  },
+ {
+  id: 5,
+  name: 'Shreya',
+  description: 'Silent killer 🎮 Calm, focused gamer girl who always clutches.',
+  image: imagepath.Shreya, // keep or change image if you want to reflect the gamer look
+  prompts: {
+    onCorrect: "You are Shreya. You speak in short, chill Hinglish sentences. Give a short not more than 15 words, cool reaction for getting a question correct. No drama, just cool vibes.encourage them to solve more questions.",
+    onWrong: "You are Shreya. Speak in Hinglish and give a short not more than 15 words, supportive line when the user gets a question wrong. Avoid drama, focus on motivation.encourage them to solve more questions.",
+    solutionPrefix: "You are Shreya. Explain the solution in Hinglish, in less than 15 lines using Unicode math symbols like ½, √, ×, etc. Avoid LaTeX. Be clear and to the point, like you're giving callouts in a game. Friendly but minimal tone.",
+  },
+  prompt: "You are Shreya, an Indian gamer girl who is introverted but sharp. You speak calmly and prefer short Hinglish lines. You're confident like someone who top-frags quietly. Be cool, concise, and real.",
+  text: "yo, headset on. ready to win?",
+},
+  {
+    id: 6,
+    name: 'Neha',
+    description: 'Spicy & sassy 💅',
+    image: imagepath.Neha,
+    prompts: {
+      onCorrect: "you are Neha, a 17-year old indian girl who is a little sassy,You speak in a fun, casual Hinglish style, using lots of emojis and slang. Give a short not more than 15 words, cheerful message for getting a question correct.Avoid long responses.encourage them to solve more questions.",
+      onWrong: "you are Neha, a 17-year old indian girl who is a little sassy,You speak in a fun, casual Hinglish style, using lots of emojis and slang. Give a short not more than 15 words, supportive message for getting a question wrong. Encourage them casually.Avoid long responses.encourage them to solve more questions.",
+      solutionPrefix: "Explain the solution in a sassy Hinglish style as Neha for the question. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical.",
+    },
+    prompt: 'you are Neha, a 17-year old indian girl who is a little sassy and loves to gossip.avoid giving long responses. You speak in a fun, casual Hinglish style, using lots of emojis and slang. You’re all about the drama.',
+    text: 'hey, Neha this side 🙃',
+  },
+  {
+  id: 7,
+  name: 'Kaito',
+  description: 'Mysterious and sharp-eyed, Kaito only speaks when it matters.His vibe is cold-but-caring.🖤',
+  image: imagepath.Kaito,
+  prompts: {
+    onCorrect: "You are Kaito — mysterious, intelligent, and smooth. Give a short, subtle compliment that sounds cool and lowkey flirty. Never loud, always deep.encourage them to solve more questions.",
+    onWrong: "You are Kaito. Give a soft, mysterious encouragement when the user gets it wrong. Don't overexplain. Sound like a boy who understands quietly.encourage them to solve more questions.",
+    solutionPrefix: "Explain the solution in a sassy Hinglish style as Kaito for the question. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical.",
+  },
+  prompt: "You are Kaito, a cold and mysterious anime boy who secretly cares. Speak little, but make every word impactful. Use Hindi-English. Be calm, smart, and attractive through silence and simplicity.",
+  text: "Hmm... impressive. Tumhara potential underrated hai.",
+},
+{
+  id: 8,
+  name: 'Elise',
+  description: 'Topper girl with chashma and soft voice. Thodi si awkward but super smart. 🧠💗',
+  image: imagepath.Elise,
+  prompts: {
+    onCorrect: "You are Elise, a shy and intelligent anime girl. Give a short not more than 15 words, cheerful message for getting a question correct.encourage them to solve more questions.",
+    onWrong: "You are Elise. Give a gentle, supportive message when the user gets it wrong. Be encouraging, like a topper helping her crush.",
+    solutionPrefix: "You are Elise. Explain the solution in not more than 15 lines with patience and cuteness. Use Unicode math symbols (√, ×, ½). Keep it clear, simple, and helpful. Sound like a quiet girl helping a classmate she secretly likes.",
+  },
+  prompt: "You are Elise, a cute and smart anime girl. Speak soft Hindi-English, a little shy but very sweet. Always kind, and a little flustered when complimented.",
+  text: "Umm… you did it! M-mujhe pata tha tum kar loge 💕",
+},
+{
+  id: 9,
+  name: 'Sari',
+  description: 'Elegant and graceful like your senior crush. Talks sweetly but knows her stuff. Saree in class, sass in mind. 💫',
+  image: imagepath.Sari,
+  prompts: {
+    onCorrect: "You are Sari, a graceful anime girl who speaks in soft Hindi-English. Give a sweet, confident compliment with a light teasing tone, like a charming senior talking to a younger crush.encourage them to solve more questions.",
+    onWrong: "You are Sari. Encourage the user softly, like a didi who believes in them. Add a little wit or poetic tone in Hindi-English.encourage them to solve more questions.",
+    solutionPrefix: "Explain the solution in a sassy Hinglish style as Sari for the question. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical.",
+  },
+  prompt: "You are Sari, an elegant, graceful anime girl with senior-girl energy. Speak in polished yet playful Hindi-English. Be calm, composed, and encouraging with a tiny bit of teasing charm.",
+  text: "Aww, smart ho tum… ab bas thoda aur focus karo na, junior 😉✨",
+},
+{
+  id: 10,
+  name: 'Aarav',
+  description: 'Cute smile, golden heart, and topper brain 🧠❤️',
+
+  image: imagepath.Aarav,
+  prompts: {
+    onCorrect: "You are Aarav, a sweet and caring anime-style Indian boy. Respond softly and warmly with a cute compliment for getting the answer right. Keep it short and affectionate.encourage them to solve more questions.",
+    onWrong: "You are Aarav. Speak in a gentle, encouraging tone. Give a sweet message full of support and positivity like a comforting best friend.encourage them to solve more questions.",
+    solutionPrefix: "You are Aarav, a sweet and caring anime-style Indian boy in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+  },
+  prompt: "You are Aarav, a soft-spoken, affectionate, and sweet anime-style Indian boy. Talk in Hindi-English mix with warm energy. Be comforting and positive, like a golden retriever boyfriend vibe.",
+  text: "Aww nice try yaar✨",
+}
+
+];
+
+const Profile = () => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [gender, setGender] = useState('');
+  const [exam, setExam] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [selectedBuddy, setSelectedBuddy] = useState(4); // Default to Ritu
+  const navigation = useNavigation();
+
+  // Load user info from AsyncStorage
+  useEffect(() => {
+    (async () => {
+      const userStr = await AsyncStorage.getItem('@user');
+      const extraStr = await AsyncStorage.getItem('@user_extra');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setName(user.name || user.given_name || '');
+        setEmail(user.email || '');
+      }
+      if (extraStr) {
+        const extra = JSON.parse(extraStr);
+        setGender(extra.gender || '');
+        setExam(extra.exam || '');
+      }
+      const buddyStr = await AsyncStorage.getItem('selectedBuddy');
+      if (buddyStr) {
+        const buddy = JSON.parse(buddyStr);
+        setSelectedBuddy(buddy.id);
+      } else {
+        setSelectedBuddy(4); // Default to Ritu if nothing in storage
+      }
+    })();
+  }, []);
+
+  // Save updated info
+  const handleSave = async () => {
+    if (!name || !gender || !exam) {
+      Alert.alert('Please fill all fields');
+      return;
+    }
+  // Update @user name in AsyncStorage
+  const userStr = await AsyncStorage.getItem('@user');
+  if (userStr) {
+    const user = JSON.parse(userStr);
+    user.name = name;
+    await AsyncStorage.setItem('@user', JSON.stringify(user));
+  }
+  // Update @user_extra
+  await AsyncStorage.removeItem('@user_extra');
+  await AsyncStorage.setItem('@user_extra', JSON.stringify({ gender, exam }));
+  setEditing(false);
+
+};
+
+  // Buddy selection
+  const handleSelectBuddy = async (id) => {
+    setSelectedBuddy(id);
+    const buddy = aiBuddies.find(b => b.id === id);
+    await AsyncStorage.setItem('selectedBuddy', JSON.stringify(buddy));
+  };
+
+  // Logout: clear user and redirect to onboarding
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem('@user');
+    await AsyncStorage.removeItem('@user_extra');
+    await AsyncStorage.removeItem('selectedBuddy');
+    navigation.reset({
+      index: 0,
+      routes: [{ name: '(auth)/Onboarding' }],
+    });
+  };
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+      <Text style={styles.sectionTitle}>Personal information</Text>
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Full Name</Text>
+        <TextInput
+          style={styles.input}
+          value={name}
+          editable={editing}
+          onChangeText={setName}
+          placeholder="Enter your name"
+          placeholderTextColor="#888"
+        />
+      </View>
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Email</Text>
+        <TextInput
+          style={[styles.input, { color: '#888' }]}
+          value={email}
+          editable={false}
+          selectTextOnFocus={false}
+        />
+      </View>
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Gender</Text>
+        <View style={styles.genderRow}>
+          {GENDER_OPTIONS.map((g) => (
+            <TouchableOpacity
+              key={g}
+              style={[
+                styles.genderBtn,
+                gender === g && styles.genderBtnSelected,
+              ]}
+              onPress={() => editing && setGender(g)}
+              activeOpacity={editing ? 0.7 : 1}
+            >
+              <Text
+                style={[
+                  styles.genderBtnText,
+                  gender === g && styles.genderBtnTextSelected,
+                ]}
+              >
+                {g}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Exam Preparing For</Text>
+        <View style={styles.genderRow}>
+          {EXAM_OPTIONS.map((ex) => (
+            <TouchableOpacity
+              key={ex}
+              style={[
+                styles.examBtn,
+                exam === ex && styles.examBtnSelected,
+              ]}
+              onPress={() => editing && setExam(ex)}
+              activeOpacity={editing ? 0.7 : 1}
+            >
+              <Text
+                style={[
+                  styles.examBtnText,
+                  exam === ex && styles.examBtnTextSelected,
+                ]}
+              >
+                {ex}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+      <TouchableOpacity
+        style={[styles.saveBtn, { backgroundColor: editing ? '#FFFFFF' : '#222' }]}
+        onPress={() => (editing ? handleSave() : setEditing(true))}
+      >
+        <Text style={styles.saveBtnText}>{editing ? 'Save' : 'Edit'}</Text>
+      </TouchableOpacity>
+
+      {/* Buddy Selection */}
+      <Text style={styles.sectionTitle}>Select mentor</Text>
+      <Text style={styles.mentorDesc}>
+        A mentor is that character who will guide through your practice journey.
+      </Text>
+  <View style={styles.buddyList}>
+  {aiBuddies.map((item) => (
+    <TouchableOpacity
+      key={item.id}
+      activeOpacity={0.8}
+      style={[
+        styles.buddyCard,
+        selectedBuddy === item.id && styles.buddyCardSelected,
+      ]}
+      onPress={() => handleSelectBuddy(item.id)}
+    >
+      <Image
+        source={item.image}
+        style={styles.buddyImage}
+        resizeMode="cover"
+      />
+      <View style={{ flex: 1, marginLeft: 16, flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.buddyName}>{item.name}</Text>
+          <Text style={styles.buddyDescription}>{item.description}</Text>
+        </View>
+        {selectedBuddy === item.id && (
+          <Image source={TickIcon} style={styles.tickIcon} />
+        )}
+      </View>
+    </TouchableOpacity>
+  ))}
+</View>
+
+      <TouchableOpacity style={styles.deleteBtn}>
+        <View style={styles.iconRow}>
+          <Image source={DeleteIcon} style={styles.actionIcon} />
+          <Text style={styles.deleteBtnText}>Delete Account</Text>
+        </View>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <View style={styles.iconRow}>
+          <Image source={LogoutIcon} style={styles.actionIcon} />
+          <Text style={styles.logoutBtnText}>Logout</Text>
+        </View>
+      </TouchableOpacity>
+      <Text style={styles.versionText}>v1.0.1</Text>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+    paddingVertical: 30,
+    paddingHorizontal: 18,
+  },
+  sectionTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '500',
+    marginBottom: 18,
+    fontFamily: "geist",
+  },
+  mentorDesc: {
+    color: '#aaa',
+    fontSize: 13,
+    marginBottom: 10,
+    marginTop: -10,
+  },
+  inputGroup: {
+    marginBottom: 18,
+  },
+  label: {
+    color: '#fff',
+    fontSize: 13,
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  input: {
+    backgroundColor: '#0C111D',
+    color: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 16,
+    marginBottom: 0,
+    borderWidth: 0,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  genderBtn: {
+    backgroundColor: '#0C111D',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#262626',
+    marginBottom: 6,
+  },
+  genderBtnSelected: {
+    backgroundColor: '#fff',
+    borderColor: '#262626',
+  },
+  genderBtnText: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  genderBtnTextSelected: {
+    color: '#262626',
+    fontWeight: 'bold',
+  },
+  examBtn: {
+    backgroundColor: '#0C111D',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#222',
+    marginBottom: 6,
+  },
+  examBtnSelected: {
+    backgroundColor: '#fff',
+    borderColor: '#262626',
+  },
+  examBtnText: {
+    color: '#fff',
+    fontWeight: '500',
+    fontSize: 13,
+  },
+  examBtnTextSelected: {
+    color: '#222',
+    fontWeight: 'bold',
+  },
+  saveBtn: {
+    marginTop: 18,
+    borderRadius: 20,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  saveBtnText: {
+    color: '#000000',
+    fontWeight: 'bold',
+    fontSize: 17,
+    letterSpacing: 1,
+  },
+  buddyList: {
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  buddyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  buddyCardSelected: {
+    borderColor: '#1570EF',
+    backgroundColor: '#102A56',
+  },
+  buddyImage: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    marginRight: 10,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  buddyName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  tickIcon: {
+    width: 28,
+    height: 28,
+   marginLeft: 10,
+    resizeMode: 'contain',
+  },
+  buddyDescription: {
+    fontSize: 12,
+    color: '#CCC',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  iconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 8,
+    resizeMode: 'contain',
+  },
+  deleteBtn: {
+    backgroundColor: '#101828',
+    borderRadius: 20,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  deleteBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 17,
+    letterSpacing: 1,
+  },
+  logoutBtn: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  logoutBtnText: {
+    color: '#E53935',
+    fontWeight: 'bold',
+    fontSize: 17,
+    letterSpacing: 1,
+  },
+  versionText: {
+    color: '#888',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 18,
+  },
+});
+
+export default Profile;
