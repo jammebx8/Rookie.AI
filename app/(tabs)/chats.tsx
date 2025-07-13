@@ -205,7 +205,7 @@ const HomePage = () => {
                       id: item.id,
                       name: item.name,
                       description: item.description,
-                      image: item.image,
+                       image: JSON.stringify(item.image), // Convert image to string for navigation
                       prompt: item.prompt,
                       text: item.text,
                     }
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   },
   barName: {
     fontSize: moderateScale(16),
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     color: '#fff',
     fontFamily: 'Geist',
   },

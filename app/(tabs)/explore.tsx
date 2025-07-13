@@ -181,6 +181,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0C111D",
 paddingBottom: verticalScale(30),
+ paddingHorizontal: 12,
 
   },
   practiceRow: {
@@ -235,6 +236,7 @@ paddingBottom: verticalScale(30),
   dropdownText: {
     color: '#fff',
     fontSize: moderateScale(15),
+      fontFamily: 'Geist',
   },
   cardList: {
     marginTop: verticalScale(8),
@@ -276,7 +278,7 @@ paddingBottom: verticalScale(30),
   subjectName: {
     color: '#fff',
     fontSize: moderateScale(22),
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     letterSpacing: 0.2,
       fontFamily: 'Geist',
   },
@@ -290,7 +292,7 @@ paddingBottom: verticalScale(30),
   },
   subjectBadgeText: {
     fontSize: moderateScale(13),
-    fontWeight: 'bold',
+    fontWeight: 'medium',
       fontFamily: 'Geist',
   },
   subjectInfoRow: {

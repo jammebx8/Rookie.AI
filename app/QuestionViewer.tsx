@@ -15,7 +15,6 @@ import { Modal } from 'react-native';
 
 
 
-
  <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
 const windowWidth = Dimensions.get('window').width;
 const botGradient = ['#47006A', '#0031D0'];
@@ -65,7 +64,7 @@ const QuestionViewer = () => {
   const [buddy, setBuddy] = useState(null);
   const spinnerColorAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useState(new Animated.Value(0))[0];
-
+  const [showCorrectGif, setShowCorrectGif] = useState(false);
   // For follow-up AI
   const [aiFollowup, setAIFollowup] = useState<string | null>(null);
   const [aiFollowupLoading, setAIFollowupLoading] = useState(false);
@@ -259,9 +258,12 @@ const QuestionViewer = () => {
       const correct = selectedOption === currentQuestion.correctAnswer;
       setIsCorrect(correct);
 
-      if (correct) {
+         if (correct) {
+         
         const reward = rcRewards[currentQuestion.difficulty] || 0;
         setRookieCoins((prev) => prev + reward);
+        setShowCorrectGif(true); // Show the correct answer GIF
+        setTimeout(() => setShowCorrectGif(false), 4000 ); // Hide after 2.5 seconds
       }
 
       const msg = await getMotivation(correct);
@@ -276,17 +278,17 @@ const QuestionViewer = () => {
 
 
 
+
+
 const getMotivation = async (isCorrect) => {
   if (!buddy || !buddy.prompts) return '';
   try {
     // Fetch user info from AsyncStorage
-    const userStr = await AsyncStorage.getItem('@user');
-    const extraStr = await AsyncStorage.getItem('@user_extra');
+       const userStr = await AsyncStorage.getItem('@user');
     const user = userStr ? JSON.parse(userStr) : {};
-    const extra = extraStr ? JSON.parse(extraStr) : {};
 
     // Build user context string
-    const userContext = `You are talking to an 18-year-old ${extra.gender || 'student'} named ${user.name || ''}, who is preparing for ${extra.exam || 'an exam'}. `;
+    const userContext = `You are talking to an 18-year-old ${user.gender || 'student'} named ${user.name || ''}. `;
 
     const message = isCorrect
       ? `${userContext}${buddy.prompts.onCorrect}`
@@ -318,13 +320,11 @@ const getSolution = async (questionObj, followupType?: 'dig' | '5yr') => {
   if (!buddy || !buddy.prompts) return '';
   try {
     // Fetch user info from AsyncStorage
-    const userStr = await AsyncStorage.getItem('@user');
-    const extraStr = await AsyncStorage.getItem('@user_extra');
+       const userStr = await AsyncStorage.getItem('@user');
     const user = userStr ? JSON.parse(userStr) : {};
-    const extra = extraStr ? JSON.parse(extraStr) : {};
 
     // Build user context string
-    const userContext = `You are talking to an 18-year-old ${extra.gender || 'student'} named ${user.name || ''}, who is preparing for ${extra.exam || 'an exam'}. `;
+    const userContext = `You are talking to an 18-year-old ${user.gender || 'student'} named ${user.name || ''}. `;
 
     const optionsList = questionObj.options
       .map((opt, idx) => `${String.fromCharCode(65 + idx)}. ${opt}`)
@@ -342,7 +342,7 @@ Please provide a detailed solution to the question above in not more than 15 lin
     }
     if (followupType === '5yr') {
       message +=
-        '\nNow, explain the same solution as if you were talking to a 5-year-old child, using super simple language and analogies.';
+        '\nNow, explain the same solution in simplest way possible.';
     }
 
     const res = await axios.post(
@@ -679,6 +679,17 @@ User's answer: ${history[history.length-1].userAnswer}
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+   {/* Show GIF overlay on correct answer */}
+      {showCorrectGif && (
+        <View style={styles.fullScreenGifOverlay} pointerEvents="none">
+          <Image
+            source={require('../src/assets/images/c007.gif')}
+            style={styles.fullScreenGifImage}
+            resizeMode="cover"
+          />
+        </View>
+      )}
+     
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 260 }]}
@@ -858,6 +869,7 @@ User's answer: ${history[history.length-1].userAnswer}
                         </View>
                       )}
                       {!aiFollowup && (
+                     
                         <View style={styles.aiFollowupRow}>
                           <TouchableOpacity
                             style={styles.aiFollowupBtn}
@@ -876,11 +888,14 @@ User's answer: ${history[history.length-1].userAnswer}
                             <Text style={styles.aiFollowupBtnText}>Explain like 5yr old</Text>
                           </TouchableOpacity>
                         </View>
+                            
                       )}
                       {aiFollowupLoading && (
+                       
                         <View style={styles.aiFollowupRow}>
                           <ActivityIndicator size="small" color="#fff" />
                         </View>
+                        
                       )}
                     </LinearGradient>
                   ) : null}
@@ -904,7 +919,7 @@ User's answer: ${history[history.length-1].userAnswer}
               shadowRadius: 12,
               elevation: 6,
             }}>
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18, marginBottom: 8, fontFamily: 'Geist' }}>
+              <Text style={{ color: '#fff', fontWeight: 'medium', fontSize: 18, marginBottom: 8, fontFamily: 'Geist' }}>
                 Let's build your core concept clarity! 💡
               </Text>
               {conceptLoading && (
@@ -948,14 +963,14 @@ User's answer: ${history[history.length-1].userAnswer}
                       onPress={() => handleConceptUserResponse('I_understood')}
                       disabled={conceptDone}
                     >
-                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>I understood</Text>
+                      <Text style={{ color: '#fff', fontWeight: 'medium' }}>I understood</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={{ flex: 1, marginLeft: 8, backgroundColor: '#B42323', borderRadius: 12, padding: 12, alignItems: 'center' }}
                       onPress={() => handleConceptUserResponse('I_am_not_sure')}
                       disabled={conceptDone}
                     >
-                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>I'm not sure how to answer this</Text>
+                      <Text style={{ color: '#fff', fontWeight: 'medium' }}>I'm not sure how to answer this</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -974,7 +989,7 @@ User's answer: ${history[history.length-1].userAnswer}
                   }}
                   onPress={handleExitDigDeeper}
                 >
-                  <Text style={{ color: '#181C28', fontWeight: 'bold', fontSize: 15 }}>Return to solution</Text>
+                  <Text style={{ color: '#181C28', fontWeight: 'medium', fontSize: 15 }}>Return to solution</Text>
                 </TouchableOpacity>
                 {conceptDone && (
                   <TouchableOpacity
@@ -986,7 +1001,7 @@ User's answer: ${history[history.length-1].userAnswer}
                     }}
                     onPress={handleStartDigDeeper}
                   >
-                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>More concepts</Text>
+                    <Text style={{ color: '#fff', fontWeight: 'medium', fontSize: 15 }}>More concepts</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1002,12 +1017,21 @@ User's answer: ${history[history.length-1].userAnswer}
         animationType="fade"
         onRequestClose={() => setShowBackModal(false)}
       >
+       
         <View style={styles.modalOverlay}>
+         
+          
           <View style={styles.modalContent}>
+         
+         
             <View style={styles.modalIconBox}>
+          
+               
               <Feather name="alert-triangle" size={34} color="#FFFFFF" />
             </View>
+           
             <Text style={styles.modalTitle}>This will discard your input</Text>
+          
             <Text style={styles.modalSubtitle}>
               Keep the morale high, only few minutes are left
             </Text>
@@ -1272,7 +1296,7 @@ const styles = StyleSheet.create({
   },
   correctBadgeText: {
     color: '#1DC97A',
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     fontSize: 13,
     fontFamily: 'Geistmono',
     letterSpacing: 0.2,
@@ -1368,7 +1392,7 @@ const styles = StyleSheet.create({
   },
   characterName: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     fontSize: 16,
     marginBottom: 4,
     fontFamily: 'Geist',
@@ -1376,7 +1400,7 @@ const styles = StyleSheet.create({
   characterMessage: {
     color: '#fff',
     fontSize: 15,
-    fontStyle: 'italic',
+   
     lineHeight: 22,
     fontFamily: 'Geist',
   },
@@ -1425,7 +1449,8 @@ const styles = StyleSheet.create({
   rcText: {
     color: '#FFD700',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: 'medium',
+     fontFamily: 'Geist',
   },
   backButton: {
     flexDirection: 'row',
@@ -1461,7 +1486,7 @@ const styles = StyleSheet.create({
   navButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     fontFamily: 'Geist',
   },
   disabledButton: {
@@ -1508,7 +1533,7 @@ const styles = StyleSheet.create({
   footerBtnMainText: {
     color: '#fff',
     fontSize: 17,
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     fontFamily: 'Geist',
   },
   modalOverlay: {
@@ -1570,6 +1595,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginHorizontal: 7,
     opacity: 0.6,
+     fontFamily: 'Geist',
   },
   modalBtnRow: {
     flexDirection: 'row',
@@ -1609,6 +1635,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'Geist',
   },
+    fullScreenGifOverlay: {
+    position: 'absolute',
+    top: 350,
+    left: 0,
+    width: '100%',
+    height: '60%',
+    zIndex: 9999,
+
+ 
+  
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenGifImage: {
+    width: '100%',
+    height: '60%',
+    
+   
+  },
+
+  shine:{
+ position: 'absolute',
+ 
+ bottom:200,
+  width: 400,
+    height: 160,
+
+    
+ 
+
+
+  }
 });
 
 export default QuestionViewer;

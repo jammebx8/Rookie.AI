@@ -26,8 +26,6 @@ import * as FileSystem from 'expo-file-system';
 import images from '../src/constants/imagepath';
 import { LinearGradient } from 'expo-linear-gradient';
 
-
-
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -43,13 +41,11 @@ const getGroqReply = async (
   try {
     const userProfile = await AsyncStorage.getItem('userData');
 
- // Fetch user info from AsyncStorage
+    // Fetch user info from AsyncStorage
     const userStr = await AsyncStorage.getItem('@user');
-    const extraStr = await AsyncStorage.getItem('@user_extra');
     const user = userStr ? JSON.parse(userStr) : {};
-    const extra = extraStr ? JSON.parse(extraStr) : {};
-
-     const userContext = `You are chatting with an 18-year-old ${extra.gender || 'student'} named ${user.name || ''}, who is preparing for ${extra.exam || 'an exam'}.`;
+    // Compose context from user object
+    const userContext = `You are chatting with an 18-year-old ${user.gender || 'student'} named ${user.name || ''}, who is preparing for ${user.exam || 'an exam'}. `;
 
     const messages = [
       {
@@ -87,7 +83,7 @@ const getGroqReply = async (
       }
     );
 
-    return res.data.choices?.[0]?.message?.content || "Sorry, I didn’t get that.";
+    return res.data.choices?.[0]?.message?.content || "Sorry, I didn't get that.";
   } catch (err) {
     console.error('Groq error:', err.response?.data || err);
     return 'Error...try again.';
@@ -139,7 +135,7 @@ const getRelativeTime = (dateString: string | number | Date) => {
 };
 
 export default function MessageScreen() {
-  const { name, prompt, text } = useLocalSearchParams();
+  const { name, prompt, text, image } = useLocalSearchParams(); // Added image parameter
   const router = useRouter();
 
   const [message, setMessage] = useState('');
@@ -256,20 +252,36 @@ export default function MessageScreen() {
     flatListRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
+  // Function to get the image source - handles both string URIs and imported images
+  const getImageSource = (imageParam) => {
+    if (typeof imageParam === 'string') {
+      // If it's a string, it could be a URI or a reference to an imported image
+      try {
+        // Try to parse as JSON first (in case it's a stringified object)
+        return JSON.parse(imageParam);
+      } catch {
+        // If parsing fails, treat as URI
+        return { uri: imageParam };
+      }
+    }
+    // If it's already an object, return as is
+    return imageParam;
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0B0B28' }}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 :0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
             {/* Back Button */}
             <TouchableOpacity
-              onPress={() =>  router.replace('/chats')}
+              onPress={() => router.replace('/chats')}
               style={styles.backButton}
               hitSlop={{ top: 30, bottom: 30, left: 30, right: 12 }}
             >
@@ -277,10 +289,24 @@ export default function MessageScreen() {
                 source={require('../src/assets/images/caret-left.png')}
                 style={[styles.backIcon, { tintColor: '#FFFFFF' }]}
               />
+      
               <Text style={styles.backText}>Back</Text>
+
+               
+          
             </TouchableOpacity>
 
+            {/* Character Image */}
+            {image && (
+              <Image
+                source={getImageSource(image)}
+                style={styles.characterImage}
+                resizeMode="cover"
+              />
+            )}
+
             {/* Title */}
+            
             <Text style={styles.headerTitle}>{name}</Text>
 
             {/* Info Icon */}
@@ -400,12 +426,24 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(16),
     color: '#FFFFFF',
     marginLeft: scale(5),
+    fontFamily: "Geist"
+  },
+  characterImage: {
+    width: scale(40),
+    height: scale(40),
+    borderRadius: scale(20),
+  marginLeft: scale(40),
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
   headerTitle: {
     fontSize: moderateScale(18),
     color: '#FFFFFF',
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     textAlign: 'center',
+    flex: 1,
+    marginRight: scale(40),
+    fontFamily: "Geist"
   },
   infoButton: {
     padding: scale(5),
@@ -420,12 +458,14 @@ const styles = StyleSheet.create({
   messageText: {
     color: '#fff',
     fontSize: moderateScale(16),
+    fontFamily: "Geist"
   },
   timestamp: {
     fontSize: moderateScale(10),
     color: '#aaa',
     marginTop: verticalScale(4),
     alignSelf: 'flex-end',
+    fontFamily: "Geist"
   },
   inputContainer: {
     flexDirection: 'row',
@@ -451,6 +491,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: moderateScale(16),
     paddingVertical: verticalScale(10),
+    fontFamily: "Geist"
   },
   sendButton: {
     marginLeft: scale(10),

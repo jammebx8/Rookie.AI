@@ -474,6 +474,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: moderateScale(15),
     fontWeight: '500',
+     fontFamily: 'Geist',
   },
   chapterCardContent: {
     flex: 1,

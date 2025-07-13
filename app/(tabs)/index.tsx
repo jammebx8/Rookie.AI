@@ -20,7 +20,7 @@ const socialMediaLinks = [
   },
   {
     label: 'LinkedIn',
-    icon: require('../../src/assets/images/linkedin.png'),
+    icon: require('../../src/assets/images/icon link.png'),
     url: 'https://www.linkedin.com/in/dhruv-pathak-437a56365/',
   },
   {
@@ -171,6 +171,8 @@ export default function HomeScreen() {
             {formulaChapters.map((chapter, index) => {
               const bgColor = formulaCardColors[index % formulaCardColors.length];
               return (
+
+                
                 <TouchableOpacity
                   key={chapter.title}
                   activeOpacity={0.92}
@@ -180,6 +182,7 @@ export default function HomeScreen() {
                     setModalVisible(true);
                   }}
                 >
+                  
 
                      <Image
                     source={require('../../src/assets/images/layer.png')} // <-- Save the user image as 'dotted_overlay.png' in the same folder
@@ -194,18 +197,21 @@ export default function HomeScreen() {
                     {chapter.title.replace(/\.$/, '')}
                   </Text>
                   <View style={styles.cardFooterRow}>
-                    <Image source={require('../../src/assets/images/cardicon.png')} style={styles.cardIcon} />
+                    <Image source={require('../../src/assets/images/copy.png')} style={styles.cardIcon} />
                     <Text style={styles.cardCount}>{chapter.questions}</Text>
                     <View style={styles.cardArrowBtn}>
                       <Image source={imagepath.arrow} style={styles.cardArrowImg} />
                     </View>
                   </View>
+                 
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
+         
+            
         </View>
-
+ 
           {/* Modal for formula card */}
         <Modal
           visible={modalVisible}
@@ -358,7 +364,7 @@ export default function HomeScreen() {
 
         {/* Footer */}
         <Image
-          source={require('../../src/assets/images/foot.png')}
+          source={require('../../src/assets/images/banner.png')}
           style={styles.footerImage}
           resizeMode="contain"
         />
@@ -376,17 +382,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#101523',
+    
+    paddingHorizontal: 12,
   },
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: 30,
   },
   sectionTitle: {
     color: '#fff',
     fontSize: 19,
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     marginTop: 18,
     marginBottom: 12,
     marginLeft: 16,
+    fontFamily: 'Geist',
   },
   cardTabsContainer: {
     backgroundColor: '#1D2939',
@@ -394,7 +403,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
     paddingVertical: 14,
     marginBottom: 18,
-    paddingHorizontal: 8,
+    paddingHorizontal: 16,
+     
   },
   tabRow: {
     flexDirection: 'row',
@@ -415,6 +425,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 16,
+     fontFamily: 'Geist',
   },
   tabBtnTextActive: {
     color: '#000000',
@@ -436,6 +447,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     overflow: 'hidden',
+    opacity: 1,
   },
   formulaCardTitle: {
     color: '#fff',
@@ -449,6 +461,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     flexGrow: 0,
     flexWrap: 'nowrap',
+     fontFamily: 'Geist',
   },
   cardFooterRow: {
     flexDirection: 'row',
@@ -465,6 +478,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     marginRight: 10,
+     fontFamily: 'Geist',
   },
   cardArrowBtn: {
     width: 46,
@@ -508,9 +522,10 @@ const styles = StyleSheet.create({
   modalTitle: {
     color: '#fff',
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     marginBottom: 8,
     textAlign: 'center',
+     fontFamily: 'Geist',
   },
   modalSubtitle: {
     color: '#B5B5CA',
@@ -529,6 +544,7 @@ const styles = StyleSheet.create({
     color: '#181C28',
     fontWeight: '700',
     fontSize: 17,
+     fontFamily: 'Geist',
   },
   // Study Content
   studyGrid: {
@@ -572,6 +588,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginLeft: 2,
     marginBottom: 2,
+     fontFamily: 'Geist',
   },
   // Show More Button
   showMoreBtn: {
@@ -588,6 +605,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontWeight: '600',
     fontSize: 15,
+     fontFamily: 'Geist',
   },
   // Invite friends
   inviteBox: {
@@ -611,6 +629,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     marginTop: 2,
     fontFamily: "Geist"
+    
   },
   inviteSubtitle: {
     color: '#e5eaf7',
@@ -619,6 +638,7 @@ const styles = StyleSheet.create({
     marginBottom: 13,
     marginTop: 0,
     fontWeight: '400',
+     fontFamily: 'Geist',
   },
   inviteImage: {
     width: 400,
@@ -648,6 +668,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 17,
     textAlign: 'center',
+     fontFamily: 'Geist',
   },
   // Social Media
   socialBox: {
@@ -665,11 +686,12 @@ const styles = StyleSheet.create({
   },
   socialTitle: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     fontSize: 19,
     marginBottom: 2,
     marginTop: 2,
     textAlign: 'center',
+     fontFamily: 'Geist',
   },
   socialSub: {
     color: '#fff',
@@ -678,6 +700,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 0,
     fontWeight: '400',
+     fontFamily: 'Geist',
   },
   socialImage: {
     width: 400,
@@ -715,6 +738,7 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '700',
     fontSize: 15,
+     fontFamily: 'Geist',
   },
   // Footer
   footerClipWrapper: {
@@ -748,21 +772,22 @@ const styles = StyleSheet.create({
   },
   footerTextBold: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     fontSize: 24,
     marginBottom: 6,
-    fontFamily: 'System',
+    fontFamily: 'Geist',
   },
   footerText: {
     color: '#fff',
     fontSize: 22,
     marginBottom: 0,
-    fontFamily: 'System',
+    fontFamily: 'Geist',
   },
   footerRookie: {
     color: '#fff',
     fontSize: 22,
-    fontWeight: 'bold',
+    fontWeight: 'medium',
+     fontFamily: 'Geist',
   },
   footerImage: {
     width: '100%',
@@ -770,6 +795,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: 35, // for spacing above tab bar
     alignSelf: 'center',
+    
   },
 
   // Modal: new styles for the modal based on the reference image
@@ -806,6 +832,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
     marginRight: 8,
+     fontFamily: 'Geist',
   },
   fancyModalCloseX: {
     color: '#fff',
@@ -815,6 +842,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     marginTop: -2,
     marginRight: -4,
+     fontFamily: 'Geist',
   },
   fancyModalLineRow: {
     flexDirection: 'row',
@@ -862,5 +890,6 @@ const styles = StyleSheet.create({
     opacity: 1,
     pointerEvents: 'none', // ensures touch events pass through
   },
+
 
 });

@@ -170,23 +170,19 @@ const Profile = () => {
   useEffect(() => {
     (async () => {
       const userStr = await AsyncStorage.getItem('@user');
-      const extraStr = await AsyncStorage.getItem('@user_extra');
       if (userStr) {
         const user = JSON.parse(userStr);
         setName(user.name || user.given_name || '');
         setEmail(user.email || '');
-      }
-      if (extraStr) {
-        const extra = JSON.parse(extraStr);
-        setGender(extra.gender || '');
-        setExam(extra.exam || '');
+        setGender(user.gender || '');
+        setExam(user.exam || '');
       }
       const buddyStr = await AsyncStorage.getItem('selectedBuddy');
       if (buddyStr) {
         const buddy = JSON.parse(buddyStr);
         setSelectedBuddy(buddy.id);
       } else {
-        setSelectedBuddy(4); // Default to Ritu if nothing in storage
+        setSelectedBuddy(4);
       }
     })();
   }, []);
@@ -198,18 +194,18 @@ const Profile = () => {
       return;
     }
   // Update @user name in AsyncStorage
-  const userStr = await AsyncStorage.getItem('@user');
-  if (userStr) {
-    const user = JSON.parse(userStr);
-    user.name = name;
-    await AsyncStorage.setItem('@user', JSON.stringify(user));
-  }
-  // Update @user_extra
-  await AsyncStorage.removeItem('@user_extra');
-  await AsyncStorage.setItem('@user_extra', JSON.stringify({ gender, exam }));
-  setEditing(false);
-
-};
+    const userStr = await AsyncStorage.getItem('@user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      user.name = name;
+      user.gender = gender;
+      user.exam = exam;
+      await AsyncStorage.setItem('@user', JSON.stringify(user));
+    } else {
+      await AsyncStorage.setItem('@user', JSON.stringify({ name, gender, exam, email }));
+    }
+    setEditing(false);
+  };
 
   // Buddy selection
   const handleSelectBuddy = async (id) => {
@@ -230,7 +226,7 @@ const Profile = () => {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
       <Text style={styles.sectionTitle}>Personal information</Text>
       <View style={styles.inputGroup}>
@@ -367,19 +363,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     paddingVertical: 30,
     paddingHorizontal: 18,
+     paddingBottom: 60,
   },
   sectionTitle: {
     color: '#fff',
     fontSize: 20,
     fontWeight: '500',
     marginBottom: 18,
-    fontFamily: "geist",
+    fontFamily: "Geist",
   },
   mentorDesc: {
     color: '#aaa',
     fontSize: 13,
     marginBottom: 10,
     marginTop: -10,
+     fontFamily: 'Geist',
   },
   inputGroup: {
     marginBottom: 18,
@@ -389,6 +387,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 6,
     fontWeight: '500',
+     fontFamily: 'Geist',
   },
   input: {
     backgroundColor: '#0C111D',
@@ -422,11 +421,13 @@ const styles = StyleSheet.create({
   },
   genderBtnText: {
     color: '#fff',
-    fontWeight: '500',
+    fontWeight: 'medium',
+     fontFamily: 'Geist',
   },
   genderBtnTextSelected: {
     color: '#262626',
-    fontWeight: 'bold',
+    fontWeight: 'medium',
+     fontFamily: 'Geist',
   },
   examBtn: {
     backgroundColor: '#0C111D',
@@ -446,10 +447,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '500',
     fontSize: 13,
+     fontFamily: 'Geist',
   },
   examBtnTextSelected: {
     color: '#222',
-    fontWeight: 'bold',
+    fontWeight: 'medium',
+     fontFamily: 'Geist',
   },
   saveBtn: {
     marginTop: 18,
@@ -460,9 +463,10 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     color: '#000000',
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     fontSize: 17,
     letterSpacing: 1,
+     fontFamily: 'Geist',
   },
   buddyList: {
     marginTop: 10,
@@ -492,9 +496,10 @@ const styles = StyleSheet.create({
   },
   buddyName: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     color: '#fff',
     marginBottom: 2,
+     fontFamily: 'Geist',
   },
   tickIcon: {
     width: 28,
@@ -507,6 +512,7 @@ const styles = StyleSheet.create({
     color: '#CCC',
     marginTop: 2,
     lineHeight: 16,
+     fontFamily: 'Geist',
   },
   iconRow: {
     flexDirection: 'row',
@@ -531,9 +537,10 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     fontSize: 17,
     letterSpacing: 1,
+     fontFamily: 'Geist',
   },
   logoutBtn: {
     backgroundColor: '#fff',
@@ -545,15 +552,17 @@ const styles = StyleSheet.create({
   },
   logoutBtnText: {
     color: '#E53935',
-    fontWeight: 'bold',
+    fontWeight: 'medium',
     fontSize: 17,
     letterSpacing: 1,
+     fontFamily: 'Geist',
   },
   versionText: {
     color: '#888',
     fontSize: 13,
     textAlign: 'center',
     marginTop: 18,
+     fontFamily: 'Geist',
   },
 });
 
