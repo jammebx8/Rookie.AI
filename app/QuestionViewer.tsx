@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, ImageBackground, Dimensions ,StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, ImageBackground, Dimensions, StatusBar } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { questionsData } from '../app/questions';
@@ -11,15 +11,15 @@ import imagepath from '../src/constants/imagepath';
 import { moderateScale, scale } from 'react-native-size-matters';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Modal } from 'react-native';
- import LoadSolGif from '../src/assets/images/loadsol.gif'; // Place your loading.gif in this path
+import LoadSolGif from '../src/assets/images/loadsol.gif';
+import NetInfo from '@react-native-community/netinfo'; 
 
-
-
- <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
 const windowWidth = Dimensions.get('window').width;
 const botGradient = ['#47006A', '#0031D0'];
 const GROQ_API_KEY = 'REMOVED';
 const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
+const BOOKMARKS_KEY = 'bookmarkedQuestions';
+
 
 const getSubjectImage = (subjectName) => {
   if (subjectName === 'Physics') return imagepath.Physics;
@@ -29,7 +29,6 @@ const getSubjectImage = (subjectName) => {
   return imagepath.Maths;
 };
 
-// Store a weak concept in async storage
 const storeWeakConcept = async ({ concept, question }) => {
   try {
     const prev = await AsyncStorage.getItem(WEAK_CONCEPTS_KEY);
@@ -41,9 +40,7 @@ const storeWeakConcept = async ({ concept, question }) => {
       date: new Date().toISOString(),
     });
     await AsyncStorage.setItem(WEAK_CONCEPTS_KEY, JSON.stringify(arr));
-  } catch (err) {
-    // Optionally handle error
-  }
+  } catch (err) {}
 };
 
 const QuestionViewer = () => {
@@ -65,9 +62,13 @@ const QuestionViewer = () => {
   const spinnerColorAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useState(new Animated.Value(0))[0];
   const [showCorrectGif, setShowCorrectGif] = useState(false);
-  // For follow-up AI
   const [aiFollowup, setAIFollowup] = useState<string | null>(null);
   const [aiFollowupLoading, setAIFollowupLoading] = useState(false);
+    const [isConnected, setIsConnected] = useState(true);
+ const [bookmarked, setBookmarked] = useState(false);
+
+
+
 
   // Dig Deeper Adaptive Concept Diagnostic
   const [isDigging, setIsDigging] = useState(false);
@@ -76,6 +77,76 @@ const QuestionViewer = () => {
   const [conceptLoading, setConceptLoading] = useState(false);
   const [conceptFeedback, setConceptFeedback] = useState('');
   const [conceptDone, setConceptDone] = useState(false);
+
+  // For Dig Deeper option highlight
+  const [digDeepSelected, setDigDeepSelected] = useState<string | null>(null);
+
+
+
+
+
+
+
+
+
+
+    // Check bookmarked state on focus and question change
+  useEffect(() => {
+    const checkBookmarked = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
+        if (!stored) {
+          setBookmarked(false);
+          return;
+        }
+        const arr = JSON.parse(stored);
+        const currentQuestion = questions[currentIndex];
+        if (!currentQuestion) return;
+        const isBookmarked = arr.some(
+          (q) =>
+            q.question === currentQuestion.question &&
+            q.chapterTitle === chapterTitle &&
+            q.subjectName === subjectName
+        );
+        setBookmarked(isBookmarked);
+      } catch (e) {
+        setBookmarked(false);
+      }
+    };
+    if (questions.length > 0) checkBookmarked();
+  }, [currentIndex, questions, chapterTitle, subjectName]);
+
+  // Bookmark handler
+  const handleBookmark = async () => {
+    try {
+      const currentQuestion = questions[currentIndex];
+      if (!currentQuestion) return;
+      const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
+      let arr = stored ? JSON.parse(stored) : [];
+
+      if (!bookmarked) {
+        arr.push({
+          ...currentQuestion,
+          chapterTitle,
+          subjectName,
+          index: currentIndex,
+        });
+        await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
+        setBookmarked(true);
+      } else {
+        arr = arr.filter(
+          (q) =>
+            !(
+              q.question === currentQuestion.question &&
+              q.chapterTitle === chapterTitle &&
+              q.subjectName === subjectName
+            )
+        );
+        await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
+        setBookmarked(false);
+      }
+    } catch (e) {}
+  };
 
   useEffect(() => {
     const chapterQuestions = questionsData[chapterTitle] || [];
@@ -91,9 +162,7 @@ const QuestionViewer = () => {
       try {
         const savedCoins = await AsyncStorage.getItem('rookieCoins');
         setRookieCoins(savedCoins ? parseInt(savedCoins, 10) : 0);
-      } catch (error) {
-        console.error('Failed to load Rookie Coins:', error);
-      }
+      } catch (error) {}
     };
     loadRookieCoins();
   }, []);
@@ -102,9 +171,7 @@ const QuestionViewer = () => {
     const saveRookieCoins = async () => {
       try {
         await AsyncStorage.setItem('rookieCoins', rookieCoins.toString());
-      } catch (error) {
-        console.error('Failed to save Rookie Coins:', error);
-      }
+      } catch (error) {}
     };
     saveRookieCoins();
   }, [rookieCoins]);
@@ -134,6 +201,21 @@ const QuestionViewer = () => {
     return () => animation && animation.stop();
   }, [loading]);
 
+
+
+
+    // Add useEffect to listen for connection change
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsConnected(!!state.isConnected);
+    });
+    // Check once immediately on mount
+    NetInfo.fetch().then(state => {
+      setIsConnected(!!state.isConnected);
+    });
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     const loadBuddy = async () => {
       try {
@@ -155,9 +237,7 @@ const QuestionViewer = () => {
           setBuddy(defaultBuddy);
           await AsyncStorage.setItem('selectedBuddy', JSON.stringify(defaultBuddy));
         }
-      } catch (error) {
-        console.error('Error loading buddy:', error);
-      }
+      } catch (error) {}
     };
     loadBuddy();
   }, []);
@@ -220,6 +300,7 @@ const QuestionViewer = () => {
     setConceptHistory([]);
     setConceptFeedback('');
     setConceptDone(false);
+    setDigDeepSelected(null);
 
     const nextIndex = getNextIndex(isCorrect);
     if (nextIndex != null) {
@@ -258,12 +339,11 @@ const QuestionViewer = () => {
       const correct = selectedOption === currentQuestion.correctAnswer;
       setIsCorrect(correct);
 
-         if (correct) {
-         
+      if (correct) {
         const reward = rcRewards[currentQuestion.difficulty] || 0;
         setRookieCoins((prev) => prev + reward);
         setShowCorrectGif(true); // Show the correct answer GIF
-        setTimeout(() => setShowCorrectGif(false), 4000 ); // Hide after 2.5 seconds
+        setTimeout(() => setShowCorrectGif(false), 4000); // Hide after 2.5 seconds
       }
 
       const msg = await getMotivation(correct);
@@ -276,97 +356,80 @@ const QuestionViewer = () => {
     }
   };
 
-
-
-
-
-const getMotivation = async (isCorrect) => {
-  if (!buddy || !buddy.prompts) return '';
-  try {
-    // Fetch user info from AsyncStorage
-       const userStr = await AsyncStorage.getItem('@user');
-    const user = userStr ? JSON.parse(userStr) : {};
-
-    // Build user context string
-    const userContext = `You are talking to an 18-year-old ${user.gender || 'student'} named ${user.name || ''}. `;
-
-    const message = isCorrect
-      ? `${userContext}${buddy.prompts.onCorrect}`
-      : `${userContext}${buddy.prompts.onWrong}`;
-
-    const res = await axios.post(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: message }],
-        temperature: 0.7,
-        max_tokens: 50,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${GROQ_API_KEY}`,
+  const getMotivation = async (isCorrect) => {
+    if (!buddy || !buddy.prompts) return '';
+    try {
+      const userStr = await AsyncStorage.getItem('@user');
+      const user = userStr ? JSON.parse(userStr) : {};
+      const userContext = `You are talking to an 18-year-old ${user.gender || 'student'} named ${user.name || ''}. `;
+      const message = isCorrect
+        ? `${userContext}${buddy.prompts.onCorrect}`
+        : `${userContext}${buddy.prompts.onWrong}`;
+      const res = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: message }],
+          temperature: 0.7,
+          max_tokens: 50,
         },
-      }
-    );
-    return res.data.choices?.[0]?.message?.content || '';
-  } catch (error) {
-    console.error('Motivation fetch failed:', error);
-    return '';
-  }
-};
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+          },
+        }
+      );
+      return res.data.choices?.[0]?.message?.content || '';
+    } catch (error) {
+      return '';
+    }
+  };
 
-const getSolution = async (questionObj, followupType?: 'dig' | '5yr') => {
-  if (!buddy || !buddy.prompts) return '';
-  try {
-    // Fetch user info from AsyncStorage
-       const userStr = await AsyncStorage.getItem('@user');
-    const user = userStr ? JSON.parse(userStr) : {};
+  const getSolution = async (questionObj, followupType?: 'dig' | '5yr') => {
+    if (!buddy || !buddy.prompts) return '';
+    try {
+      const userStr = await AsyncStorage.getItem('@user');
+      const user = userStr ? JSON.parse(userStr) : {};
+      const userContext = `You are talking to an 18-year-old ${user.gender || 'student'} named ${user.name || ''}. `;
 
-    // Build user context string
-    const userContext = `You are talking to an 18-year-old ${user.gender || 'student'} named ${user.name || ''}. `;
-
-    const optionsList = questionObj.options
-      .map((opt, idx) => `${String.fromCharCode(65 + idx)}. ${opt}`)
-      .join('\n');
-    let message = `${userContext}${buddy.prompts.solutionPrefix}
+      const optionsList = questionObj.options
+        .map((opt, idx) => `${String.fromCharCode(65 + idx)}. ${opt}`)
+        .join('\n');
+      let message = `${userContext}${buddy.prompts.solutionPrefix}
 Question: "${questionObj.question}"
 Options:
 ${optionsList}
 Correct Answer: ${questionObj.correctAnswer}
 Please provide a detailed solution to the question above in not more than 15 lines`;
 
-    if (followupType === 'dig') {
-      message +=
-        '\nNow, dig deeper and provide more advanced insights, connections, or extra detailed solution.';
-    }
-    if (followupType === '5yr') {
-      message +=
-        '\nNow, explain the same solution in simplest way possible.';
-    }
-
-    const res = await axios.post(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: message }],
-        temperature: 0.7,
-        max_tokens: 400,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-        },
+      if (followupType === 'dig') {
+        message += '\nNow, dig deeper and provide more advanced insights, connections, or extra detailed solution.';
       }
-    );
-    return res.data.choices?.[0]?.message?.content || '';
-  } catch (error) {
-    console.error('Solution fetch failed:', error);
-    return '';
-  }
-};
-// ...rest of your code...
+      if (followupType === '5yr') {
+        message += '\nNow, explain the same solution in simplest way possible.';
+      }
+
+      const res = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: message }],
+          temperature: 0.7,
+          max_tokens: 400,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+          },
+        }
+      );
+      return res.data.choices?.[0]?.message?.content || '';
+    } catch (error) {
+      return '';
+    }
+  };
 
   const handleAIFollowup = async (type: 'dig' | '5yr') => {
     setAIFollowupLoading(true);
@@ -375,7 +438,6 @@ Please provide a detailed solution to the question above in not more than 15 lin
     setAIFollowupLoading(false);
   };
 
-  // --------- DIG DEEPER: Concept-based Adaptive Diagnostic MCQ FLOW ---------
   const getConceptDiagnosticPrompt = (questionObj, history, lastConcept, lastLevel, lastWasCorrect, lastExplanation) => {
     if (history.length === 0) {
       return `
@@ -438,7 +500,6 @@ User's answer: ${history[history.length-1].userAnswer}
 `;
   };
 
-  // Parse concept MCQ (may have explanation if last was wrong)
   const parseConceptMCQ = (llmText) => {
     let explanation = '';
     let concept = '';
@@ -479,6 +540,7 @@ User's answer: ${history[history.length-1].userAnswer}
     setConceptHistory([]);
     setConceptFeedback('');
     setConceptDone(false);
+    setDigDeepSelected(null);
 
     try {
       const prompt = getConceptDiagnosticPrompt(questions[currentIndex], [], null, 1, false, '');
@@ -506,15 +568,17 @@ User's answer: ${history[history.length-1].userAnswer}
     }
   };
 
-  // Handles both MCQ option and the two bottom buttons
   const handleConceptUserResponse = async (typeOrKey) => {
     if (!conceptMCQ || conceptDone) return;
     const mcq = conceptMCQ.mcq;
     let history = [...conceptHistory];
 
-    // "I understood"
+    // Track selected option for highlight
+    if (['A','B','C','D'].includes(typeOrKey)) {
+      setDigDeepSelected(typeOrKey);
+    }
+
     if (typeOrKey === 'I_understood') {
-      // Equivalent to correct answer, but not incrementing MCQ count
       history.push({
         mcq, userAnswer: 'I_understood', correct: true, concept: mcq.concept, level: mcq.level
       });
@@ -524,7 +588,6 @@ User's answer: ${history[history.length-1].userAnswer}
       return;
     }
 
-    // "I'm not sure..." - Store weak concept and treat as incorrect
     if (typeOrKey === 'I_am_not_sure') {
       await storeWeakConcept({ concept: mcq.concept, question: mcq.question });
       history.push({
@@ -532,8 +595,8 @@ User's answer: ${history[history.length-1].userAnswer}
       });
       setConceptHistory(history);
       setConceptFeedback('Thanks! We have saved this as your weak spot. Let\'s break it down further...');
-      // Proceed as incorrect for breakdown
       setConceptLoading(true);
+      setDigDeepSelected(null);
       try {
         const prompt = getConceptDiagnosticPrompt(
           questions[currentIndex],
@@ -585,6 +648,7 @@ User's answer: ${history[history.length-1].userAnswer}
         return;
       }
       setConceptLoading(true);
+      setDigDeepSelected(null);
       try {
         const prompt = getConceptDiagnosticPrompt(
           questions[currentIndex],
@@ -619,6 +683,7 @@ User's answer: ${history[history.length-1].userAnswer}
     } else {
       setConceptLoading(true);
       setConceptFeedback('');
+      setDigDeepSelected(null);
       try {
         const prompt = getConceptDiagnosticPrompt(
           questions[currentIndex],
@@ -659,6 +724,7 @@ User's answer: ${history[history.length-1].userAnswer}
     setConceptHistory([]);
     setConceptFeedback('');
     setConceptDone(false);
+    setDigDeepSelected(null);
   };
 
   // ---------- UI Rendering ----------
@@ -679,7 +745,7 @@ User's answer: ${history[history.length-1].userAnswer}
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
-   {/* Show GIF overlay on correct answer */}
+    
       {showCorrectGif && (
         <View style={styles.fullScreenGifOverlay} pointerEvents="none">
           <Image
@@ -689,7 +755,6 @@ User's answer: ${history[history.length-1].userAnswer}
           />
         </View>
       )}
-     
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 260 }]}
@@ -822,18 +887,17 @@ User's answer: ${history[history.length-1].userAnswer}
 
           {/* Motivation and Solution AI Gradient, with follow-up buttons */}
           {isCorrect !== null && (
-  <>
-    {loading ? (
-      <View style={{ alignItems: 'center', marginVertical: 10 }}>
-        <Image
-          source={LoadSolGif}
-          style={{ width: 80, height: 80 }}
-          resizeMode="contain"
-        />
-        <Text style={{ color: '#aaa', marginTop: 10 }}>Generating feedback...</Text>
-      </View>
-    ) : (
-   
+            <>
+              {loading ? (
+                <View style={{ alignItems: 'center', marginVertical: 10 }}>
+                  <Image
+                    source={LoadSolGif}
+                    style={{ width: 80, height: 80 }}
+                    resizeMode="contain"
+                  />
+                  <Text style={{ color: '#aaa', marginTop: 10 }}>Generating feedback...</Text>
+                </View>
+              ) : (
                 <>
                   {motivation ? (
                     <LinearGradient
@@ -869,7 +933,6 @@ User's answer: ${history[history.length-1].userAnswer}
                         </View>
                       )}
                       {!aiFollowup && (
-                     
                         <View style={styles.aiFollowupRow}>
                           <TouchableOpacity
                             style={styles.aiFollowupBtn}
@@ -888,14 +951,11 @@ User's answer: ${history[history.length-1].userAnswer}
                             <Text style={styles.aiFollowupBtnText}>Explain like 5yr old</Text>
                           </TouchableOpacity>
                         </View>
-                            
                       )}
                       {aiFollowupLoading && (
-                       
                         <View style={styles.aiFollowupRow}>
                           <ActivityIndicator size="small" color="#fff" />
                         </View>
-                        
                       )}
                     </LinearGradient>
                   ) : null}
@@ -906,106 +966,61 @@ User's answer: ${history[history.length-1].userAnswer}
 
           {/* --- Dig Deeper Concept Adaptive Diagnostic Modal --- */}
           {isDigging && (
-            <View style={{
-              marginTop: 32,
-              marginHorizontal: 0,
-              padding: 16,
-              borderRadius: 18,
-              backgroundColor: '#181C28',
-              borderWidth: 1.2,
-              borderColor: '#3A4363',
-              shadowColor: '#000',
-              shadowOpacity: 0.15,
-              shadowRadius: 12,
-              elevation: 6,
-            }}>
-              <Text style={{ color: '#fff', fontWeight: 'medium', fontSize: 18, marginBottom: 8, fontFamily: 'Geist' }}>
-                Let's build your core concept clarity! 💡
-              </Text>
-              {conceptLoading && (
-                <View style={{ alignItems: 'center', marginVertical: 16 }}>
-                  <ActivityIndicator size="large" color="#fff" />
-                  <Text style={{ color: '#ccc', marginTop: 8 }}>Loading a targeted question...</Text>
-                </View>
-              )}
-              {!conceptLoading && conceptMCQ && conceptMCQ.mcq && (
-                <>
-                  {conceptMCQ.mcq.explanation ? (
-                    <Text style={{ color: '#FFD34E', fontSize: 15, marginBottom: 8, fontFamily: 'Geistmono' }}>{conceptMCQ.mcq.explanation}</Text>
-                  ) : null}
-                  <Text style={{ color: '#FFD34E', fontWeight: '600', fontSize: 15, marginBottom: 2 }}>{conceptMCQ.mcq.concept} (Level {conceptMCQ.mcq.level})</Text>
-                  <Text style={{ color: '#fff', fontSize: 16, marginBottom: 18 }}>{conceptMCQ.mcq.question}</Text>
-                  {conceptMCQ.mcq.options.map((opt, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={{
-                        backgroundColor: '#262F4C',
-                        borderRadius: 8,
-                        borderWidth: 1.2,
-                        borderColor: '#344054',
-                        paddingVertical: 12,
-                        paddingHorizontal: 16,
-                        marginBottom: 10,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                      }}
-                      onPress={() => handleConceptUserResponse(['A', 'B', 'C', 'D'][idx])}
-                      disabled={conceptDone}
-                    >
-                      <Text style={{ color: '#fff', fontSize: 16, fontWeight: '500', marginRight: 6 }}>{String.fromCharCode(65 + idx)}.</Text>
-                      <Text style={{ color: '#fff', fontSize: 16 }}>{opt}</Text>
-                    </TouchableOpacity>
-                  ))}
-                  {/* Two bottom buttons */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-                    <TouchableOpacity
-                      style={{ flex: 1, marginRight: 8, backgroundColor: '#1DC97A', borderRadius: 12, padding: 12, alignItems: 'center' }}
-                      onPress={() => handleConceptUserResponse('I_understood')}
-                      disabled={conceptDone}
-                    >
-                      <Text style={{ color: '#fff', fontWeight: 'medium' }}>I understood</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={{ flex: 1, marginLeft: 8, backgroundColor: '#B42323', borderRadius: 12, padding: 12, alignItems: 'center' }}
-                      onPress={() => handleConceptUserResponse('I_am_not_sure')}
-                      disabled={conceptDone}
-                    >
-                      <Text style={{ color: '#fff', fontWeight: 'medium' }}>I'm not sure how to answer this</Text>
-                    </TouchableOpacity>
+            <LinearGradient
+              colors={botGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.digDeepGradientBox}
+            >
+              <View style={styles.digDeepInnerBox}>
+                <Text style={styles.digDeepLead}>Let's build your concept clarity...</Text>
+                <Text style={styles.digDeepSubLead}>Acha ye bata:</Text>
+                {conceptLoading && (
+                  <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={{ color: '#ccc', marginTop: 8 }}>Loading a targeted question...</Text>
                   </View>
-                </>
-              )}
-              {conceptFeedback ? (
-                <Text style={{ color: conceptDone ? '#1DC97A' : '#FFD34E', marginTop: 12, fontSize: 15, fontFamily: 'Geistmono' }}>{conceptFeedback}</Text>
-              ) : null}
-              <View style={{ flexDirection: 'row', marginTop: 18, justifyContent: 'flex-end' }}>
-                <TouchableOpacity
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 18,
-                    backgroundColor: '#fff',
-                    borderRadius: 18,
-                    marginRight: 12,
-                  }}
-                  onPress={handleExitDigDeeper}
-                >
-                  <Text style={{ color: '#181C28', fontWeight: 'medium', fontSize: 15 }}>Return to solution</Text>
-                </TouchableOpacity>
-                {conceptDone && (
-                  <TouchableOpacity
-                    style={{
-                      paddingVertical: 8,
-                      paddingHorizontal: 18,
-                      backgroundColor: '#3270FF',
-                      borderRadius: 18,
-                    }}
-                    onPress={handleStartDigDeeper}
-                  >
-                    <Text style={{ color: '#fff', fontWeight: 'medium', fontSize: 15 }}>More concepts</Text>
-                  </TouchableOpacity>
+                )}
+                {!conceptLoading && conceptMCQ && conceptMCQ.mcq && (
+                  <>
+                    <Text style={styles.digDeepQText}>{conceptMCQ.mcq.question}</Text>
+                    <View style={{ marginTop: 15, marginBottom: 18 }}>
+                      {conceptMCQ.mcq.options.map((opt, idx) => {
+                        const letter = ['A', 'B', 'C', 'D'][idx];
+                        const isSelected = digDeepSelected === letter;
+                        return (
+                          <TouchableOpacity
+                            key={idx}
+                            style={[
+                              styles.digDeepOptionRow,
+                              isSelected ? styles.digDeepOptionRowSelected : styles.digDeepOptionRowUnselected,
+                            ]}
+                            onPress={() => handleConceptUserResponse(letter)}
+                            activeOpacity={0.98}
+                          >
+                            <View style={[
+                              styles.digDeepCheckBox,
+                              isSelected ? styles.digDeepCheckBoxChecked : styles.digDeepCheckBoxUnchecked,
+                            ]}>
+                              {isSelected && <Feather name="check" size={17} color="#fff" />}
+                            </View>
+                            <Text style={styles.digDeepOptionLabel}>{opt}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.digDeepNotSureBtn}
+                      onPress={() => handleConceptUserResponse('I_am_not_sure')}
+                      activeOpacity={0.85}
+                    >
+                      <Feather name="x" size={18} color="#181C28" style={{ marginRight: 10 }} />
+                      <Text style={styles.digDeepNotSureBtnText}>Not Sure</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
               </View>
-            </View>
+            </LinearGradient>
           )}
         </View>
       </ScrollView>
@@ -1017,21 +1032,12 @@ User's answer: ${history[history.length-1].userAnswer}
         animationType="fade"
         onRequestClose={() => setShowBackModal(false)}
       >
-       
         <View style={styles.modalOverlay}>
-         
-          
           <View style={styles.modalContent}>
-         
-         
             <View style={styles.modalIconBox}>
-          
-               
               <Feather name="alert-triangle" size={34} color="#FFFFFF" />
             </View>
-           
             <Text style={styles.modalTitle}>This will discard your input</Text>
-          
             <Text style={styles.modalSubtitle}>
               Keep the morale high, only few minutes are left
             </Text>
@@ -1062,7 +1068,16 @@ User's answer: ${history[history.length-1].userAnswer}
       </Modal>
 
       {/* Fixed Footer Navigation */}
+     
       <View style={styles.footerNav}>
+            {!isConnected && (
+        <View style={styles.noInternetBar}>
+          <Text style={styles.noInternetBarText}>
+            No Internet Connection. Try connecting your internet
+          </Text>
+        </View>
+      )}
+     
         <TouchableOpacity
           style={styles.footerBtnCircle}
           onPress={handlePrev}
@@ -1076,10 +1091,19 @@ User's answer: ${history[history.length-1].userAnswer}
           <Text style={styles.footerBtnMainText}>Skip to next</Text>
           <Feather name="arrow-right" size={26} color="#fff" style={{ marginLeft: 10 }} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.footerBtnCircle}
+           <TouchableOpacity
+          style={[
+            styles.footerBtnCircle,
+            bookmarked && styles.bookmarkBtnActive, // Style for active bookmark
+          ]}
+          onPress={handleBookmark}
         >
-          <Feather name="bookmark" size={26} color="#fff" />
+          <Feather
+            name="bookmark"
+            size={26}
+            color={bookmarked ? "#181C28" : "#fff"}
+            style={{}}
+          />
         </TouchableOpacity>
       </View>
     </View>
@@ -1497,13 +1521,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 120,
+    height: 100,
     backgroundColor: '#000000',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-evenly',
     paddingBottom: 38,
-    paddingTop: 8,
+    paddingTop: 48,
     borderTopWidth: 0.5,
     borderTopColor: '#232B3B',
     zIndex: 12,
@@ -1640,7 +1664,7 @@ const styles = StyleSheet.create({
     top: 350,
     left: 0,
     width: '100%',
-    height: '60%',
+    height: '80%',
     zIndex: 9999,
 
  
@@ -1650,9 +1674,114 @@ const styles = StyleSheet.create({
   },
   fullScreenGifImage: {
     width: '100%',
-    height: '60%',
+    height: '80%',
     
    
+  },
+   digDeepGradientBox: {
+    borderRadius: 20,
+    marginTop: 28,
+    marginHorizontal: 0,
+    padding: 2,
+    marginBottom: 0,
+    overflow: 'hidden',
+    minHeight: 330,
+  },
+  digDeepInnerBox: {
+    flexDirection: 'column',
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: 'transparent',
+    minHeight: 300,
+  },
+  digDeepLead: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Geist',
+    marginBottom: 0,
+  },
+  digDeepSubLead: {
+    color: '#fff',
+    opacity: 0.8,
+    fontFamily: 'Geist',
+    fontSize: 15,
+    marginBottom: 16,
+  },
+  digDeepQText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontFamily: 'Geist',
+    fontSize: 17,
+    lineHeight: 23,
+    marginBottom: 3,
+    marginTop: 0,
+  },
+  digDeepOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+    minHeight: 48,
+    borderWidth: 2,
+    position: 'relative',
+    backgroundColor: 'transparent',
+  },
+  digDeepOptionRowUnselected: {
+    borderColor: '#262F4C',
+    backgroundColor: '#000',
+  },
+  digDeepOptionRowSelected: {
+    borderColor: '#1DC97A',
+    backgroundColor: '#04271C',
+  },
+  digDeepCheckBox: {
+    width: 30,
+    height: 30,
+    marginRight: 14,
+    borderRadius: 8,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  digDeepCheckBoxUnchecked: {
+    borderColor: '#414553',
+    backgroundColor: '#181C28',
+  },
+  digDeepCheckBoxChecked: {
+    borderColor: '#1DC97A',
+    backgroundColor: '#1DC97A',
+  },
+  digDeepOptionLabel: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Geist',
+  },
+  digDeepNotSureBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+   
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 36,
+    borderWidth: 0,
+    minWidth: 160,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  digDeepNotSureBtnText: {
+    color: '#181C28',
+    fontSize: 17,
+    fontWeight: 'bold',
+    fontFamily: 'Geist',
+    letterSpacing: 0.1,
   },
 
   shine:{
@@ -1666,7 +1795,38 @@ const styles = StyleSheet.create({
  
 
 
-  }
+  },
+
+
+ 
+  bookmarkBtnActive: {
+    backgroundColor: '#fff',
+    borderColor: '#fff',
+  },
+
+
+
+    noInternetBar: {
+    width: '100%',
+    backgroundColor: '#D32F2F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 5,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  
+    zIndex: 9999,
+    minHeight: 28,
+  },
+  noInternetBarText: {
+    color: '#fff',
+    fontSize: 15,
+    fontFamily: 'Geist',
+    fontWeight: '400',
+    textAlign: 'center',
+    letterSpacing: 0.1,
+  },
 });
 
 export default QuestionViewer;

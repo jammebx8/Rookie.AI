@@ -271,11 +271,11 @@ export default function MessageScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0B0B28' }}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
+    <KeyboardAvoidingView
+  style={{ flex: 1 }}
+  behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+  keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 40} // Try adjusting this offset
+>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>

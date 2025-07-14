@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     paddingVertical: 30,
     paddingHorizontal: 18,
-     paddingBottom: 60,
+
   },
   sectionTitle: {
     color: '#fff',
@@ -563,6 +563,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 18,
      fontFamily: 'Geist',
+      marginBottom: 100,
   },
 });
 

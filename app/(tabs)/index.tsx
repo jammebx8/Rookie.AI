@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,33 +8,37 @@ import {
   Image,
   Modal,
   Linking,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import imagepath from '@/src/constants/imagepath';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 const socialMediaLinks = [
   {
     label: 'Instagram',
-    icon: require('../../src/assets/images/insta.png'),
+    icon: require('../../src/assets/images/instagram 1.png'),
     url: 'https://www.instagram.com/rookie_ai.2006?igsh=ajB6YXRnNnJ4OGZ2',
   },
   {
     label: 'LinkedIn',
-    icon: require('../../src/assets/images/icon link.png'),
+    icon: require('../../src/assets/images/linkedin (2) 1.png'),
     url: 'https://www.linkedin.com/in/dhruv-pathak-437a56365/',
   },
   {
     label: 'Reddit',
-    icon: require('../../src/assets/images/reddit.png'),
+    icon: require('../../src/assets/images/reddit 3.png'),
     url: 'https://www.reddit.com/u/Possible_Loss4995/s/pcBd7G86Ic',
   },
   {
     label: 'Discord',
-    icon: require('../../src/assets/images/discord.png'),
+    icon: require('../../src/assets/images/discord 1.png'),
     url: 'https://discord.gg/snh7kFPV',
   },
 ];
-// --- CHAPTER DATA (with per-chapter playlist links for each subject) ---
+
 const chaptersData = {
   Physics: [
     { title: "Units and Measurements.", questions: 90, playlist: "https://www.youtube.com/watch?v=D_rUfEM4dTE&list=PLxb0SzPSaqZ4zV2ftv64MaL7ObQCG6a-6" },
@@ -135,6 +139,9 @@ export default function HomeScreen() {
   const [modalChapter, setModalChapter] = useState(null);
   const [showAllVideos, setShowAllVideos] = useState(false);
 
+  // Fade effect for horizontal scroll
+  const formulaCardsScrollView = useRef(null);
+
   // Get chapters for selected subject
   const formulaChapters = chaptersData[selectedCardTab] || [];
   const studyChapters = chaptersData[selectedStudyTab] || [];
@@ -163,56 +170,60 @@ export default function HomeScreen() {
               </TouchableOpacity>
             ))}
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.cardsRow}
-          >
-            {formulaChapters.map((chapter, index) => {
-              const bgColor = formulaCardColors[index % formulaCardColors.length];
-              return (
-
-                
-                <TouchableOpacity
-                  key={chapter.title}
-                  activeOpacity={0.92}
-                  style={[styles.formulaCard, { backgroundColor: bgColor }]}
-                  onPress={() => {
-                    setModalChapter(chapter);
-                    setModalVisible(true);
-                  }}
-                >
-                  
-
-                     <Image
-                    source={require('../../src/assets/images/layer.png')} // <-- Save the user image as 'dotted_overlay.png' in the same folder
-                    style={styles.formulaCardOverlay}
-                    pointerEvents="none"
-                  />
-                  <Text
-                    style={styles.formulaCardTitle}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <ScrollView
+              horizontal
+              ref={formulaCardsScrollView}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cardsRow}
+            >
+              {formulaChapters.map((chapter, index) => {
+                const bgColor = formulaCardColors[index % formulaCardColors.length];
+                return (
+                  <TouchableOpacity
+                    key={chapter.title}
+                    activeOpacity={0.92}
+                    style={[styles.formulaCard, { backgroundColor: bgColor }]}
+                    onPress={() => {
+                      setModalChapter(chapter);
+                      setModalVisible(true);
+                    }}
                   >
-                    {chapter.title.replace(/\.$/, '')}
-                  </Text>
-                  <View style={styles.cardFooterRow}>
-                    <Image source={require('../../src/assets/images/copy.png')} style={styles.cardIcon} />
-                    <Text style={styles.cardCount}>{chapter.questions}</Text>
-                    <View style={styles.cardArrowBtn}>
-                      <Image source={imagepath.arrow} style={styles.cardArrowImg} />
+                    <Image
+                      source={require('../../src/assets/images/Dotted.png')}
+                      style={styles.formulaCardOverlay}
+                      pointerEvents="none"
+                    />
+                    <Text
+                      style={styles.formulaCardTitle}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {chapter.title.replace(/\.$/, '')}
+                    </Text>
+                    <View style={styles.cardFooterRow}>
+                      <Image source={require('../../src/assets/images/copy.png')} style={styles.cardIcon} />
+                      <Text style={styles.cardCount}>{chapter.questions}</Text>
+                      <View style={styles.cardArrowBtn}>
+                        <Image source={imagepath.arrow} style={styles.cardArrowImg} />
+                      </View>
                     </View>
-                  </View>
-                 
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-         
-            
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            {/* Fade effect at the end of horizontal scroll */}
+            <View pointerEvents="none" style={styles.formulaFadeBox}>
+              <Image
+                source={require('../../src/assets/images/Fade007.png')}
+                style={styles.formulaFadeImg}
+                resizeMode="stretch"
+              />
+            </View>
+          </View>
         </View>
- 
-          {/* Modal for formula card */}
+
+        {/* Modal for formula card */}
         <Modal
           visible={modalVisible}
           animationType="fade"
@@ -356,24 +367,34 @@ export default function HomeScreen() {
                 activeOpacity={0.85}
               >
                 <Image source={item.icon} style={styles.socialIcon} />
-                <Text style={styles.socialBtnText}>{item.label}</Text>
+                <Text style={styles.socialBtnText}> {item.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
+       
         </View>
 
-        {/* Footer */}
+    
+         {/* Footer */}
+     
         <Image
-          source={require('../../src/assets/images/banner.png')}
+          source={require('../../src/assets/images/imgfoot.png')}
           style={styles.footerImage}
-          resizeMode="contain"
+          resizeMode="cover"
         />
+  
+       
       </ScrollView>
+      
+   
+    
     </View>
+
+    
+     
+     
   );
 }
-
-// ...styles remain unchanged from previous code...
 
 const CARD_WIDTH = 128;
 const CARD_HEIGHT = 160;
@@ -382,16 +403,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#101523',
+    paddingHorizontal: 0, // Remove horizontal padding so footer can go edge to edge
     
-    paddingHorizontal: 12,
   },
   scrollContent: {
-    paddingBottom: 30,
+    paddingBottom: 20,
   },
   sectionTitle: {
     color: '#fff',
     fontSize: 19,
     fontWeight: 'medium',
+   
     marginTop: 18,
     marginBottom: 12,
     marginLeft: 16,
@@ -404,7 +426,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginBottom: 18,
     paddingHorizontal: 16,
-     
   },
   tabRow: {
     flexDirection: 'row',
@@ -425,7 +446,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 16,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   tabBtnTextActive: {
     color: '#000000',
@@ -436,9 +457,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     gap: 10,
   },
-  touchCard: {
-    marginRight: 12,
-  },
   formulaCard: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
@@ -448,6 +466,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     overflow: 'hidden',
     opacity: 1,
+    marginRight: 12,
   },
   formulaCardTitle: {
     color: '#fff',
@@ -461,7 +480,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     flexGrow: 0,
     flexWrap: 'nowrap',
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   cardFooterRow: {
     flexDirection: 'row',
@@ -478,7 +497,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     marginRight: 10,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   cardArrowBtn: {
     width: 46,
@@ -501,6 +520,32 @@ const styles = StyleSheet.create({
     height: 18,
     resizeMode: 'contain',
   },
+  formulaCardOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    zIndex: 2,
+    opacity: 1,
+    pointerEvents: 'none',
+  },
+  // Fade effect overlay at right end of formula card row
+  formulaFadeBox: {
+    width: 46,
+    height: CARD_HEIGHT,
+    position: 'absolute',
+    right: 0,
+    
+    top: 4,
+    zIndex: 10,
+    pointerEvents: 'none',
+  },
+  formulaFadeImg: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
   // Modal styles
   modalOverlay: {
     flex: 1,
@@ -508,6 +553,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // ... rest of your modal styles ...
   modalBox: {
     width: 300,
     backgroundColor: '#191C2A',
@@ -522,10 +568,10 @@ const styles = StyleSheet.create({
   modalTitle: {
     color: '#fff',
     fontSize: 20,
-    fontWeight: 'medium',
+    fontWeight: '500',
     marginBottom: 8,
     textAlign: 'center',
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   modalSubtitle: {
     color: '#B5B5CA',
@@ -544,7 +590,7 @@ const styles = StyleSheet.create({
     color: '#181C28',
     fontWeight: '700',
     fontSize: 17,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   // Study Content
   studyGrid: {
@@ -584,11 +630,11 @@ const styles = StyleSheet.create({
   studyCardTitle: {
     color: '#fff',
     fontSize: 13,
-    fontWeight: '400',
+    fontWeight: 'medium',
     marginTop: 8,
     marginLeft: 2,
     marginBottom: 2,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   // Show More Button
   showMoreBtn: {
@@ -605,11 +651,11 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontWeight: '600',
     fontSize: 15,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   // Invite friends
   inviteBox: {
-    width: 360,
+    width: SCREEN_WIDTH - 12,
     alignSelf: 'center',
     borderRadius: 18,
     marginTop: 18,
@@ -623,13 +669,12 @@ const styles = StyleSheet.create({
   },
   inviteTitle: {
     color: '#fff',
-    fontWeight: 'medium',
+    fontWeight: '500',
     fontSize: 20,
     marginBottom: 4,
     marginLeft: 6,
     marginTop: 2,
     fontFamily: "Geist"
-    
   },
   inviteSubtitle: {
     color: '#e5eaf7',
@@ -638,7 +683,7 @@ const styles = StyleSheet.create({
     marginBottom: 13,
     marginTop: 0,
     fontWeight: '400',
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   inviteImage: {
     width: 400,
@@ -648,7 +693,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   inviteBtn: {
-    width: 300,
+    width: 350,
     height: 38,
     borderRadius: 8,
     backgroundColor: '#fff',
@@ -668,11 +713,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 17,
     textAlign: 'center',
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   // Social Media
   socialBox: {
-    width: 360,
+    width: SCREEN_WIDTH - 12,
     alignSelf: 'center',
     borderRadius: 18,
     marginTop: 10,
@@ -686,12 +731,12 @@ const styles = StyleSheet.create({
   },
   socialTitle: {
     color: '#fff',
-    fontWeight: 'medium',
+    fontWeight: '500',
     fontSize: 19,
     marginBottom: 2,
     marginTop: 2,
     textAlign: 'center',
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   socialSub: {
     color: '#fff',
@@ -700,7 +745,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 0,
     fontWeight: '400',
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   socialImage: {
     width: 400,
@@ -730,74 +775,26 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   socialIcon: {
-    width: 38,
-    height: 38,
+    width: 28,
+    height: 28,
     resizeMode: 'contain',
   },
   socialBtnText: {
     color: '#000',
     fontWeight: '700',
     fontSize: 15,
-     fontFamily: 'Geist',
-  },
-  // Footer
-  footerClipWrapper: {
-    marginTop: 12,
-    marginBottom: 25, // Add extra margin so not blocked by tab bar
-    overflow: 'visible',
-  },
-  footerTriangles: {
-    width: '100%',
-    height: 15,       // Adjust based on your triangle pattern image
-    marginBottom: -1, // Slight overlap for a seamless look
-  },
-  footer: {
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    paddingVertical: 28,
-    paddingBottom: 34,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    minHeight: 100,
-  },
-  footerContent: {
-    flexDirection: 'row',
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  footerTextBold: {
-    color: '#fff',
-    fontWeight: 'medium',
-    fontSize: 24,
-    marginBottom: 6,
     fontFamily: 'Geist',
   },
-  footerText: {
-    color: '#fff',
-    fontSize: 22,
-    marginBottom: 0,
-    fontFamily: 'Geist',
-  },
-  footerRookie: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'medium',
-     fontFamily: 'Geist',
-  },
+  // Footer: make it edge-to-edge
   footerImage: {
-    width: '100%',
-    height: 101, // match image's pixel height or scale appropriately
-    marginTop: 0,
-    marginBottom: 35, // for spacing above tab bar
+    width: SCREEN_WIDTH,
+    minWidth: '100%',
+    maxWidth: '100%',
+    height: 101,
+    marginTop:20,
+    marginBottom: 35,
     alignSelf: 'center',
-    
   },
-
   // Modal: new styles for the modal based on the reference image
   fancyModalOverlay: {
     flex: 1,
@@ -832,7 +829,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
     marginRight: 8,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   fancyModalCloseX: {
     color: '#fff',
@@ -842,7 +839,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     marginTop: -2,
     marginRight: -4,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   fancyModalLineRow: {
     flexDirection: 'row',
@@ -863,7 +860,6 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: '#232D3B',
-    // Dashed effect - use a dashed border
     borderStyle: 'dashed',
     borderWidth: 0,
     borderTopWidth: 3,
@@ -877,19 +873,5 @@ const styles = StyleSheet.create({
     marginTop: 4,
     borderRadius: 18,
     minHeight: 550,
-    // If you want to fill the modal box height, use flexGrow
   },
-
-    formulaCardOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    zIndex: 2,
-    opacity: 1,
-    pointerEvents: 'none', // ensures touch events pass through
-  },
-
-
 });
