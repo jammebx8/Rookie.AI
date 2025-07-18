@@ -20,7 +20,6 @@ const GROQ_API_KEY = 'REMOVED';
 const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
 
-
 const getSubjectImage = (subjectName) => {
   if (subjectName === 'Physics') return imagepath.Physics;
   if (subjectName === 'Chemistry') return imagepath.Chemistry;
@@ -64,33 +63,22 @@ const QuestionViewer = () => {
   const [showCorrectGif, setShowCorrectGif] = useState(false);
   const [aiFollowup, setAIFollowup] = useState<string | null>(null);
   const [aiFollowupLoading, setAIFollowupLoading] = useState(false);
-    const [isConnected, setIsConnected] = useState(true);
- const [bookmarked, setBookmarked] = useState(false);
-
-
-
+  const [isConnected, setIsConnected] = useState(true);
+  const [bookmarked, setBookmarked] = useState(false);
 
   // Dig Deeper Adaptive Concept Diagnostic
   const [isDigging, setIsDigging] = useState(false);
-  const [conceptMCQ, setConceptMCQ] = useState<any>(null); // { concept, mcq, explanation, level }
+  const [conceptMCQ, setConceptMCQ] = useState<any>(null); // { mcq, numCorrect }
   const [conceptHistory, setConceptHistory] = useState<any[]>([]);
   const [conceptLoading, setConceptLoading] = useState(false);
   const [conceptFeedback, setConceptFeedback] = useState('');
   const [conceptDone, setConceptDone] = useState(false);
-
-  // For Dig Deeper option highlight
   const [digDeepSelected, setDigDeepSelected] = useState<string | null>(null);
 
+  // Added state for previous dig deeper answer
+  const [prevDigResult, setPrevDigResult] = useState<{ status: 'correct' | 'incorrect' | ''; explanation?: string, answer?: string } | null>(null);
 
-
-
-
-
-
-
-
-
-    // Check bookmarked state on focus and question change
+  // Check bookmarked state on focus and question change
   useEffect(() => {
     const checkBookmarked = async () => {
       try {
@@ -201,10 +189,7 @@ const QuestionViewer = () => {
     return () => animation && animation.stop();
   }, [loading]);
 
-
-
-
-    // Add useEffect to listen for connection change
+  // Add useEffect to listen for connection change
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
       setIsConnected(!!state.isConnected);
@@ -301,6 +286,7 @@ const QuestionViewer = () => {
     setConceptFeedback('');
     setConceptDone(false);
     setDigDeepSelected(null);
+    setPrevDigResult(null);
 
     const nextIndex = getNextIndex(isCorrect);
     if (nextIndex != null) {
@@ -500,16 +486,18 @@ User's answer: ${history[history.length-1].userAnswer}
 `;
   };
 
+  // Improved explanation parsing (multi-line)
   const parseConceptMCQ = (llmText) => {
     let explanation = '';
     let concept = '';
     let level = 1;
     let text = llmText.trim();
 
-    if (text.startsWith('Explanation:')) {
-      const explMatch = text.match(/^Explanation:\s*([^\n]*)\nConcept:/i);
-      explanation = explMatch ? explMatch[1].trim() : '';
-      text = text.replace(/^Explanation:[^\n]*\n/i, '');
+    // Match explanation as multiline
+    const explMatch = text.match(/^Explanation:\s*([\s\S]*?)\nConcept:/i);
+    if (explMatch) {
+      explanation = explMatch[1].trim();
+      text = text.replace(/^Explanation:[\s\S]*?\nConcept:/i, 'Concept:');
     }
     const conceptMatch = text.match(/Concept:\s*(.*)\nLevel:\s*(\d+)/);
     if (conceptMatch) {
@@ -541,6 +529,7 @@ User's answer: ${history[history.length-1].userAnswer}
     setConceptFeedback('');
     setConceptDone(false);
     setDigDeepSelected(null);
+    setPrevDigResult(null);
 
     try {
       const prompt = getConceptDiagnosticPrompt(questions[currentIndex], [], null, 1, false, '');
@@ -585,6 +574,7 @@ User's answer: ${history[history.length-1].userAnswer}
       setConceptHistory(history);
       setConceptFeedback('Super! You marked this as understood. Want to keep building your mastery or return to solution?');
       setConceptDone(true);
+      setPrevDigResult({ status: '', explanation: '', answer: '' });
       return;
     }
 
@@ -624,6 +614,11 @@ User's answer: ${history[history.length-1].userAnswer}
         const newMcq = parseConceptMCQ(res.data.choices?.[0]?.message?.content || '');
         setConceptMCQ({ mcq: newMcq, numCorrect: 0 });
         setConceptLoading(false);
+        setPrevDigResult({
+          status: 'incorrect',
+          explanation: newMcq?.explanation || '',
+          answer: history[history.length-1]?.userAnswer || '',
+        });
       } catch (err) {
         setConceptFeedback('Could not generate breakdown question. Please try again.');
         setConceptLoading(false);
@@ -642,6 +637,7 @@ User's answer: ${history[history.length-1].userAnswer}
     if (correct) {
       numCorrect += 1;
       setConceptFeedback('Nice! You got it right. Building up your mastery...');
+      setPrevDigResult({ status: 'correct', explanation: '', answer: typeOrKey });
       if (numCorrect >= 3) {
         setConceptDone(true);
         setConceptFeedback('Awesome! You have built a strong foundation for this concept. You can return to the main solution or keep digging for other concepts.');
@@ -711,6 +707,11 @@ User's answer: ${history[history.length-1].userAnswer}
         const newMcq = parseConceptMCQ(res.data.choices?.[0]?.message?.content || '');
         setConceptMCQ({ mcq: newMcq, numCorrect: 0 });
         setConceptLoading(false);
+        setPrevDigResult({
+          status: 'incorrect',
+          explanation: newMcq?.explanation || '',
+          answer: typeOrKey,
+        });
       } catch (err) {
         setConceptFeedback('Could not generate breakdown question. Please try again.');
         setConceptLoading(false);
@@ -725,6 +726,7 @@ User's answer: ${history[history.length-1].userAnswer}
     setConceptFeedback('');
     setConceptDone(false);
     setDigDeepSelected(null);
+    setPrevDigResult(null);
   };
 
   // ---------- UI Rendering ----------
@@ -745,16 +747,6 @@ User's answer: ${history[history.length-1].userAnswer}
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
-    
-      {showCorrectGif && (
-        <View style={styles.fullScreenGifOverlay} pointerEvents="none">
-          <Image
-            source={require('../src/assets/images/c007.gif')}
-            style={styles.fullScreenGifImage}
-            resizeMode="cover"
-          />
-        </View>
-      )}
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 260 }]}
@@ -974,6 +966,33 @@ User's answer: ${history[history.length-1].userAnswer}
             >
               <View style={styles.digDeepInnerBox}>
                 <Text style={styles.digDeepLead}>Let's build your concept clarity...</Text>
+                {/* Show last answer status */}
+                {prevDigResult && prevDigResult.status && (
+                  <Text style={{
+                    color: prevDigResult.status === 'correct' ? '#1DC97A' : '#B42323',
+                    fontWeight: 'bold',
+                    fontSize: 15,
+                    marginBottom: 6,
+                  }}>
+                    {prevDigResult.status === 'correct'
+                      ? 'Previous Answer: Correct'
+                      : `Previous Answer: Incorrect (${prevDigResult.answer})`}
+                  </Text>
+                )}
+                {/* Show explanation if previous was incorrect */}
+                {prevDigResult && prevDigResult.status === 'incorrect' && prevDigResult.explanation && (
+                  <View style={{ marginBottom: 10 }}>
+                    <Text style={{
+                      color: '#fff',
+                      fontSize: 15,
+                      fontWeight: '600',
+                      fontFamily: 'Geist',
+                      marginBottom: 6,
+                    }}>
+                      {prevDigResult.explanation}
+                    </Text>
+                  </View>
+                )}
                 <Text style={styles.digDeepSubLead}>Acha ye bata:</Text>
                 {conceptLoading && (
                   <View style={{ alignItems: 'center', marginVertical: 16 }}>
@@ -1068,16 +1087,25 @@ User's answer: ${history[history.length-1].userAnswer}
       </Modal>
 
       {/* Fixed Footer Navigation */}
-     
-      <View style={styles.footerNav}>
-            {!isConnected && (
-        <View style={styles.noInternetBar}>
-          <Text style={styles.noInternetBarText}>
-            No Internet Connection. Try connecting your internet
-          </Text>
+
+      {showCorrectGif && (
+        <View style={styles.fullScreenGifOverlay} pointerEvents="none">
+          <Image
+            source={require('../src/assets/images/c007.gif')}
+            style={styles.fullScreenGifImage}
+            resizeMode="cover"
+          />
         </View>
       )}
-     
+      <View style={styles.footerNav}>
+        {!isConnected && (
+          <View style={styles.noInternetBar}>
+            <Text style={styles.noInternetBarText}>
+              No Internet Connection. Try connecting your internet
+            </Text>
+          </View>
+        )}
+
         <TouchableOpacity
           style={styles.footerBtnCircle}
           onPress={handlePrev}
@@ -1091,19 +1119,17 @@ User's answer: ${history[history.length-1].userAnswer}
           <Text style={styles.footerBtnMainText}>Skip to next</Text>
           <Feather name="arrow-right" size={26} color="#fff" style={{ marginLeft: 10 }} />
         </TouchableOpacity>
-           <TouchableOpacity
-          style={[
-            styles.footerBtnCircle,
-            bookmarked && styles.bookmarkBtnActive, // Style for active bookmark
-          ]}
+        <TouchableOpacity
+          style={styles.footerBtnCircle}
           onPress={handleBookmark}
         >
-          <Feather
-            name="bookmark"
-            size={26}
-            color={bookmarked ? "#181C28" : "#fff"}
-            style={{}}
-          />
+          {bookmarked ? (
+            // Filled bookmark icon (use Ionicons or Feather with solid style if available)
+            <Ionicons name="bookmark" size={26} color="#fff" />
+          ) : (
+            // Outlined bookmark icon
+            <Feather name="bookmark" size={26} color="#fff" />
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -1125,7 +1151,7 @@ const styles = StyleSheet.create({
   },
   qHeaderBg: {
     width: '100%',
-    height: 120,
+    height: 100,
     justifyContent: 'flex-end',
     backgroundColor: '#111B2A',
   },
@@ -1210,7 +1236,7 @@ const styles = StyleSheet.create({
     color: '#787C87',
     fontSize: 15,
     fontFamily: 'Geistmono',
-    fontWeight: '500',
+    fontWeight: 'medium',
   },
   breadcrumbSeparator: {
     color: '#787C87',
@@ -1222,19 +1248,19 @@ const styles = StyleSheet.create({
     color: '#787C87',
     fontSize: 15,
     fontFamily: 'Geistmono',
-    fontWeight: '500',
+    fontWeight: 'medium',
   },
   breadcrumbQNum: {
     color: '#787C87',
     fontSize: 15,
     fontFamily: 'Geistmono',
-    fontWeight: '500',
+    fontWeight: 'medium',
   },
   qText: {
     color: '#fff',
     fontSize: 20,
     fontFamily: 'Geist',
-    fontWeight: '600',
+    fontWeight: 'medium',
     marginBottom: 30,
     marginTop: 3,
     paddingHorizontal: 8,
@@ -1368,7 +1394,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
     marginBottom: 10,
-    gap: 0,
+    gap: 12,
   },
   aiFollowupBtn: {
     flexDirection: 'row',
@@ -1383,6 +1409,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 8,
+   
     shadowOffset: { width: 0, height: 2 },
   },
   aiFollowupBtnText: {
@@ -1570,7 +1597,7 @@ const styles = StyleSheet.create({
     width: '88%',
     paddingVertical: 32,
     paddingHorizontal: 20,
-    backgroundColor: '#111B2A',
+    backgroundColor: '#0C111D',
     borderRadius: 22,
     alignItems: 'center',
     shadowColor: '#000',
@@ -1578,13 +1605,13 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
     borderWidth: 1,
-    borderColor: '#232B3B',
+    borderColor: '#1D2939',
   },
   modalIconBox: {
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: '#181C28',
+    backgroundColor: '#0C111D',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -1629,7 +1656,8 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   modalBtnOutline: {
-    minWidth: 110,
+    minWidth: 159,
+    minHeight: 48,
     backgroundColor: '#181C28',
     borderRadius: 24,
     paddingVertical: 12,
@@ -1646,7 +1674,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist',
   },
   modalBtnSolid: {
-    minWidth: 110,
+    minWidth: 159,
+    minHeight: 48,
     backgroundColor: '#fff',
     borderRadius: 24,
     paddingVertical: 12,
@@ -1664,7 +1693,7 @@ const styles = StyleSheet.create({
     top: 350,
     left: 0,
     width: '100%',
-    height: '80%',
+    height: '60%',
     zIndex: 9999,
 
  
@@ -1674,7 +1703,7 @@ const styles = StyleSheet.create({
   },
   fullScreenGifImage: {
     width: '100%',
-    height: '80%',
+    height: '60%',
     
    
   },

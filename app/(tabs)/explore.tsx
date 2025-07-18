@@ -189,7 +189,7 @@ paddingBottom: verticalScale(30),
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: verticalScale(15),
-    marginHorizontal: scale(16),
+    marginHorizontal: scale(12),
     marginBottom: verticalScale(10),
    
   },

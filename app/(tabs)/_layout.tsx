@@ -1,16 +1,9 @@
 import React from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import Fontisto from '@expo/vector-icons/Fontisto';
-import Entypo from '@expo/vector-icons/Entypo';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
-import { Platform, View, Dimensions, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Feather from '@expo/vector-icons/Feather';
+import { View, TouchableOpacity, StyleSheet, Dimensions, Image, StatusBar } from 'react-native';
+
 const { width } = Dimensions.get('window');
-import { Image } from 'react-native';
-import { StatusBar } from 'react-native';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 export default function TabLayout() {
   const router = useRouter();
@@ -24,25 +17,19 @@ export default function TabLayout() {
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       testID="bookmark-btn"
     >
-      {/* You can use Image below if you want to use the provided image asset.
-          Replace the require path with your local asset if needed. */}
-      {/* 
-      <Image
-        source={require('../../src/assets/images/bookmark_button.png')}
-        style={{ width: 48, height: 32 }}
-        resizeMode="contain"
-      />
-      */}
-      <View style={styles.bookmarkIconContainer}>
-        {/* SVG path or use Feather Icon for a "bookmark" lookalike */}
-        <Feather name="bookmark" size={28} color="#fff" />
+      <View>
+        <Image
+          source={require('../../src/assets/images/bookmarkicon.png')}
+          style={{ width: 52, height: 36 }}
+          resizeMode="contain"
+        />
       </View>
     </TouchableOpacity>
   );
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <Tabs
         screenOptions={{
           headerShown: true,
@@ -58,17 +45,13 @@ export default function TabLayout() {
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.15,
             shadowRadius: 10,
+            backgroundColor: '#000000', // <-- Tabs background color
           },
           tabBarBackground: () => (
-            <LinearGradient
-              colors={['rgba(11,11,40,0.95)', 'rgba(0,0,0,0.95)']}
-              style={{
-                flex: 1,
-              }}
-            />
+            <View style={{ flex: 1, backgroundColor: '#000000', }} /> // <-- Tabs background color
           ),
           headerStyle: {
-            backgroundColor: '#0a0517',
+            backgroundColor: '#000000', // <-- Header background color
             borderBottomWidth: 1,
             borderBottomColor: '#262626',
           },
@@ -81,6 +64,7 @@ export default function TabLayout() {
           headerTintColor: '#E0B3FF',
         }}
       >
+        {/* Home Tab */}
         <Tabs.Screen
           name="index"
           options={{
@@ -96,9 +80,13 @@ export default function TabLayout() {
             ),
             headerRight: () => <BookmarkButton />,
             title: 'Home',
-            tabBarIcon: ({ color, focused }) => (
+            tabBarIcon: ({ focused }) => (
               <Image
-                source={require('../../src/assets/images/home_14424222.png')}
+                source={
+                  focused
+                    ? require('../../src/assets/images/home_filled.png')
+                    : require('../../src/assets/images/home_unfilled.png')
+                }
                 style={{
                   width: 24,
                   height: 24,
@@ -110,6 +98,7 @@ export default function TabLayout() {
           }}
         />
 
+        {/* Chats Tab */}
         <Tabs.Screen
           name="chats"
           options={{
@@ -124,26 +113,37 @@ export default function TabLayout() {
               />
             ),
             title: 'Chats',
-            tabBarIcon: ({ color, focused }) => (
+            tabBarIcon: ({ focused }) => (
               <Image
-                source={require('../../src/assets/images/chat-circle-text.png')}
+                source={
+                  focused
+                    ? require('../../src/assets/images/chat_filled.png')
+                    : require('../../src/assets/images/chat_unfilled.png')
+                }
                 style={{
                   width: 24,
                   height: 24,
                   tintColor: focused ? 'white' : 'rgb(144, 144, 144)',
+                   
                 }}
                 resizeMode="contain"
               />
             ),
           }}
         />
+
+        {/* Practice Tab */}
         <Tabs.Screen
           name="explore"
           options={{
             title: 'Practice',
-            tabBarIcon: ({ color, size, focused }) => (
+            tabBarIcon: ({ focused }) => (
               <Image
-                source={require('../../src/assets/images/book.png')}
+                source={
+                  focused
+                    ? require('../../src/assets/images/book_filled.png')
+                    : require('../../src/assets/images/book_unfilled.png')
+                }
                 style={{
                   width: 24,
                   height: 24,
@@ -165,13 +165,19 @@ export default function TabLayout() {
             headerRight: () => <BookmarkButton />,
           }}
         />
+
+        {/* Settings/Profile Tab */}
         <Tabs.Screen
           name="profile"
           options={{
             title: 'Settings',
-            tabBarIcon: ({ color, size, focused }) => (
+            tabBarIcon: ({ focused }) => (
               <Image
-                source={require('../../src/assets/images/set.png')}
+                source={
+                  focused
+                    ? require('../../src/assets/images/set_filled.png')
+                    : require('../../src/assets/images/set_unfilled.png')
+                }
                 style={{
                   width: 24,
                   height: 24,
@@ -190,19 +196,5 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   bookmarkButton: {
     marginRight: 16,
-  },
-  bookmarkIconContainer: {
-    backgroundColor: '#171e2e', // matches your image bg
-    borderRadius: 20,
-    width: 68,
-    height: 42,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#232b39',
-    shadowColor: '#000',
-    shadowOpacity: 0.07,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
   },
 });

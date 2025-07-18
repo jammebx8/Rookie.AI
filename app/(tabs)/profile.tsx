@@ -9,6 +9,7 @@ import {
   StatusBar,
   Alert,
   Image,
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -22,7 +23,7 @@ import TickIcon from '../../src/assets/images/ticck.png';
 const GENDER_OPTIONS = ['Male', 'Female', 'Other'];
 const EXAM_OPTIONS = ['JEE Main', 'JEE Advanced', 'NEET', 'CUET', 'Other'];
 
-const aiBuddies = [
+const aiBuddies =  [
  {
     id: 1,
     name: 'Jeetu Bhaiya',
@@ -164,10 +165,12 @@ const Profile = () => {
   const [exam, setExam] = useState('');
   const [editing, setEditing] = useState(false);
   const [selectedBuddy, setSelectedBuddy] = useState(4); // Default to Ritu
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
   const navigation = useNavigation();
+   const [savedOnce, setSavedOnce] = useState(false); // Track save click
 
-  // Load user info from AsyncStorage
-  useEffect(() => {
+   useEffect(() => {
     (async () => {
       const userStr = await AsyncStorage.getItem('@user');
       if (userStr) {
@@ -193,7 +196,6 @@ const Profile = () => {
       Alert.alert('Please fill all fields');
       return;
     }
-  // Update @user name in AsyncStorage
     const userStr = await AsyncStorage.getItem('@user');
     if (userStr) {
       const user = JSON.parse(userStr);
@@ -205,6 +207,7 @@ const Profile = () => {
       await AsyncStorage.setItem('@user', JSON.stringify({ name, gender, exam, email }));
     }
     setEditing(false);
+    setSavedOnce(true); // After save, change color
   };
 
   // Buddy selection
@@ -225,122 +228,161 @@ const Profile = () => {
     });
   };
 
+  // Delete Account logic
+  const handleDeleteAccount = async () => {
+    setDeleteModalVisible(false);
+    setDeleteInput('');
+    await AsyncStorage.removeItem('@user');
+    await AsyncStorage.removeItem('@user_extra');
+    await AsyncStorage.removeItem('selectedBuddy');
+    navigation.reset({
+      index: 0,
+      routes: [{ name: '(auth)/Onboarding' }],
+    });
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
-      <Text style={styles.sectionTitle}>Personal information</Text>
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Full Name</Text>
-        <TextInput
-          style={styles.input}
-          value={name}
-          editable={editing}
-          onChangeText={setName}
-          placeholder="Enter your name"
-          placeholderTextColor="#888"
-        />
-      </View>
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={[styles.input, { color: '#888' }]}
-          value={email}
-          editable={false}
-          selectTextOnFocus={false}
-        />
-      </View>
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Gender</Text>
-        <View style={styles.genderRow}>
-          {GENDER_OPTIONS.map((g) => (
-            <TouchableOpacity
-              key={g}
-              style={[
-                styles.genderBtn,
-                gender === g && styles.genderBtnSelected,
-              ]}
-              onPress={() => editing && setGender(g)}
-              activeOpacity={editing ? 0.7 : 1}
-            >
-              <Text
-                style={[
-                  styles.genderBtnText,
-                  gender === g && styles.genderBtnTextSelected,
-                ]}
-              >
-                {g}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Exam Preparing For</Text>
-        <View style={styles.genderRow}>
-          {EXAM_OPTIONS.map((ex) => (
-            <TouchableOpacity
-              key={ex}
-              style={[
-                styles.examBtn,
-                exam === ex && styles.examBtnSelected,
-              ]}
-              onPress={() => editing && setExam(ex)}
-              activeOpacity={editing ? 0.7 : 1}
-            >
-              <Text
-                style={[
-                  styles.examBtnText,
-                  exam === ex && styles.examBtnTextSelected,
-                ]}
-              >
-                {ex}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-      <TouchableOpacity
-        style={[styles.saveBtn, { backgroundColor: editing ? '#FFFFFF' : '#222' }]}
-        onPress={() => (editing ? handleSave() : setEditing(true))}
+      <View
+        style={[
+          styles.personalInfoBox,
+          {
+            backgroundColor: editing ? '#1D2939' : '#101828'
+          }
+        ]} 
       >
-        <Text style={styles.saveBtnText}>{editing ? 'Save' : 'Edit'}</Text>
-      </TouchableOpacity>
+        <View style={styles.personalInfoHeader}>
+          <Text style={styles.sectionTitle}>Personal information</Text>
+          {!editing && (
+            <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
+              <Text style={styles.editBtnText}>Edit</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-      {/* Buddy Selection */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Full Name</Text>
+          <TextInput
+            style={[styles.input, !editing && styles.inputReadOnly]}
+            value={name}
+            editable={editing}
+            onChangeText={setName}
+            placeholder="Enter your name"
+            placeholderTextColor="#888"
+          />
+        </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={[styles.input, styles.inputReadOnly, { color: '#888' }]}
+            value={email}
+            editable={false}
+            selectTextOnFocus={false}
+          />
+        </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Exam preparing for</Text>
+          <View style={styles.examRow}>
+            {EXAM_OPTIONS.map((ex) => (
+              <TouchableOpacity
+                key={ex}
+                style={[
+                  styles.examBtn,
+                  exam === ex && styles.examBtnSelected,
+                  !editing && styles.examBtnReadOnly,
+                ]}
+                onPress={() => editing && setExam(ex)}
+                activeOpacity={editing ? 0.7 : 1}
+              >
+                <Text
+                  style={[
+                    styles.examBtnText,
+                    exam === ex && styles.examBtnTextSelected,
+                    !editing && styles.examBtnTextReadOnly,
+                  ]}
+                >
+                  {ex}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Gender</Text>
+          <View style={styles.genderRow}>
+            {GENDER_OPTIONS.map((g) => (
+              <TouchableOpacity
+                key={g}
+                style={[
+                  styles.genderBtnNew,
+                  gender === g && styles.genderBtnNewSelected,
+                  !editing && styles.genderBtnNewReadOnly,
+                ]}
+                onPress={() => editing && setGender(g)}
+                activeOpacity={editing ? 0.7 : 1}
+              >
+                <Text
+                  style={[
+                    styles.genderBtnTextNew,
+                    gender === g && styles.genderBtnTextNewSelected,
+                    !editing && styles.genderBtnTextNewReadOnly,
+                  ]}
+                >
+                  {g}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        {editing && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditing(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtnNew} onPress={handleSave}>
+                <Text style={styles.saveBtnNewText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </View>
+
       <Text style={styles.sectionTitle}>Select mentor</Text>
       <Text style={styles.mentorDesc}>
         A mentor is that character who will guide through your practice journey.
       </Text>
-  <View style={styles.buddyList}>
-  {aiBuddies.map((item) => (
-    <TouchableOpacity
-      key={item.id}
-      activeOpacity={0.8}
-      style={[
-        styles.buddyCard,
-        selectedBuddy === item.id && styles.buddyCardSelected,
-      ]}
-      onPress={() => handleSelectBuddy(item.id)}
-    >
-      <Image
-        source={item.image}
-        style={styles.buddyImage}
-        resizeMode="cover"
-      />
-      <View style={{ flex: 1, marginLeft: 16, flexDirection: 'row', alignItems: 'center' }}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.buddyName}>{item.name}</Text>
-          <Text style={styles.buddyDescription}>{item.description}</Text>
-        </View>
-        {selectedBuddy === item.id && (
-          <Image source={TickIcon} style={styles.tickIcon} />
-        )}
+      <View style={styles.buddyList}>
+        {aiBuddies.map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            activeOpacity={0.8}
+            style={[
+              styles.buddyCard,
+              selectedBuddy === item.id && styles.buddyCardSelected,
+            ]}
+            onPress={() => handleSelectBuddy(item.id)}
+          >
+            <Image
+              source={item.image}
+              style={styles.buddyImage}
+              resizeMode="cover"
+            />
+            <View style={{ flex: 1, marginLeft: 16, flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.buddyName}>{item.name}</Text>
+                <Text style={styles.buddyDescription}>{item.description}</Text>
+              </View>
+              {selectedBuddy === item.id && (
+                <Image source={TickIcon} style={styles.tickIcon} />
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
       </View>
-    </TouchableOpacity>
-  ))}
-</View>
-
-      <TouchableOpacity style={styles.deleteBtn}>
+      <TouchableOpacity style={styles.deleteBtn} onPress={() => setDeleteModalVisible(true)} >
         <View style={styles.iconRow}>
           <Image source={DeleteIcon} style={styles.actionIcon} />
           <Text style={styles.deleteBtnText}>Delete Account</Text>
@@ -353,6 +395,57 @@ const Profile = () => {
         </View>
       </TouchableOpacity>
       <Text style={styles.versionText}>v1.0.1</Text>
+
+      {/* Delete Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setDeleteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalBox}>
+            <View style={styles.modalIconContainer}>
+              <Image source={DeleteIcon} style={styles.deleteModalBinIcon} />
+            </View>
+            <Text style={styles.deleteModalText}>
+              Enter <Text style={{ fontWeight: 'bold', color: '#fff' }}>"Delete"</Text>{'\n'}to delete your account.
+            </Text>
+            <TextInput
+              style={styles.deleteModalInput}
+              placeholder='Delete'
+              placeholderTextColor="#F04438"
+              value={deleteInput}
+              onChangeText={setDeleteInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.deleteModalBtnRow}>
+              <TouchableOpacity
+                style={styles.deleteModalGoBackBtn}
+                onPress={() => {
+                  setDeleteModalVisible(false);
+                  setDeleteInput('');
+                }}
+              >
+                <Text style={styles.deleteModalGoBackText}>Go Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.deleteModalDeleteBtn,
+                  deleteInput.trim().toLowerCase() === 'delete'
+                    ? { opacity: 1 }
+                    : { opacity: 0.6 }
+                ]}
+                disabled={deleteInput.trim().toLowerCase() !== 'delete'}
+                onPress={handleDeleteAccount}
+              >
+                <Text style={styles.deleteModalDeleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -363,7 +456,71 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     paddingVertical: 30,
     paddingHorizontal: 18,
-
+  },
+  examRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  examBtn: {
+    backgroundColor: '#0C111D',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginRight: 10,
+    marginBottom: 6,
+  },
+  examBtnSelected: {
+    backgroundColor: '#fff',
+  },
+  examBtnReadOnly: {
+    opacity: 0.7,
+  },
+  examBtnText: {
+    color: '#fff',
+    fontWeight: '500',
+    fontFamily: 'Geist',
+    fontSize: 13,
+  },
+  examBtnTextSelected: {
+    color: '#181f2b',
+    fontWeight: '500',
+  },
+  examBtnTextReadOnly: {
+    opacity: 0.7,
+  },
+  personalInfoBox: {
+    // backgroundColor: '#1D2939', // REMOVE to allow dynamic color
+    borderRadius: 18,
+    padding: 20,
+    marginBottom: 28,
+    marginTop: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  personalInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    marginTop: 0,
+  },
+  editBtn: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingHorizontal: 22,
+    paddingVertical: 7,
+    marginLeft: 8,
+  },
+  editBtnText: {
+    color: '#121929',
+    fontWeight: '600',
+    fontSize: 15,
+    fontFamily: "Geist",
   },
   sectionTitle: {
     color: '#fff',
@@ -372,32 +529,69 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     fontFamily: "Geist",
   },
-  mentorDesc: {
-    color: '#aaa',
-    fontSize: 13,
-    marginBottom: 10,
-    marginTop: -10,
-     fontFamily: 'Geist',
-  },
   inputGroup: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
   label: {
     color: '#fff',
     fontSize: 13,
     marginBottom: 6,
     fontWeight: '500',
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   input: {
     backgroundColor: '#0C111D',
     color: '#fff',
-    borderRadius: 10,
+    borderRadius: 9,
     paddingHorizontal: 15,
     paddingVertical: 12,
     fontSize: 16,
-    marginBottom: 0,
     borderWidth: 0,
+    marginBottom: 0,
+    fontFamily: 'Geist',
+  },
+  inputReadOnly: {
+    color: '#fff',
+    backgroundColor: '#0C111D',
+    opacity: 0.7,
+  },
+  customSelect: {
+    backgroundColor: '#0C111D',
+    borderRadius: 9,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 16,
+    justifyContent: 'center',
+    borderWidth: 0,
+    marginBottom: 0,
+    fontFamily: 'Geist',
+  },
+  customSelectActive: {
+    opacity: 1,
+  },
+  selectText: {
+    fontSize: 16,
+    color: '#fff',
+    fontFamily: 'Geist',
+  },
+  selectDropdown: {
+    backgroundColor: '#232b3b',
+    borderRadius: 9,
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    paddingVertical: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.14,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  selectDropdownItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
   },
   genderRow: {
     flexDirection: 'row',
@@ -405,68 +599,80 @@ const styles = StyleSheet.create({
     marginTop: 4,
     flexWrap: 'wrap',
   },
-  genderBtn: {
+  genderBtnNew: {
     backgroundColor: '#0C111D',
-    borderRadius: 20,
+    borderRadius: 18,
     paddingVertical: 8,
     paddingHorizontal: 18,
     marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#262626',
     marginBottom: 6,
   },
-  genderBtnSelected: {
+  genderBtnNewSelected: {
     backgroundColor: '#fff',
-    borderColor: '#262626',
   },
-  genderBtnText: {
-    color: '#fff',
-    fontWeight: 'medium',
-     fontFamily: 'Geist',
+  genderBtnNewReadOnly: {
+    opacity: 0.7,
   },
-  genderBtnTextSelected: {
-    color: '#262626',
-    fontWeight: 'medium',
-     fontFamily: 'Geist',
-  },
-  examBtn: {
-    backgroundColor: '#0C111D',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#222',
-    marginBottom: 6,
-  },
-  examBtnSelected: {
-    backgroundColor: '#fff',
-    borderColor: '#262626',
-  },
-  examBtnText: {
+  genderBtnTextNew: {
     color: '#fff',
     fontWeight: '500',
-    fontSize: 13,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
+    fontSize: 15,
   },
-  examBtnTextSelected: {
-    color: '#222',
-    fontWeight: 'medium',
-     fontFamily: 'Geist',
+  genderBtnTextNewSelected: {
+    color: '#0C111D',
+    fontWeight: '500',
   },
-  saveBtn: {
-    marginTop: 18,
+  genderBtnTextNewReadOnly: {
+    opacity: 0.7,
+  },
+  divider: {
+    borderBottomColor: '#344054',
+    borderBottomWidth: 1,
+    marginVertical: 18,
+    marginHorizontal: -8,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: '#181f2b',
     borderRadius: 20,
-    paddingVertical: 14,
+    paddingVertical: 13,
     alignItems: 'center',
-    marginBottom: 10,
+    marginRight: 8,
   },
-  saveBtnText: {
-    color: '#000000',
-    fontWeight: 'medium',
+  cancelBtnText: {
+    color: '#fff',
+    fontWeight: '500',
     fontSize: 17,
     letterSpacing: 1,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
+  },
+  saveBtnNew: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  saveBtnNewText: {
+    color: '#181f2b',
+    fontWeight: '600',
+    fontSize: 17,
+    letterSpacing: 1,
+    fontFamily: 'Geist',
+  },
+  mentorDesc: {
+    color: '#aaa',
+    fontSize: 13,
+    marginBottom: 10,
+    marginTop: -10,
+    fontFamily: 'Geist',
   },
   buddyList: {
     marginTop: 10,
@@ -499,12 +705,12 @@ const styles = StyleSheet.create({
     fontWeight: 'medium',
     color: '#fff',
     marginBottom: 2,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   tickIcon: {
     width: 28,
     height: 28,
-   marginLeft: 10,
+    marginLeft: 10,
     resizeMode: 'contain',
   },
   buddyDescription: {
@@ -512,7 +718,7 @@ const styles = StyleSheet.create({
     color: '#CCC',
     marginTop: 2,
     lineHeight: 16,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   iconRow: {
     flexDirection: 'row',
@@ -540,7 +746,7 @@ const styles = StyleSheet.create({
     fontWeight: 'medium',
     fontSize: 17,
     letterSpacing: 1,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   logoutBtn: {
     backgroundColor: '#fff',
@@ -555,15 +761,111 @@ const styles = StyleSheet.create({
     fontWeight: 'medium',
     fontSize: 17,
     letterSpacing: 1,
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   versionText: {
     color: '#888',
     fontSize: 13,
     textAlign: 'center',
     marginTop: 18,
-     fontFamily: 'Geist',
-      marginBottom: 100,
+    fontFamily: 'Geist',
+    marginBottom: 100,
+  },
+  // --- Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+   
+    alignItems: 'center',
+  },
+  deleteModalBox: {
+    width: 320,
+    backgroundColor: '#0C111D',
+    borderRadius: 18,
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 12,
+    borderColor: "#1D2939",
+    borderWidth: 1
+   
+  },
+  modalIconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    marginBottom: 12,
+  },
+  deleteModalBinIcon: {
+    width: 34,
+    height: 34,
+    resizeMode: 'contain',
+    tintColor: '#fff',
+  },
+  deleteModalText: {
+    color: '#fff',
+    textAlign: 'center',
+    fontSize: 17,
+    marginBottom: 18,
+    fontWeight: '400',
+    fontFamily: 'Geist',
+  },
+  deleteModalInput: {
+    width: '95%',
+    minHeight: 42,
+    borderWidth: 1.2,
+    borderColor: '#344054',
+    borderRadius: 10,
+    marginBottom: 22,
+    color: '#F04438',
+    fontSize: 17,
+    textAlign: 'center',
+    fontWeight: '600',
+    backgroundColor: 'transparent',
+    fontFamily: 'Geist',
+  },
+  deleteModalBtnRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 0,
+    gap: 14,
+  },
+  deleteModalGoBackBtn: {
+    flex: 1,
+    backgroundColor: '#101828',
+    borderRadius: 22,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginRight: 6,
+      borderColor: "#1D2939",
+      borderWidth: 1
+  },
+  deleteModalGoBackText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '500',
+    fontFamily: 'Geist',
+  },
+  deleteModalDeleteBtn: {
+    flex: 1,
+    backgroundColor: '#FEE4E2',
+    borderRadius: 22,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginLeft: 6,
+  },
+  deleteModalDeleteText: {
+    color: '#D92D20',
+    fontSize: 17,
+    fontWeight: '700',
+    fontFamily: 'Geist',
   },
 });
 

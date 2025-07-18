@@ -429,8 +429,8 @@ const styles = StyleSheet.create({
     fontFamily: "Geist"
   },
   characterImage: {
-    width: scale(40),
-    height: scale(40),
+    width: scale(30),
+    height: scale(30),
     borderRadius: scale(20),
   marginLeft: scale(40),
     borderWidth: 1,

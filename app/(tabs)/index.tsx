@@ -156,243 +156,231 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Quick Formula Cards */}
-        <Text style={styles.sectionTitle}>Quick Formula Cards</Text>
-        <View style={styles.cardTabsContainer}>
-          <View style={styles.tabRow}>
-            {['Physics', 'Maths', 'Chemistry'].map(tab => (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.tabBtn, selectedCardTab === tab && styles.tabBtnActive]}
-                onPress={() => setSelectedCardTab(tab)}
+        {/* All content except footer gets horizontal padding */}
+        <View style={styles.paddedContent}>
+          {/* Quick Formula Cards */}
+          <Text style={styles.sectionTitle}>Quick Formula Cards</Text>
+          <View style={styles.cardTabsContainer}>
+            <View style={styles.tabRow}>
+              {['Physics', 'Maths', 'Chemistry'].map(tab => (
+                <TouchableOpacity
+                  key={tab}
+                  style={[styles.tabBtn, selectedCardTab === tab && styles.tabBtnActive]}
+                  onPress={() => setSelectedCardTab(tab)}
+                >
+                  <Text style={[styles.tabBtnText, selectedCardTab === tab && styles.tabBtnTextActive]}>{tab}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <ScrollView
+                horizontal
+                ref={formulaCardsScrollView}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.cardsRow}
               >
-                <Text style={[styles.tabBtnText, selectedCardTab === tab && styles.tabBtnTextActive]}>{tab}</Text>
-              </TouchableOpacity>
-            ))}
+                {formulaChapters.map((chapter, index) => {
+                  const bgColor = formulaCardColors[index % formulaCardColors.length];
+                  return (
+                    <TouchableOpacity
+                      key={chapter.title}
+                      activeOpacity={0.92}
+                      style={[styles.formulaCard, { backgroundColor: bgColor }]}
+                      onPress={() => {
+                        setModalChapter(chapter);
+                        setModalVisible(true);
+                      }}
+                    >
+                      <Image
+                        source={require('../../src/assets/images/Dotted.png')}
+                        style={styles.formulaCardOverlay}
+                        pointerEvents="none"
+                      />
+                      <Text
+                        style={styles.formulaCardTitle}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {chapter.title.replace(/\.$/, '')}
+                      </Text>
+                      <View style={styles.cardFooterRow}>
+                        <Image source={require('../../src/assets/images/copy.png')} style={styles.cardIcon} />
+                        <Text style={styles.cardCount}>{chapter.questions}</Text>
+                        <View style={styles.cardArrowBtn}>
+                          <Image source={imagepath.arrow} style={styles.cardArrowImg} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+              <View pointerEvents="none" style={styles.formulaFadeBox}>
+                <Image
+                  source={require('../../src/assets/images/Fade007.png')}
+                  style={styles.formulaFadeImg}
+                  resizeMode="stretch"
+                />
+              </View>
+            </View>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <ScrollView
-              horizontal
-              ref={formulaCardsScrollView}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.cardsRow}
-            >
-              {formulaChapters.map((chapter, index) => {
-                const bgColor = formulaCardColors[index % formulaCardColors.length];
+
+          {/* Modal for formula card */}
+          <Modal
+            visible={modalVisible}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setModalVisible(false)}
+          >
+            <View style={styles.fullScreenModalOverlay}>
+              <View style={styles.fancyModalBox}>
+                <View style={styles.fancyModalHeader}>
+                  <Text style={styles.fancyModalTitle} numberOfLines={2}>
+                    {modalChapter?.title?.replace(/\.$/, '')}
+                  </Text>
+                  <TouchableOpacity onPress={() => setModalVisible(false)}>
+                    <Text style={styles.fancyModalCloseX}>×</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.fancyModalLineRow}>
+                  <View style={styles.fancyModalLineShort} />
+                  <View style={styles.fancyModalLineLong} />
+                </View>
+                <View style={styles.fancyModalContent} />
+              </View>
+            </View>
+          </Modal>
+
+          {/* Study Content */}
+          <Text style={styles.sectionTitle}>Study Content</Text>
+          <View style={styles.cardTabsContainer}>
+            <View style={styles.tabRow}>
+              {['Physics', 'Maths', 'Chemistry'].map(tab => (
+                <TouchableOpacity
+                  key={tab}
+                  style={[
+                    styles.tabBtn,
+                    selectedStudyTab === tab && styles.tabBtnActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedStudyTab(tab);
+                    setShowAllVideos(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.tabBtnText,
+                      selectedStudyTab === tab && styles.tabBtnTextActive,
+                    ]}
+                  >
+                    {tab}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.studyGrid}>
+              {displayStudyChapters.map((chapter, idx) => {
+                const thumb = studyThumbs[idx % studyThumbs.length] || studyThumbs[0];
                 return (
                   <TouchableOpacity
                     key={chapter.title}
+                    style={styles.studyCard}
                     activeOpacity={0.92}
-                    style={[styles.formulaCard, { backgroundColor: bgColor }]}
                     onPress={() => {
-                      setModalChapter(chapter);
-                      setModalVisible(true);
+                      if (chapter.playlist) {
+                        Linking.openURL(chapter.playlist);
+                      }
                     }}
                   >
                     <Image
-                      source={require('../../src/assets/images/Dotted.png')}
-                      style={styles.formulaCardOverlay}
-                      pointerEvents="none"
+                      source={thumb}
+                      style={styles.studyThumb}
+                      resizeMode="cover"
                     />
-                    <Text
-                      style={styles.formulaCardTitle}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
+                    <View style={styles.playBtn}>
+                      <Image
+                        source={require('../../src/assets/images/youtube_play.png')}
+                        style={styles.playIcon}
+                      />
+                    </View>
+                    <Text style={styles.studyCardTitle} numberOfLines={2}>
                       {chapter.title.replace(/\.$/, '')}
                     </Text>
-                    <View style={styles.cardFooterRow}>
-                      <Image source={require('../../src/assets/images/copy.png')} style={styles.cardIcon} />
-                      <Text style={styles.cardCount}>{chapter.questions}</Text>
-                      <View style={styles.cardArrowBtn}>
-                        <Image source={imagepath.arrow} style={styles.cardArrowImg} />
-                      </View>
-                    </View>
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
-            {/* Fade effect at the end of horizontal scroll */}
-            <View pointerEvents="none" style={styles.formulaFadeBox}>
-              <Image
-                source={require('../../src/assets/images/Fade007.png')}
-                style={styles.formulaFadeImg}
-                resizeMode="stretch"
-              />
             </View>
-          </View>
-        </View>
 
-        {/* Modal for formula card */}
-        <Modal
-          visible={modalVisible}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setModalVisible(false)}
-        >
-          <View style={styles.fancyModalOverlay}>
-            <View style={styles.fancyModalBox}>
-              {/* Modal Header */}
-              <View style={styles.fancyModalHeader}>
-                <Text style={styles.fancyModalTitle} numberOfLines={2}>
-                  {modalChapter?.title?.replace(/\.$/, '')}
-                </Text>
-                <TouchableOpacity onPress={() => setModalVisible(false)}>
-                  <Text style={styles.fancyModalCloseX}>×</Text>
-                </TouchableOpacity>
-              </View>
-              {/* Decorative line */}
-              <View style={styles.fancyModalLineRow}>
-                <View style={styles.fancyModalLineShort} />
-                <View style={styles.fancyModalLineLong} />
-              </View>
-              {/* Formula content area (placeholder for now) */}
-              <View style={styles.fancyModalContent} />
-            </View>
-          </View>
-        </Modal>
-
-        {/* Study Content */}
-        <Text style={styles.sectionTitle}>Study Content</Text>
-        <View style={styles.cardTabsContainer}>
-          <View style={styles.tabRow}>
-            {['Physics', 'Maths', 'Chemistry'].map(tab => (
+            {studyChapters.length > initialCount && (
               <TouchableOpacity
-                key={tab}
-                style={[
-                  styles.tabBtn,
-                  selectedStudyTab === tab && styles.tabBtnActive,
-                ]}
-                onPress={() => {
-                  setSelectedStudyTab(tab);
-                  setShowAllVideos(false); // Reset show more when switching tab
-                }}
+                style={styles.showMoreBtn}
+                onPress={() => setShowAllVideos(!showAllVideos)}
               >
-                <Text
-                  style={[
-                    styles.tabBtnText,
-                    selectedStudyTab === tab && styles.tabBtnTextActive,
-                  ]}
-                >
-                  {tab}
+                <Text style={styles.showMoreBtnText}>
+                  {showAllVideos ? 'Show Less' : 'Show More'}
                 </Text>
               </TouchableOpacity>
-            ))}
+            )}
           </View>
 
-          <View style={styles.studyGrid}>
-            {displayStudyChapters.map((chapter, idx) => {
-              const thumb = studyThumbs[idx % studyThumbs.length] || studyThumbs[0];
-              return (
-                <TouchableOpacity
-                  key={chapter.title}
-                  style={styles.studyCard}
-                  activeOpacity={0.92}
-                  onPress={() => {
-                    if (chapter.playlist) {
-                      Linking.openURL(chapter.playlist);
-                    }
-                  }}
-                >
-                  <Image
-                    source={thumb}
-                    style={styles.studyThumb}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.playBtn}>
-                    <Image
-                      source={require('../../src/assets/images/youtube_play.png')}
-                      style={styles.playIcon}
-                    />
-                  </View>
-                  <Text style={styles.studyCardTitle} numberOfLines={2}>
-                    {chapter.title.replace(/\.$/, '')}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Show More / Show Less Button */}
-          {studyChapters.length > initialCount && (
-            <TouchableOpacity
-              style={styles.showMoreBtn}
-              onPress={() => setShowAllVideos(!showAllVideos)}
-            >
-              <Text style={styles.showMoreBtnText}>
-                {showAllVideos ? 'Show Less' : 'Show More'}
-              </Text>
+          {/* Invite Friends */}
+          <LinearGradient
+            colors={['#1C9980', '#2E5BFF']}
+            start={{ x: 1, y: 1 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.inviteBox}
+          >
+            <Text style={styles.inviteTitle}>Study with your friends!</Text>
+            <Text style={styles.inviteSubtitle}>
+              Invite your friends to Rookie app to learn together.
+            </Text>
+            <Image
+              source={require('../../src/assets/images/invite_friends.png')}
+              style={styles.inviteImage}
+              resizeMode="contain"
+            />
+            <TouchableOpacity style={styles.inviteBtn}>
+              <Text style={styles.inviteBtnText}>Invite</Text>
             </TouchableOpacity>
-          )}
-        </View>
+          </LinearGradient>
 
-        {/* Invite Friends */}
-        <LinearGradient
-          colors={['#1C9980', '#2E5BFF']}
-          start={{ x: 1, y: 1 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.inviteBox}
-        >
-          <Text style={styles.inviteTitle}>Study with your friends!</Text>
-          <Text style={styles.inviteSubtitle}>
-            Invite your friends to Rookie app to learn together.
-          </Text>
-          <Image
-            source={require('../../src/assets/images/invite_friends.png')}
-            style={styles.inviteImage}
-            resizeMode="contain"
-          />
-          <TouchableOpacity style={styles.inviteBtn}>
-            <Text style={styles.inviteBtnText}>Invite</Text>
-          </TouchableOpacity>
-        </LinearGradient>
-
-        {/* Social Media */}
-        <View style={styles.socialBox}>
-          <Text style={styles.socialTitle}>We're on social media</Text>
-          <Text style={styles.socialSub}>
-            Follow us and share with your friends.
-          </Text>
-          <Image
-            source={require('../../src/assets/images/social_illustration.png')}
-            style={styles.socialImage}
-            resizeMode="contain"
-          />
-          <View style={styles.socialGrid}>
-            {socialMediaLinks.map((item, idx) => (
-              <TouchableOpacity
-                key={item.label}
-                style={styles.socialBtn}
-                onPress={() => Linking.openURL(item.url)}
-                activeOpacity={0.85}
-              >
-                <Image source={item.icon} style={styles.socialIcon} />
-                <Text style={styles.socialBtnText}> {item.label}</Text>
-              </TouchableOpacity>
-            ))}
+          {/* Social Media */}
+          <View style={styles.socialBox}>
+            <Text style={styles.socialTitle}>We're on social media</Text>
+            <Text style={styles.socialSub}>
+              Follow us and share with your friends.
+            </Text>
+            <Image
+              source={require('../../src/assets/images/social_illustration.png')}
+              style={styles.socialImage}
+              resizeMode="contain"
+            />
+            <View style={styles.socialGrid}>
+              {socialMediaLinks.map((item, idx) => (
+                <TouchableOpacity
+                  key={item.label}
+                  style={styles.socialBtn}
+                  onPress={() => Linking.openURL(item.url)}
+                  activeOpacity={0.85}
+                >
+                  <Image source={item.icon} style={styles.socialIcon} />
+                  <Text style={styles.socialBtnText}> {item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-       
         </View>
-
-    
-         {/* Footer */}
-     
-        <Image
-          source={require('../../src/assets/images/imgfoot.png')}
-          style={styles.footerImage}
-          resizeMode="cover"
-        />
-  
-       
+ 
+        {/* Footer: edge-to-edge in its own container */}
+        <View style={styles.footerContainer}>
+          <Image
+            source={require('../../src/assets/images/featpicsss.png')}
+            style={styles.footerImage}
+            resizeMode="cover"
+          />
+        </View>
       </ScrollView>
-      
-   
-    
     </View>
-
-    
-     
-     
   );
 }
 
@@ -556,6 +544,7 @@ const styles = StyleSheet.create({
   // ... rest of your modal styles ...
   modalBox: {
     width: 300,
+    
     backgroundColor: '#191C2A',
     borderRadius: 20,
     padding: 24,
@@ -655,7 +644,7 @@ const styles = StyleSheet.create({
   },
   // Invite friends
   inviteBox: {
-    width: SCREEN_WIDTH - 12,
+    width: '100%',
     alignSelf: 'center',
     borderRadius: 18,
     marginTop: 18,
@@ -717,7 +706,7 @@ const styles = StyleSheet.create({
   },
   // Social Media
   socialBox: {
-    width: SCREEN_WIDTH - 12,
+     width: '100%',
     alignSelf: 'center',
     borderRadius: 18,
     marginTop: 10,
@@ -802,11 +791,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  fullScreenModalOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+
   fancyModalBox: {
-    width: 350,
-    minHeight: 680,
+    width: '100%',          // changed from fixed width to full width
+    minHeight: '100%',      // changed from fixed minHeight to full height
     backgroundColor: '#0B111C',
-    borderRadius: 16,
+    borderRadius: 0,        // remove border radius for edge-to-edge
     paddingTop: 18,
     paddingBottom: 18,
     paddingHorizontal: 0,
@@ -815,6 +815,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 24,
     elevation: 8,
+    // Optionally: add flex properties to fill space
+    flex: 1,
+    justifyContent: 'flex-start',
   },
   fancyModalHeader: {
     flexDirection: 'row',
@@ -873,5 +876,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     borderRadius: 18,
     minHeight: 550,
+  },
+    // New style for content wrapper
+  paddedContent: {
+    paddingHorizontal: 10,
   },
 });
