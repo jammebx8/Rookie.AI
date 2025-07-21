@@ -126,7 +126,7 @@ const handleSubjectPress = (subject) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <ScrollView  showsVerticalScrollIndicator={false}>
         {/* Practice Title & Exam Toggle */}
         <View style={styles.practiceRow}>
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0C111D",
 paddingBottom: verticalScale(30),
- paddingHorizontal: 12,
+  paddingHorizontal: 10,
 
   },
   practiceRow: {
@@ -217,7 +217,7 @@ paddingBottom: verticalScale(30),
       fontFamily: 'Geist',
   },
   dropdown: {
-    backgroundColor: '#18183A',
+    backgroundColor: '#000000',
     borderRadius: 12,
     marginTop: 4,
     overflow: 'hidden',

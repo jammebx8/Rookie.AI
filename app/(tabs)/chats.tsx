@@ -184,7 +184,7 @@ const HomePage = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <ImageBackground
         source={require('../../src/assets/images/bg2.png')}
         style={styles.backgroundImage}
@@ -250,10 +250,11 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    
    
   },
   scrollContent: {
-   
+    paddingHorizontal: 10,
     paddingTop: verticalScale(10),
      paddingBottom: 60,
   },

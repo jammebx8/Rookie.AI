@@ -9,7 +9,7 @@ const Auth = () => {
   const gifDisplayTime = 3000; // Set the GIF display time in milliseconds (e.g., 5000 = 5 seconds)
 
   let navigate_to_welcome = () => {
-    router.push('/(tabs)'); // Navigate to the Onboarding screen     ////     (auth)/Onboarding
+    router.push('/terms_agree'); // Navigate to the Onboarding screen     ////     (auth)/Onboarding
   };
 
   let loading_timeout = () => {
@@ -18,7 +18,7 @@ const Auth = () => {
   };
 
   useEffect(() => {
-    const timeout = setTimeout(loading_timeout, 2000); // Initial delay before GIF starts
+    const timeout = setTimeout(loading_timeout, 0); // Initial delay before GIF starts
     return () => {
       clearTimeout(timeout);
     };
@@ -26,7 +26,7 @@ const Auth = () => {
 
   return (
     <SafeAreaView style={style.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
        <ImageBackground 
               source={imagepath.level1} 
               style={style.background_image}
@@ -35,7 +35,7 @@ const Auth = () => {
       <View style={style.header}></View>
 
       <View style={style.body}>
-        <Image source={imagepath.logo} style={style.logo_style} resizeMode="contain" />
+        <Image source={imagepath.homelogo} style={style.logo_style} resizeMode="contain" />
          
       </View>
 
@@ -44,7 +44,7 @@ const Auth = () => {
           <View style={{ alignItems: 'center' }}>
             <Image
               source={require('../../src/assets/images/667.gif')} // Replace with your GIF path
-              style={{ width: 100, height: 100}} // Adjust size as needed
+              style={{ width: 60, height: 60}} // Adjust size as needed
             />
           </View>
         ) : (

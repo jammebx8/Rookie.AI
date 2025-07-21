@@ -222,7 +222,7 @@ export default function ChapterScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       {/* Header with background image */}
       <ImageBackground source={subjectImage} style={styles.headerBg} imageStyle={styles.headerBgImg}>
         {/* Top Row: Back and Info */}
@@ -412,6 +412,7 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(22),
     fontWeight: 'medium',
     fontFamily: 'Geist',
+    marginBottom: verticalScale(10),
   },
   filterBtn: {
     flexDirection: 'row',
@@ -439,6 +440,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(10),
     paddingBottom: verticalScale(20),
     paddingTop: 0,
+ 
   },
   chapterCard: {
     flexDirection: 'row',

@@ -270,7 +270,7 @@ export default function MessageScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0B0B28' }}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
     <KeyboardAvoidingView
   style={{ flex: 1 }}
   behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}

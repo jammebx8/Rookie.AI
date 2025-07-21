@@ -4,8 +4,12 @@
     "slug": "rookie",
     "version": "1.0.0",
     "orientation": "portrait",
-     "icon": "./src/assets/shiee.png",
-
+     "icon": "./src/assets/appicon.png",
+    "splash": {
+      "image": "./src/assets/PreSplash3.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
   
     "userInterfaceStyle": "light",
    

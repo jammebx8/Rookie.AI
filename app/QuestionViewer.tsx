@@ -20,6 +20,7 @@ const GROQ_API_KEY = 'REMOVED';
 const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
 
+
 const getSubjectImage = (subjectName) => {
   if (subjectName === 'Physics') return imagepath.Physics;
   if (subjectName === 'Chemistry') return imagepath.Chemistry;
@@ -65,6 +66,10 @@ const QuestionViewer = () => {
   const [aiFollowupLoading, setAIFollowupLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const [bookmarked, setBookmarked] = useState(false);
+const [showToast, setShowToast] = useState(false);
+
+
+
 
   // Dig Deeper Adaptive Concept Diagnostic
   const [isDigging, setIsDigging] = useState(false);
@@ -105,36 +110,39 @@ const QuestionViewer = () => {
   }, [currentIndex, questions, chapterTitle, subjectName]);
 
   // Bookmark handler
-  const handleBookmark = async () => {
-    try {
-      const currentQuestion = questions[currentIndex];
-      if (!currentQuestion) return;
-      const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
-      let arr = stored ? JSON.parse(stored) : [];
+ const handleBookmark = async () => {
+  try {
+    const currentQuestion = questions[currentIndex];
+    if (!currentQuestion) return;
+    const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
+    let arr = stored ? JSON.parse(stored) : [];
 
-      if (!bookmarked) {
-        arr.push({
-          ...currentQuestion,
-          chapterTitle,
-          subjectName,
-          index: currentIndex,
-        });
-        await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
-        setBookmarked(true);
-      } else {
-        arr = arr.filter(
-          (q) =>
-            !(
-              q.question === currentQuestion.question &&
-              q.chapterTitle === chapterTitle &&
-              q.subjectName === subjectName
-            )
-        );
-        await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
-        setBookmarked(false);
-      }
-    } catch (e) {}
-  };
+    if (!bookmarked) {
+      arr.push({
+        ...currentQuestion,
+        chapterTitle,
+        subjectName,
+        index: currentIndex,
+      });
+      await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
+      setBookmarked(true);
+      setShowToast(true); // Show toast
+      setTimeout(() => setShowToast(false), 1800); // Hide after 1.8s
+    } else {
+      arr = arr.filter(
+        (q) =>
+          !(
+            q.question === currentQuestion.question &&
+            q.chapterTitle === chapterTitle &&
+            q.subjectName === subjectName
+          )
+      );
+      await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
+      setBookmarked(false);
+    }
+  } catch (e) {}
+};
+
 
   useEffect(() => {
     const chapterQuestions = questionsData[chapterTitle] || [];
@@ -746,7 +754,7 @@ User's answer: ${history[history.length-1].userAnswer}
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 260 }]}
@@ -1086,6 +1094,8 @@ User's answer: ${history[history.length-1].userAnswer}
         </View>
       </Modal>
 
+
+
       {/* Fixed Footer Navigation */}
 
       {showCorrectGif && (
@@ -1095,9 +1105,23 @@ User's answer: ${history[history.length-1].userAnswer}
             style={styles.fullScreenGifImage}
             resizeMode="cover"
           />
+
+
         </View>
       )}
+
+      
+
+
       <View style={styles.footerNav}>
+
+
+                     {showToast && (
+  <View style={styles.toastBar}>
+    <Text style={styles.toastText}>Bookmarked!</Text>
+  </View>
+)}
+
         {!isConnected && (
           <View style={styles.noInternetBar}>
             <Text style={styles.noInternetBarText}>
@@ -1105,6 +1129,8 @@ User's answer: ${history[history.length-1].userAnswer}
             </Text>
           </View>
         )}
+
+       
 
         <TouchableOpacity
           style={styles.footerBtnCircle}
@@ -1394,7 +1420,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
     marginBottom: 10,
-    gap: 12,
+    gap:6
+    
   },
   aiFollowupBtn: {
     flexDirection: 'row',
@@ -1656,7 +1683,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   modalBtnOutline: {
-    minWidth: 159,
+   minWidth: 120,
     minHeight: 48,
     backgroundColor: '#181C28',
     borderRadius: 24,
@@ -1674,7 +1701,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist',
   },
   modalBtnSolid: {
-    minWidth: 159,
+  minWidth: 120,
     minHeight: 48,
     backgroundColor: '#fff',
     borderRadius: 24,
@@ -1690,7 +1717,7 @@ const styles = StyleSheet.create({
   },
     fullScreenGifOverlay: {
     position: 'absolute',
-    top: 350,
+    top: 460,
     left: 0,
     width: '100%',
     height: '60%',
@@ -1842,7 +1869,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 5,
     position: 'absolute',
-    top: 0,
+    
+    bottom:90,
     left: 0,
   
     zIndex: 9999,
@@ -1855,6 +1883,34 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     textAlign: 'center',
     letterSpacing: 0.1,
+  },
+
+
+
+    toastBar: {
+    position: 'absolute',
+   
+    bottom: 120,
+    left: '50%',
+    transform: [{ translateX: -100 }],
+    width: 200,
+    height: 40,
+    backgroundColor: '#0B7A44',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.09,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  toastText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'Geist',
   },
 });
 

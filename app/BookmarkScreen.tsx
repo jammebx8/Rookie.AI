@@ -79,7 +79,7 @@ const BookmarkScreen = () => {
   if (bookmarks.length === 0) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
             <Ionicons name="chevron-back" size={26} color="#fff" />
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   breadcrumbSeparator: { color: '#787C87', fontSize: 13, marginHorizontal: 5, fontFamily: 'Geistmono' },
   breadcrumbChapter: { color: '#787C87', fontSize: 15, fontFamily: 'Geistmono', fontWeight: '500' },
   breadcrumbQNum: { color: '#787C87', fontSize: 15, fontFamily: 'Geistmono', fontWeight: '500' },
-  qBodyOuter: { paddingHorizontal: 12, paddingTop: 32, paddingBottom: 30 },
+  qBodyOuter: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 30 },
   qText: { color: '#fff', fontSize: 20, fontFamily: 'Geist', fontWeight: '600', marginBottom: 30, marginTop: 3, paddingHorizontal: 8, lineHeight: 27 },
   optionsWrap: { marginBottom: 36, marginTop: 0 },
   optionRow: { flexDirection: 'row', alignItems: 'center', minHeight: 52, borderRadius: 10, marginBottom: 15, paddingHorizontal: 16, borderWidth: 1.2, position: 'relative' },

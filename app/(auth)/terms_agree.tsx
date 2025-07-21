@@ -1,112 +1,172 @@
-import { View, Text, StyleSheet, ImageBackground,StatusBar } from 'react-native';
-import React, { useEffect } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-import imagepath from '../../src/constants/imagepath';
-import ButtonComp from "../../src/components/atoms/ButtonComp";
-import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  Image,
+  ImageBackground,
+  StatusBar,
+  Platform,
+  Linking,
+} from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from "@react-navigation/native";
 
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-
-
-const TermsAgree = () => {
-  const router = useRouter();
+export default function TermsAgree() {
+  const [loading, setLoading] = useState(false);
+  const navigation = useNavigation();
 
   useEffect(() => {
-    const checkAgreement = async () => {
-      const agreed = await AsyncStorage.getItem('userAgreedToTerms');
-      if (agreed === 'true') {
-        router.replace('/Onboarding'); // Skip this screen
+    // If onboarding is already done, redirect to (tabs)
+    const checkOnboarded = async () => {
+      const onboarded = await AsyncStorage.getItem('@user_onboarded');
+      if (onboarded === 'true') {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "(tabs)" }],
+        });
       }
     };
-    checkAgreement();
+    checkOnboarded();
   }, []);
 
-  const onAgree = async () => {
-    await AsyncStorage.setItem('userAgreedToTerms', 'true');
-    router.push('/Onboarding');
+  const handleContinue = async () => {
+    // Go to Onboarding page
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Onboarding" }],
+    });
   };
 
   return (
-
-    
-    <SafeAreaView style={{ backgroundColor: "#0B0B28", flex: 1 }}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
-      <ImageBackground 
-        source={imagepath.welcome} 
-        style={styles.background_image}
-        resizeMode='cover'
-      >
-        <View style={styles.overlay}>
-          <Text style={styles.welcome_text}>Welcome to Rookie</Text>
-
-          <Text style={styles.description_text}>
-            Read our <Text style={styles.link_text}>Privacy Policy</Text>. Tap "Agree and continue" to accept the
-            <Text style={styles.link_text}> Terms of Service</Text>
-          </Text>
-
-          <ButtonComp title="AGREE AND CONTINUE" onPress={onAgree} />
-
-          <View style={styles.footer}>
-            <Text style={styles.from_text}>From</Text>
-            <Text style={styles.pookie_text}>Dhruv Pathak</Text>
-          </View>
+    <ImageBackground
+      source={require("../../src/assets/images/bg2.png")}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      <View style={styles.container}>
+        <Image
+          source={require("../../src/assets/images/logo.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <Text style={styles.heading}>Your Prep{"\n"}Made Easy</Text>
+        <View style={styles.handContainer}>
+          <Image
+            source={require("../../src/assets/images/Hand.png")}
+            style={styles.handImage}
+            resizeMode="contain"
+          />
+          <TouchableOpacity
+            style={[styles.continueButton, loading && styles.buttonDisabled]}
+            onPress={handleContinue}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.continueButtonText}>
+              Continue
+            </Text>
+          </TouchableOpacity>
         </View>
-      </ImageBackground>
-    </SafeAreaView>
+        <View style={{ flex: 1 }} />
+        <Text style={styles.termsText}>
+          By continuing you'll agree to all of our{"\n"}
+          <Text
+            style={styles.link}
+            onPress={() => Linking.openURL("https://yourdomain.com/terms")}
+          >
+            Terms of service
+          </Text>
+          {" "} &amp;{" "}
+          <Text
+            style={styles.link}
+            onPress={() => Linking.openURL("https://yourdomain.com/privacy")}
+          >
+            Privacy policies
+          </Text>
+          .
+        </Text>
+      </View>
+    </ImageBackground>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  background_image: {
+  background: {
     flex: 1,
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#000",
   },
-  overlay: {
+  container: {
     flex: 1,
-    backgroundColor: 'rgba(11, 11, 40, 0.5)',
-    paddingVertical: verticalScale(65),
-    paddingHorizontal: scale(20),
-    justifyContent: 'space-between',
+    paddingTop: Platform.OS === "android" ? 60 : 80,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingHorizontal: 0,
   },
-  footer: {
+  logo: {
+    width: 100,
+    height: 60,
+    marginBottom: 10,
+  },
+  heading: {
+    color: "#fff",
+    fontSize: 44,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 10,
+    lineHeight: 48,
+      fontFamily: 'Geist',
+  },
+  handContainer: {
+    width: "100%",
     alignItems: "center",
   },
-  from_text: {
-    fontSize: moderateScale(12),
-    color: "white",
-    paddingBottom: verticalScale(10),
+  handImage: {
+    width: 500,
+    height: 440,
   },
-  pookie_text: {
-    paddingTop: verticalScale(10),
-    color: "white",
+  continueButton: {
+    backgroundColor: "#fff",
+    borderRadius: 32,
+    width: "90%",
+    alignSelf: "center",
+    marginBottom: 12,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    height: 56,
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  continueButtonText: {
+    color: "#222",
     fontWeight: "bold",
-    fontSize: moderateScale(14),
-  },
-  welcome_text: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: moderateScale(30),
+      fontFamily: 'Geist',
+    fontSize: 20,
     textAlign: "center",
-    marginTop: verticalScale(20),
   },
-  description_text: {
-    color: "white",
+  termsText: {
+    color: "#aaa",
+    fontSize: 13,
     textAlign: "center",
-    fontSize: moderateScale(13),
+    marginBottom: 100,
+    marginTop: 2,
+    lineHeight: 18,
+      fontFamily: 'Geist',
   },
-  link_text: {
-    color: "#34B7F1"
-  }
+  link: {
+    color: "#3B82F6",
+    textDecorationLine: "underline",
+  },
 });
-
-export default TermsAgree;
-
-
-
-
-
-
 

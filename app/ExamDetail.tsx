@@ -53,7 +53,7 @@ export default function ExamDetail() {
 const router = useRouter();
   return (
     <ScrollView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
           <View style={styles.headerRow}>
       <TouchableOpacity onPress={() => router.back()}  >
         <Ionicons name="arrow-back" size={28} color="white" />

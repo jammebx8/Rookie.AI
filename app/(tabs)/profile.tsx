@@ -243,7 +243,7 @@ const Profile = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0517" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <View
         style={[
           styles.personalInfoBox,
@@ -272,15 +272,7 @@ const Profile = () => {
             placeholderTextColor="#888"
           />
         </View>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={[styles.input, styles.inputReadOnly, { color: '#888' }]}
-            value={email}
-            editable={false}
-            selectTextOnFocus={false}
-          />
-        </View>
+       
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Exam preparing for</Text>
           <View style={styles.examRow}>
@@ -388,12 +380,7 @@ const Profile = () => {
           <Text style={styles.deleteBtnText}>Delete Account</Text>
         </View>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <View style={styles.iconRow}>
-          <Image source={LogoutIcon} style={styles.actionIcon} />
-          <Text style={styles.logoutBtnText}>Logout</Text>
-        </View>
-      </TouchableOpacity>
+    
       <Text style={styles.versionText}>v1.0.1</Text>
 
       {/* Delete Modal */}
@@ -640,10 +627,12 @@ const styles = StyleSheet.create({
   cancelBtn: {
     flex: 1,
     backgroundColor: '#181f2b',
-    borderRadius: 20,
+    borderRadius: 22,
     paddingVertical: 13,
     alignItems: 'center',
     marginRight: 8,
+      minWidth: 120,
+    minHeight: 48,
   },
   cancelBtnText: {
     color: '#fff',
@@ -655,10 +644,12 @@ const styles = StyleSheet.create({
   saveBtnNew: {
     flex: 1,
     backgroundColor: '#fff',
-    borderRadius: 20,
+    borderRadius: 22,
     paddingVertical: 13,
     alignItems: 'center',
     marginLeft: 8,
+      minWidth: 120,
+    minHeight: 48,
   },
   saveBtnNewText: {
     color: '#181f2b',
@@ -840,7 +831,7 @@ const styles = StyleSheet.create({
   deleteModalGoBackBtn: {
     flex: 1,
     backgroundColor: '#101828',
-    borderRadius: 22,
+    borderRadius: 20,
     paddingVertical: 14,
     alignItems: 'center',
     marginRight: 6,
@@ -856,7 +847,7 @@ const styles = StyleSheet.create({
   deleteModalDeleteBtn: {
     flex: 1,
     backgroundColor: '#FEE4E2',
-    borderRadius: 22,
+    borderRadius: 20,
     paddingVertical: 14,
     alignItems: 'center',
     marginLeft: 6,

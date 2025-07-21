@@ -186,6 +186,16 @@ export default function TabLayout() {
                 resizeMode="contain"
               />
             ),
+              headerTitle: () => (
+              <Image
+                source={require('../../src/assets/images/lg.png')}
+                style={{
+                  width: 100,
+                  height: 100,
+                  resizeMode: 'contain',
+                }}
+              />
+            ),
           }}
         />
       </Tabs>
