@@ -7,7 +7,7 @@
      "icon": "./src/assets/appicon.png",
     "splash": {
       "image": "./src/assets/PreSplash3.png",
-      "resizeMode": "contain",
+      "resizeMode": "cover",
       "backgroundColor": "#000000"
     },
   

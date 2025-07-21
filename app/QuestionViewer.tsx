@@ -1420,7 +1420,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
     marginBottom: 10,
-    gap:6
+
     
   },
   aiFollowupBtn: {
