@@ -34,12 +34,16 @@ export default function TabLayout() {
         screenOptions={{
           headerShown: true,
           tabBarHideOnKeyboard: true,
+           
           tabBarActiveTintColor: 'white',
           tabBarInactiveTintColor: 'rgb(144, 144, 144)',
           tabBarStyle: {
             position: 'absolute',
             height: 60,
             paddingBottom: 10,
+
+    
+           
             elevation: 10,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 6 },
@@ -62,6 +66,11 @@ export default function TabLayout() {
             letterSpacing: 1.2,
           },
           headerTintColor: '#E0B3FF',
+
+                    tabBarLabelStyle: {
+      fontSize: 14, // <-- Increase this value as you like
+     
+    },
         }}
       >
         {/* Home Tab */}

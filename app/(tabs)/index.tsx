@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import imagepath from '@/src/constants/imagepath';
+import { supabase } from "../../src/utils/supabase"; // adjust the import path as needed
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -181,6 +183,8 @@ export default function HomeScreen() {
   const ROWS_TO_SHOW = 3;
   const initialCount = VIDEOS_PER_ROW * ROWS_TO_SHOW;
   const displayStudyChapters = showAllVideos ? studyChapters : studyChapters.slice(0, initialCount);
+  
+  
 
   return (
     <View style={styles.container}>

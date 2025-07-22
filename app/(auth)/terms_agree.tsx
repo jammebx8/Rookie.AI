@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(12),
     paddingVertical: 0,
     paddingHorizontal: 0,
-    height: verticalScale(56),
+    height: verticalScale(48),
     justifyContent: "center",
     shadowColor: "#000",
     shadowOpacity: 0.08,

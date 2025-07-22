@@ -10,13 +10,15 @@ import {
   StatusBar,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "@react-navigation/native";
 import { scale, verticalScale, moderateScale } from "react-native-size-matters";
+import { supabase } from "../../src/utils/supabase"; // adjust the import path as needed
 
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
-const EXAM_OPTIONS = ["JEE mains","NEET", "JEE Advanced" , "Other"];
+const EXAM_OPTIONS = ["JEE Mains", "NEET", "JEE Advanced", "Other"];
 
 export default function Onboarding() {
   const navigation = useNavigation();
@@ -24,6 +26,7 @@ export default function Onboarding() {
   const [gender, setGender] = useState("");
   const [exam, setExam] = useState("");
   const [inputComplete, setInputComplete] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     // Check if user is already onboarded
@@ -44,16 +47,38 @@ export default function Onboarding() {
   }, [fullName, gender, exam]);
 
   const handleContinue = async () => {
-    await AsyncStorage.setItem('@user', JSON.stringify({
-      name: fullName.trim(),
-      gender,
-      exam,
-    }));
-    await AsyncStorage.setItem('@user_onboarded', 'true');
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "(tabs)" }],
-    });
+    setLoading(true);
+    try {
+      // Save in AsyncStorage first for local access
+      await AsyncStorage.setItem('@user', JSON.stringify({
+        name: fullName.trim(),
+        gender,
+        exam,
+      }));
+
+      // Save to Supabase
+      const { error } = await supabase
+        .from('users')
+        .upsert([{
+          name: fullName.trim(),
+          gender,
+          exam,
+        }]);
+
+      // Optionally, handle error (show toast, etc. if needed)
+      if (!error) {
+        await AsyncStorage.setItem('@user_onboarded', 'true');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "(tabs)" }],
+        });
+      } else {
+        // Optionally handle Supabase error (toast, etc.)
+      }
+    } catch (err) {
+      // Optionally handle JS error (toast, etc.)
+    }
+    setLoading(false);
   };
 
   return (
@@ -120,18 +145,22 @@ export default function Onboarding() {
           <TouchableOpacity
             style={[
               styles.continueButton,
-              !inputComplete && styles.continueButtonInactive,
+              (!inputComplete || loading) && styles.continueButtonInactive,
             ]}
             onPress={handleContinue}
-            disabled={!inputComplete}
-            activeOpacity={inputComplete ? 0.8 : 1}
+            disabled={!inputComplete || loading}
+            activeOpacity={inputComplete && !loading ? 0.8 : 1}
           >
-            <Text style={[
-              styles.continueButtonText,
-              !inputComplete && styles.continueButtonTextInactive
-            ]}>
-              Continue
-            </Text>
+            {loading ? (
+              <ActivityIndicator size="small" color="#181f2b" />
+            ) : (
+              <Text style={[
+                styles.continueButtonText,
+                !inputComplete && styles.continueButtonTextInactive
+              ]}>
+                Continue
+              </Text>
+            )}
           </TouchableOpacity>
           <View style={styles.bottomSection}>
             <View style={styles.avatarRow}>
@@ -260,7 +289,7 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     width: "90%",
-    height: verticalScale(54),
+    height: verticalScale(48),
     borderRadius: moderateScale(27),
     backgroundColor: "#fff",
     justifyContent: "center",

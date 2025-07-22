@@ -6,8 +6,8 @@
     "orientation": "portrait",
      "icon": "./src/assets/appicon.png",
     "splash": {
-      "image": "./src/assets/PreSplash3.png",
-      "resizeMode": "cover",
+      "image": "./src/assets/Vector17.png",
+      "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
   
