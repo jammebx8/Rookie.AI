@@ -33,6 +33,7 @@
     "android": {
     
       "package": "com.ttyyy",
+      "versionCode": 2,
       "intentFilters": [
         {
           "action": "VIEW",
