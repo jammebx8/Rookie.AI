@@ -151,7 +151,8 @@ const HomePage = () => {
         })
       );
 
-      // Sort AI chats by last message
+  
+      // SORTING FEATURE:
       aiChats.sort((a, b) => {
         if (a.timestamp && b.timestamp) {
           return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
@@ -166,6 +167,12 @@ const HomePage = () => {
 
     loadChats();
   }, []);
+
+
+
+
+
+  
 
   const getRelativeTime = (dateString) => {
     if (!dateString) return '';
