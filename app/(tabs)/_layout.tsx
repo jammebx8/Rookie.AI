@@ -212,6 +212,10 @@ export default function TabLayout() {
   );
 }
 
+
+
+
+
 const styles = StyleSheet.create({
   bookmarkButton: {
     marginRight: 16,

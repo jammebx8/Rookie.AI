@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet, Image, ImageBackground,StatusBar } from 'react-native';
 import React, { useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import imagepath from '../../src/constants/imagepath';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Auth = () => {
   const [isloading, setIsLoading] = useState(false);
@@ -11,6 +12,21 @@ const Auth = () => {
   let navigate_to_welcome = () => {
     router.push('/terms_agree'); // Navigate to the Onboarding screen     ////     (auth)/Onboarding
   };
+
+  const navigation = useNavigation();
+  useEffect(() => {
+    // If onboarding is already done, redirect to (tabs)
+    const checkOnboarded = async () => {
+      const onboarded = await AsyncStorage.getItem('@user_onboarded');
+      if (onboarded === 'true') {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "(tabs)" }],
+        });
+      }
+    };
+    checkOnboarded();
+  }, []);
 
   let loading_timeout = () => {
     setIsLoading(true);
@@ -27,11 +43,7 @@ const Auth = () => {
   return (
     <SafeAreaView style={style.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
-       <ImageBackground 
-              source={imagepath.level1} 
-              style={style.background_image}
-              resizeMode='cover'
-            >
+     
       <View style={style.header}></View>
 
       <View style={style.body}>
@@ -54,7 +66,7 @@ const Auth = () => {
           </View>
         )}
       </View>
-       </ImageBackground>
+    
     </SafeAreaView>
   );
 };

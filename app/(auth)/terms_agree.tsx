@@ -11,6 +11,8 @@ import {
   Linking,
   ScrollView,
 } from "react-native";
+import { router } from "expo-router";
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "@react-navigation/native";
 import { scale, verticalScale, moderateScale } from "react-native-size-matters";
@@ -20,33 +22,24 @@ export default function TermsAgree() {
   const navigation = useNavigation();
 
   useEffect(() => {
-    // If onboarding is already done, redirect to (tabs)
     const checkOnboarded = async () => {
       const onboarded = await AsyncStorage.getItem('@user_onboarded');
       if (onboarded === 'true') {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "(tabs)" }],
-        });
+        router.replace("/edith"); // replaces stack so user can’t go back
       }
     };
     checkOnboarded();
   }, []);
-
+  
   const handleContinue = async () => {
-    // Go to Onboarding page
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Onboarding" }],
-    });
+    router.push("/Onboarding"); // or router.replace("/edith") if you don’t want back navigation
   };
+  
+
+ 
 
   return (
-    <ImageBackground
-      source={require("../../src/assets/images/bg2.png")}
-      style={styles.background}
-      resizeMode="cover"
-    >
+  <> 
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -59,7 +52,7 @@ export default function TermsAgree() {
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text style={styles.heading}>Your Prep{"\n"}Made Easy</Text>
+          <Text style={styles.heading}>Give your child{"\n"}a better you</Text>
           <View style={styles.handContainer}>
             <Image
               source={require("../../src/assets/images/Hand.png")}
@@ -97,11 +90,14 @@ export default function TermsAgree() {
           </Text>
         </View>
       </ScrollView>
-    </ImageBackground>
+      </>
   );
 }
 
 const styles = StyleSheet.create({
+
+
+ 
   background: {
     flex: 1,
     width: "100%",
@@ -111,6 +107,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
+    backgroundColor: "#000",
   },
   container: {
     flex: 1,

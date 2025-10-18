@@ -7,9 +7,10 @@ const AuthStack = () => {
    <Stack screenOptions={{headerShown:false}}>  
    <Stack.Screen name="index"/> 
     <Stack.Screen name="terms_agree"/> 
-    
+    <Stack.Screen name='edith'/>  
       <Stack.Screen name='(tabs)'/>  
-     
+  
+
        </Stack>
   )
 }
