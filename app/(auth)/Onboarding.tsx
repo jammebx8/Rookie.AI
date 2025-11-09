@@ -11,14 +11,21 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "@react-navigation/native";
 import { scale, verticalScale, moderateScale } from "react-native-size-matters";
-import { supabase } from "../../src/utils/supabase"; // adjust the import path as needed
+import { supabase } from "../../src/utils/supabase"; // adjust path as needed
+import * as WebBrowser from 'expo-web-browser'; // If using Expo
+import * as Linking from 'expo-linking'; // For deep linking
+import { makeRedirectUri } from 'expo-auth-session';
+
 
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 const EXAM_OPTIONS = ["JEE Mains", "NEET", "JEE Advanced", "Other"];
+
+WebBrowser.maybeCompleteAuthSession(); // Needed for Expo Auth flows
 
 export default function Onboarding() {
   const navigation = useNavigation();
@@ -27,6 +34,7 @@ export default function Onboarding() {
   const [exam, setExam] = useState("");
   const [inputComplete, setInputComplete] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
     // Check if user is already onboarded
@@ -46,10 +54,64 @@ export default function Onboarding() {
     setInputComplete(fullName.trim().length > 0 && !!gender && !!exam);
   }, [fullName, gender, exam]);
 
+  // === GOOGLE AUTHENTICATION ===
+  const signInWithGoogle = async () => {
+    try {
+      setAuthLoading(true);
+      // Get redirect URL for Expo (change for bare RN)
+      const redirectUrl = makeRedirectUri({ scheme: 'com.ttyyy' });
+
+      // Start OAuth flow
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+
+      if (error) throw error;
+      // Open browser for OAuth
+      const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+      // On redirect, supabase-js will get session automatically (persisted)
+      const session = await supabase.auth.getSession();
+      const user = session.data.session?.user;
+
+      if (user) {
+        // Save to AsyncStorage and Supabase DB
+        await AsyncStorage.setItem('@user', JSON.stringify({
+          email: user.email,
+          name: user.user_metadata?.full_name || "", // or "name"
+          avatar_url: user.user_metadata?.avatar_url || "",
+        }));
+        // Upsert into your 'users' table with email as id
+        await supabase
+          .from('users')
+          .upsert([{
+            id: user.id,
+            email: user.email,
+            name: user.user_metadata?.full_name || "",
+          }]);
+
+        await AsyncStorage.setItem('@user_onboarded', 'true');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "(tabs)" }],
+        });
+      } else {
+        Alert.alert("Error", "Google Sign-In failed.");
+      }
+    } catch (error) {
+      Alert.alert("Error", error.message || "Google Auth failed");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const handleContinue = async () => {
     setLoading(true);
     try {
-      // Save in AsyncStorage first for local access
+      // Save in AsyncStorage first for local access (optional)
       await AsyncStorage.setItem('@user', JSON.stringify({
         name: fullName.trim(),
         gender,
@@ -57,26 +119,28 @@ export default function Onboarding() {
       }));
 
       // Save to Supabase
-      const { error } = await supabase
-        .from('users')
-        .upsert([{
-          name: fullName.trim(),
-          gender,
-          exam,
-        }]);
+      // Get current auth user (if signed in, should have email)
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
 
-      // Optionally, handle error (show toast, etc. if needed)
-      if (!error) {
-        await AsyncStorage.setItem('@user_onboarded', 'true');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "(tabs)" }],
-        });
-      } else {
-        // Optionally handle Supabase error (toast, etc.)
+      let row = {
+        name: fullName.trim(),
+        gender,
+        exam,
+      };
+      if (user) {
+        row.email = user.email;
+        row.id = user.id;
       }
+      await supabase.from('users').upsert([row]);
+
+      await AsyncStorage.setItem('@user_onboarded', 'true');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "(tabs)" }],
+      });
     } catch (err) {
-      // Optionally handle JS error (toast, etc.)
+      Alert.alert("Error", "Something went wrong saving your data");
     }
     setLoading(false);
   };
@@ -96,6 +160,29 @@ export default function Onboarding() {
         <View style={styles.container}>
           <Text style={styles.title}>Hey, kiddo!</Text>
           <Text style={styles.subtitle}>Let’s us know you</Text>
+          {/* Google Sign-in Button */}
+          <TouchableOpacity
+            style={[styles.continueButton, authLoading && styles.continueButtonInactive]}
+            onPress={signInWithGoogle}
+            disabled={authLoading}
+            activeOpacity={authLoading ? 1 : 0.8}
+          >
+            {authLoading ? (
+              <ActivityIndicator size="small" color="#181f2b" />
+            ) : (
+              <Text style={styles.continueButtonText}>
+                Continue with Google
+              </Text>
+            )}
+          </TouchableOpacity>
+          <Text style={{
+            color: "#b5b6c9",
+            marginVertical: moderateScale(8),
+            fontFamily: 'Geist',
+            fontSize: moderateScale(13),
+          }}>
+            OR
+          </Text>
           <View style={styles.infoBox}>
             <Text style={styles.label}>Full Name</Text>
             <TextInput
@@ -182,6 +269,7 @@ export default function Onboarding() {
     </ImageBackground>
   );
 }
+
 
 const styles = StyleSheet.create({
   background: {

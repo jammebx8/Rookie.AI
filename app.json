@@ -2,6 +2,7 @@
   "expo": {
     "name": "Rookie",
     "slug": "rookie",
+   
     "version": "1.0.0",
     "orientation": "portrait",
      "icon": "./src/assets/appicon.png",
@@ -31,6 +32,7 @@
       }
     },
     "android": {
+
     
       "package": "com.ttyyy",
       "versionCode": 2,
@@ -55,7 +57,7 @@
     "scheme": "com.ttyyy",
     "extra": {
       "eas": {
-        "projectId": "20681722-6476-49cd-a859-ecf994e876d9"
+        "projectId": "f98d5859-cbde-4427-b776-21b7e03e0d6e"
       }
     }
   }

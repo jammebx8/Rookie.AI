@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { verticalScale, scale, moderateScale } from 'react-native-size-matters';
 import axios from 'axios';
 
-const GROQ_API_KEY = 'REMOVED';
+const GROQ_API_KEY = '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';
 const USERNAME = "Dhruv Pathak"; // Replace with dynamic user if needed
 
 const STORAGE_KEYS = {

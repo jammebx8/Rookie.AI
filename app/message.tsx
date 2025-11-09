@@ -29,8 +29,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-const GROQ_API_KEY = 'REMOVED';
+const GROQ_API_KEY = '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';
 const OCR_API_KEY = 'K88346068688957';
 
 const getGroqReply = async (
