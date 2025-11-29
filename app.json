@@ -43,7 +43,7 @@
           "data": [
             {
               "scheme": "com.ttyyy",
-              "host": "oauthredirect"
+              "host": "*"
             }
           ],
           "category": [

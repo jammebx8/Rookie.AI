@@ -52,7 +52,7 @@ export default function TermsAgree() {
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text style={styles.heading}>Give your child{"\n"}a better you</Text>
+          <Text style={styles.heading}>Your Prep{"\n"}Made Easy</Text>
           <View style={styles.handContainer}>
             <Image
               source={require("../../src/assets/images/Hand.png")}

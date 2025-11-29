@@ -1,25 +1,24 @@
-import React, { useState, useEffect } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  ImageBackground,
-  StatusBar,
-  Platform,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "@react-navigation/native";
-import { scale, verticalScale, moderateScale } from "react-native-size-matters";
-import { supabase } from "../../src/utils/supabase"; // adjust path as needed
-import * as WebBrowser from 'expo-web-browser'; // If using Expo
-import * as Linking from 'expo-linking'; // For deep linking
 import { makeRedirectUri } from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser'; // If using Expo
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ImageBackground,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+import { supabase } from "../../src/utils/supabase"; // adjust path as needed
 
 
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
@@ -48,7 +47,45 @@ export default function Onboarding() {
       }
     };
     checkOnboarded();
-  }, []);
+
+    // Listen for auth state changes (from Google OAuth redirect)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email);
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          // User just signed in via Google
+          const user = session.user;
+          
+          // Save user to AsyncStorage
+          await AsyncStorage.setItem('@user', JSON.stringify({
+            email: user.email,
+            name: user.user_metadata?.full_name || "",
+            avatar_url: user.user_metadata?.avatar_url || "",
+          }));
+
+          // Upsert into Supabase users table
+          await supabase.from('users').upsert([{
+            id: user.id,
+            email: user.email,
+            name: user.user_metadata?.full_name || "",
+          }]);
+
+          // Mark as onboarded and navigate to (tabs)
+          await AsyncStorage.setItem('@user_onboarded', 'true');
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "(tabs)" }],
+          });
+        }
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, [navigation]);
 
   useEffect(() => {
     setInputComplete(fullName.trim().length > 0 && !!gender && !!exam);
@@ -58,52 +95,57 @@ export default function Onboarding() {
   const signInWithGoogle = async () => {
     try {
       setAuthLoading(true);
-      // Get redirect URL for Expo (change for bare RN)
-      const redirectUrl = makeRedirectUri({ scheme: 'com.ttyyy' });
+      
+      // Determine redirect URL based on platform
+      const redirectUrl = Platform.OS === 'web' 
+        ? 'http://localhost:8081/callback'
+        : makeRedirectUri({
+            scheme: 'com.ttyyy',
+            path: '/callback',
+          });
+
+      console.log('Redirect URL:', redirectUrl);
 
       // Start OAuth flow
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
         },
       });
 
-      if (error) throw error;
-      // Open browser for OAuth
-      const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-
-      // On redirect, supabase-js will get session automatically (persisted)
-      const session = await supabase.auth.getSession();
-      const user = session.data.session?.user;
-
-      if (user) {
-        // Save to AsyncStorage and Supabase DB
-        await AsyncStorage.setItem('@user', JSON.stringify({
-          email: user.email,
-          name: user.user_metadata?.full_name || "", // or "name"
-          avatar_url: user.user_metadata?.avatar_url || "",
-        }));
-        // Upsert into your 'users' table with email as id
-        await supabase
-          .from('users')
-          .upsert([{
-            id: user.id,
-            email: user.email,
-            name: user.user_metadata?.full_name || "",
-          }]);
-
-        await AsyncStorage.setItem('@user_onboarded', 'true');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "(tabs)" }],
-        });
-      } else {
-        Alert.alert("Error", "Google Sign-In failed.");
+      if (error) {
+        console.error('OAuth error:', error);
+        throw error;
       }
+
+      if (!data.url) {
+        throw new Error('No OAuth URL received from Supabase');
+      }
+
+      console.log('OAuth URL:', data.url);
+
+      // Open browser for OAuth
+      if (Platform.OS === 'web') {
+        // For web, open in same window
+        // The onAuthStateChange listener will handle the redirect
+        window.location.href = data.url;
+      } else {
+        // For mobile/Expo
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('WebBrowser result:', result);
+        
+        // The onAuthStateChange listener will handle the session
+      }
+      
+      // Note: Don't check session here - the listener will handle it
     } catch (error) {
-      Alert.alert("Error", error.message || "Google Auth failed");
-    } finally {
+      console.error('Full error:', error);
+      Alert.alert(
+        "Authentication Error", 
+        error.message || "Google Auth failed. Make sure redirect URL is configured in Supabase."
+      );
       setAuthLoading(false);
     }
   };
