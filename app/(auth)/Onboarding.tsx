@@ -96,9 +96,10 @@ export default function Onboarding() {
     try {
       setAuthLoading(true);
       
-      // Determine redirect URL based on platform
-      const redirectUrl = Platform.OS === 'web' 
-        ? 'http://localhost:8081/callback'
+      // Determine redirect URL based on platform.
+      // For web use the current origin so the same domain (dev/prod) works.
+      const redirectUrl = Platform.OS === 'web'
+        ? (typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : 'https://rookie-ai.vercel.app/auth/callback')
         : makeRedirectUri({
             scheme: 'com.ttyyy',
             path: '/callback',

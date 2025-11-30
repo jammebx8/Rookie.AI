@@ -10,8 +10,11 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Get the current session (Supabase will parse the hash/query params)
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Parse the session from the URL after OAuth redirect and store it
+        // This ensures the Supabase client processes the access token returned
+        // in the redirect URL (hash or query params) for web flows.
+        const { data, error } = await supabase.auth.getSessionFromUrl();
+        const session = data?.session;
 
         if (error) {
           console.error('Auth callback error:', error);
