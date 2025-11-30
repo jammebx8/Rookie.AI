@@ -17,9 +17,9 @@ import RazorpayCheckout from 'react-native-razorpay';
 import imagepath from '../../src/constants/imagepath';
 
 // Import your PNG icons
+import { supabase } from '@/src/utils/supabase';
 import DeleteIcon from '../../src/assets/images/bin.png';
 import TickIcon from '../../src/assets/images/ticck.png';
-import { supabase } from '@/src/utils/supabase';
 
 const GENDER_OPTIONS = ['Male', 'Female', 'Other'];
 const EXAM_OPTIONS = ['JEE Main', 'JEE Advanced', 'NEET', 'CUET', 'Other'];
@@ -231,18 +231,36 @@ const Profile = () => {
 
   // Delete Account logic
   const handleDeleteAccount = async () => {
-    setDeleteModalVisible(false);
-    setDeleteInput('');
-    await AsyncStorage.removeItem('@user');
-    await AsyncStorage.removeItem('@user_extra');
-    await AsyncStorage.removeItem('@user_onboarded');
-    await AsyncStorage.removeItem('selectedBuddy');
-    // Sign out from Supabase
-    await supabase.auth.signOut();
-    navigation.reset({
-      index: 0,
-      routes: [{ name: '(auth)/terms_agree' }],
-    });
+    try {
+      setDeleteModalVisible(false);
+      setDeleteInput('');
+      
+      // Get current user from Supabase auth
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        // Delete user record from Supabase users table
+        await supabase.from('users').delete().eq('id', user.id);
+        
+        // Sign out from Supabase (this also invalidates the session)
+        await supabase.auth.signOut();
+      }
+      
+      // Clear all local storage
+      await AsyncStorage.removeItem('@user');
+      await AsyncStorage.removeItem('@user_extra');
+      await AsyncStorage.removeItem('@user_onboarded');
+      await AsyncStorage.removeItem('selectedBuddy');
+      
+      // Redirect to auth flow
+      navigation.reset({
+        index: 0,
+        routes: [{ name: '(auth)/index' }],
+      });
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      Alert.alert('Error', 'Failed to delete account. Please try again.');
+    }
   };
 
 
