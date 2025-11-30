@@ -19,6 +19,7 @@ import imagepath from '../../src/constants/imagepath';
 // Import your PNG icons
 import DeleteIcon from '../../src/assets/images/bin.png';
 import TickIcon from '../../src/assets/images/ticck.png';
+import { supabase } from '@/src/utils/supabase';
 
 const GENDER_OPTIONS = ['Male', 'Female', 'Other'];
 const EXAM_OPTIONS = ['JEE Main', 'JEE Advanced', 'NEET', 'CUET', 'Other'];
