@@ -1,24 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
-  StatusBar,
   Alert,
   Image,
   Modal,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
-import imagepath from '../../src/constants/imagepath';
 import RazorpayCheckout from 'react-native-razorpay';
+import imagepath from '../../src/constants/imagepath';
 
 // Import your PNG icons
 import DeleteIcon from '../../src/assets/images/bin.png';
-import LogoutIcon from '../../src/assets/images/door.png';
 import TickIcon from '../../src/assets/images/ticck.png';
 
 const GENDER_OPTIONS = ['Male', 'Female', 'Other'];
@@ -235,10 +234,13 @@ const Profile = () => {
     setDeleteInput('');
     await AsyncStorage.removeItem('@user');
     await AsyncStorage.removeItem('@user_extra');
+    await AsyncStorage.removeItem('@user_onboarded');
     await AsyncStorage.removeItem('selectedBuddy');
+    // Sign out from Supabase
+    await supabase.auth.signOut();
     navigation.reset({
       index: 0,
-      routes: [{ name: '(auth)/Onboarding' }],
+      routes: [{ name: '(auth)/terms_agree' }],
     });
   };
 
