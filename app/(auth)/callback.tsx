@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { supabase } from '../src/utils/supabase';
+import { supabase } from '../../src/utils/supabase';
 import React from 'react';
 
 export default function AuthCallback() {
