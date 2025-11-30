@@ -14,6 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import imagepath from '../../src/constants/imagepath';
+import RazorpayCheckout from 'react-native-razorpay';
 
 // Import your PNG icons
 import DeleteIcon from '../../src/assets/images/bin.png';
@@ -241,6 +242,36 @@ const Profile = () => {
     });
   };
 
+
+  // Place this after editing/save/cancel logic, inside the Profile component
+const handleSubscribe = () => {
+  const options = {
+    description: 'Subscription for Premium Features',
+    image: 'https://your-app-url.com/logo.png', // optional; your app logo
+    currency: 'INR',
+    key: 'YOUR_RAZORPAY_KEY_HERE', // Replace with your Razorpay Key ID
+    amount: '29900', // Amount in paisa (i.e. ₹299.00)
+    name: name || 'User',
+    prefill: {
+      email: email,
+      contact: '', // Optionally add user's phone number
+      name: name
+    },
+    theme: { color: '#181f2b' }
+  };
+
+  RazorpayCheckout.open(options)
+    .then((data) => {
+      // handle success
+      Alert.alert('Success', `Payment successful! Payment ID: ${data.razorpay_payment_id}`);
+      // You can send this payment ID to your backend for verification etc.
+    })
+    .catch((error) => {
+      // handle failure
+      Alert.alert('Payment Failed', error.description || 'Payment was not completed');
+    });
+};
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
@@ -341,6 +372,30 @@ const Profile = () => {
           </>
         )}
       </View>
+
+
+
+      <View style={{ marginTop: 12, marginBottom: 18 }}>
+  <TouchableOpacity
+    style={{
+      backgroundColor: '#1570EF',
+      borderRadius: 22,
+      paddingVertical: 16,
+      alignItems: 'center',
+    }}
+    onPress={handleSubscribe}
+    activeOpacity={0.85}
+  >
+    <Text style={{
+      color: '#fff',
+      fontSize: 18,
+      fontWeight: '600',
+      fontFamily: 'Geist',
+    }}>
+      Subscribe
+    </Text>
+  </TouchableOpacity>
+</View>
 
       <Text style={styles.sectionTitle}>Select mentor</Text>
       <Text style={styles.mentorDesc}>

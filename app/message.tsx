@@ -15,37 +15,50 @@ import {
   Alert,
   Image,
   StatusBar,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import images from '../src/constants/imagepath';
 import { LinearGradient } from 'expo-linear-gradient';
+import { createClient } from '@supabase/supabase-js';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+// TODO: Replace with your actual Supabase keys
+const SUPABASE_URL = 'https://rzcizwacjexolkjjczbt.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6Y2l6d2FjamV4b2xrampjemJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTA2ODMsImV4cCI6MjA2MDk4NjY4M30.I5TO7lLOuBwe6T5wllcx3FK_is0pammMtVw-oevfTws';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const GROQ_API_KEY = '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';
 const OCR_API_KEY = 'K88346068688957';
 
+const REPORT_REASONS = [
+  'offensive',
+  'sexual',
+  'hate speech',
+  'misleading',
+  'other',
+];
+
 const getGroqReply = async (
-  characterPrompt: string | string[],
-  chatMessages: any[],
-  imageText: undefined
+  characterPrompt,
+  chatMessages,
+  imageText
 ) => {
   try {
     const userProfile = await AsyncStorage.getItem('userData');
-
-    // Fetch user info from AsyncStorage
     const userStr = await AsyncStorage.getItem('@user');
     const user = userStr ? JSON.parse(userStr) : {};
-    // Compose context from user object
     const userContext = `You are chatting with an 18-year-old ${user.gender || 'student'} named ${user.name || ''}, who is preparing for ${user.exam || 'an exam'}. `;
-
     const messages = [
       {
         role: 'system',
@@ -58,14 +71,12 @@ const getGroqReply = async (
           content: msg.text,
         })),
     ];
-
     if (imageText) {
       messages.push({
         role: 'user',
         content: `Please solve this question: ${imageText}`,
       });
     }
-
     const res = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
       {
@@ -81,7 +92,6 @@ const getGroqReply = async (
         },
       }
     );
-
     return res.data.choices?.[0]?.message?.content || "Sorry, I didn't get that.";
   } catch (err) {
     console.error('Groq error:', err.response?.data || err);
@@ -89,7 +99,7 @@ const getGroqReply = async (
   }
 };
 
-const getTextFromImage = async (imageUri: string) => {
+const getTextFromImage = async (imageUri) => {
   try {
     const base64 = await FileSystem.readAsStringAsync(imageUri, {
       encoding: FileSystem.EncodingType.Base64,
@@ -115,7 +125,7 @@ const getTextFromImage = async (imageUri: string) => {
   }
 };
 
-const getRelativeTime = (dateString: string | number | Date) => {
+const getRelativeTime = (dateString) => {
   const now = new Date();
   const past = new Date(dateString);
   const diffMs = now.getTime() - past.getTime();
@@ -134,7 +144,7 @@ const getRelativeTime = (dateString: string | number | Date) => {
 };
 
 export default function MessageScreen() {
-  const { name, prompt, text, image } = useLocalSearchParams(); // Added image parameter
+  const { name, prompt, text, image } = useLocalSearchParams();
   const router = useRouter();
 
   const [message, setMessage] = useState('');
@@ -142,7 +152,34 @@ export default function MessageScreen() {
   const flatListRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
 
-  // Only AI chat - load from AsyncStorage
+  // Report Modal related state
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportMessage, setReportMessage] = useState(null);
+  const [reportReason, setReportReason] = useState(REPORT_REASONS[0]);
+  const [reportDescription, setReportDescription] = useState('');
+  const [isReporting, setIsReporting] = useState(false);
+
+  const [toast, setToast] = useState({
+    visible: false,
+    message: '',
+    type: 'success',
+  });
+
+  // Avoid resetting reportReason and reportDescription on each open
+  const openReportModal = (msg) => {
+    setReportMessage(msg);
+    setReportModalVisible(true);
+    // Do NOT reset reportReason/reportDescription here; users might be switching between modal opens
+  };
+
+  const closeReportModal = () => {
+    setReportModalVisible(false);
+    setReportMessage(null);
+    setReportReason(REPORT_REASONS[0]);
+    setReportDescription('');
+    setIsReporting(false);
+  };
+
   useEffect(() => {
     const loadAIChat = async () => {
       try {
@@ -163,10 +200,7 @@ export default function MessageScreen() {
   // Send message
   const handleSend = async () => {
     if (message.trim() === '') return;
-
     const nowISOString = new Date().toISOString();
-
-    // AI chat: append locally and get AI reply
     const newMessage = { sender: 'user', text: message, timestamp: nowISOString, type: 'text' };
     const updatedMessages = [...messages, newMessage];
 
@@ -195,12 +229,10 @@ export default function MessageScreen() {
       Alert.alert('Permission required', 'Please allow gallery access.');
       return;
     }
-
     const pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       base64: false,
     });
-
     if (!pickerResult.canceled && pickerResult.assets?.[0]?.uri) {
       const imageUri = pickerResult.assets[0].uri;
       const nowISOString = new Date().toISOString();
@@ -213,7 +245,6 @@ export default function MessageScreen() {
       setIsTyping(true);
 
       const extractedText = await getTextFromImage(imageUri);
-
       if (!extractedText) {
         const errorMsg = { sender: 'bot', text: 'Could not extract any text from the image.', timestamp: new Date().toISOString(), type: 'text' };
         setMessages([...updatedMessages, errorMsg]);
@@ -251,34 +282,132 @@ export default function MessageScreen() {
     flatListRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
-  // Function to get the image source - handles both string URIs and imported images
   const getImageSource = (imageParam) => {
     if (typeof imageParam === 'string') {
-      // If it's a string, it could be a URI or a reference to an imported image
       try {
-        // Try to parse as JSON first (in case it's a stringified object)
         return JSON.parse(imageParam);
       } catch {
-        // If parsing fails, treat as URI
         return { uri: imageParam };
       }
     }
-    // If it's already an object, return as is
     return imageParam;
   };
+
+  const showToast = (message, type) => {
+    setToast({ visible: true, message, type });
+    setTimeout(() => {
+      setToast({ visible: false, message: '', type: 'success' });
+    }, 2500);
+  };
+
+  // Handle submit report
+  const handleSubmitReport = async () => {
+    if (!reportMessage || !reportReason) return;
+    setIsReporting(true);
+    try {
+      const { error } = await supabase
+        .from('reports')
+        .insert({
+          message_text: reportMessage.text,
+          reason: reportReason,
+          description: reportDescription,
+          reported_at: new Date().toISOString(),
+        });
+      if (error) throw error;
+      console.log('Success', 'Report submitted successfully');
+      closeReportModal();
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      console.log('Error', 'Failed to submit report. Please try again.');
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
+  // Inline JSX for Modal (not a function)
+  const reportModalElement = (
+    <Modal
+      visible={reportModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={closeReportModal}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalBackground}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Report Message</Text>
+            <Text style={styles.modalMsgPreview} numberOfLines={2}>
+              "{reportMessage?.text}"
+            </Text>
+            <Text style={styles.modalLabel}>Reason:</Text>
+            <View style={styles.dropdown}>
+              {REPORT_REASONS.map((reason) => (
+                <TouchableOpacity
+                  key={reason}
+                  onPress={() => setReportReason(reason)}
+                  style={[
+                    styles.dropdownItem,
+                    reason === reportReason && styles.dropdownItemSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dropdownText,
+                      reason === reportReason && styles.dropdownTextSelected,
+                    ]}
+                  >
+                    {reason}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={[styles.modalLabel, { marginTop: 10 }]}>
+              Additional Details:
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              multiline
+              value={reportDescription}
+              onChangeText={setReportDescription}
+              placeholder="Describe the issue..."
+              placeholderTextColor="#666"
+            />
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                onPress={closeReportModal}
+                style={[styles.modalButton, { backgroundColor: '#2D2D3A' }]}
+              >
+                <Text style={{ color: '#fff' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSubmitReport}
+                disabled={isReporting}
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: isReporting ? '#666' : '#47006A' },
+                ]}
+              >
+                <Text style={{ color: '#fff' }}>
+                  {isReporting ? 'Submitting...' : 'Submit'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View >
+        </View >
+      </View>
+    </Modal>
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0B0B28' }}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
-    <KeyboardAvoidingView
-  style={{ flex: 1 }}
-  behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-  keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 40} // Try adjusting this offset
->
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 40}
+      >
         <View style={styles.container}>
-          {/* Header */}
           <View style={styles.header}>
-            {/* Back Button */}
             <TouchableOpacity
               onPress={() => router.replace('/chats')}
               style={styles.backButton}
@@ -288,14 +417,8 @@ export default function MessageScreen() {
                 source={require('../src/assets/images/caret-left.png')}
                 style={[styles.backIcon, { tintColor: '#FFFFFF' }]}
               />
-      
               <Text style={styles.backText}>Back</Text>
-
-               
-          
             </TouchableOpacity>
-
-            {/* Character Image */}
             {image && (
               <Image
                 source={getImageSource(image)}
@@ -303,18 +426,12 @@ export default function MessageScreen() {
                 resizeMode="cover"
               />
             )}
-
-            {/* Title */}
-            
             <Text style={styles.headerTitle}>{name}</Text>
-
-            {/* Info Icon */}
             <TouchableOpacity style={styles.infoButton}>
               <Ionicons name="information-circle-outline" size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
-          {/* Chat Content */}
           <FlatList
             ref={flatListRef}
             data={isTyping ? [...messages, { sender: 'bot', text: 'Typing...', type: 'text' }] : messages}
@@ -323,6 +440,7 @@ export default function MessageScreen() {
               const isLast = isTyping && index === messages.length;
               const isUser = item.sender === 'user';
               const bubbleStyle = isUser ? styles.userMessage : styles.botMessage;
+              const showReport = !isUser && item.type === 'text' && !isLast && !!item.text;
 
               if (isUser) {
                 return (
@@ -345,17 +463,28 @@ export default function MessageScreen() {
                     colors={['#47006A', '#0031D0']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.botMessage}
+                    style={[styles.botMessage, { flexDirection: 'row', alignItems: 'flex-start' }]}
                   >
-                    {isLast ? (
-                      <TypingIndicator />
-                    ) : item.type === 'image' ? (
-                      <RNImage source={{ uri: item.text }} style={{ width: 200, height: 200, borderRadius: 10 }} />
-                    ) : (
-                      <>
-                        <Text style={styles.messageText}>{item.text}</Text>
-                        {item.timestamp && <Text style={styles.timestamp}>{getRelativeTime(item.timestamp)}</Text>}
-                      </>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      {isLast ? (
+                        <TypingIndicator />
+                      ) : item.type === 'image' ? (
+                        <RNImage source={{ uri: item.text }} style={{ width: 200, height: 200, borderRadius: 10 }} />
+                      ) : (
+                        <>
+                          <Text style={styles.messageText}>{item.text}</Text>
+                          {item.timestamp && <Text style={styles.timestamp}>{getRelativeTime(item.timestamp)}</Text>}
+                        </>
+                      )}
+                    </View>
+                    {showReport && (
+                      <TouchableOpacity
+                        style={styles.reportIconButton}
+                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
+                        onPress={() => openReportModal(item)}
+                      >
+                        <MaterialCommunityIcons name="dots-horizontal" size={20} color="#fff" />
+                      </TouchableOpacity>
                     )}
                   </LinearGradient>
                 );
@@ -365,26 +494,23 @@ export default function MessageScreen() {
             style={styles.chatBox}
             keyboardShouldPersistTaps="handled"
           />
-
           <View style={styles.inputContainer}>
-            {/* Attachment Icon */}
             <TouchableOpacity onPress={pickImageAndSend} style={styles.attachmentButton}>
               <Image
                 source={require('../src/assets/images/image-square.png')}
                 style={styles.attachmentIcon}
               />
             </TouchableOpacity>
-
-            {/* Text Input */}
             <TextInput
+            
               style={styles.input}
+              multiline
               value={message}
               onChangeText={setMessage}
               placeholder="Chat with character..."
               placeholderTextColor="#aaa"
+            
             />
-
-            {/* Send Button */}
             <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
               <Image
                 source={require('../src/assets/images/paper-plane-right.png')}
@@ -392,6 +518,20 @@ export default function MessageScreen() {
               />
             </TouchableOpacity>
           </View>
+          <Text style={styles.disclaimer}>
+            ⚠️ AI-generated responses may be inaccurate or inappropriate. Please use the Report option if you find any issues.
+          </Text>
+          {reportModalElement}
+          {toast.visible && (
+            <View
+              style={[
+                styles.toast,
+                toast.type === 'error' ? styles.toastError : styles.toastSuccess,
+              ]}
+            >
+              <Text style={styles.toastText}>{toast.message}</Text>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -431,14 +571,14 @@ const styles = StyleSheet.create({
     width: scale(30),
     height: scale(30),
     borderRadius: scale(20),
-  marginLeft: scale(40),
+    marginLeft: scale(40),
     borderWidth: 1,
     borderColor: '#FFFFFF',
   },
   headerTitle: {
     fontSize: moderateScale(18),
     color: '#FFFFFF',
-    fontWeight: 'medium',
+    fontWeight: '500',
     textAlign: 'center',
     flex: 1,
     marginRight: scale(40),
@@ -519,5 +659,138 @@ const styles = StyleSheet.create({
     maxWidth: '75%',
     borderWidth: 1,
     borderColor: '#262626',
+  },
+  reportIconButton: {
+    marginLeft: scale(8),
+    marginTop: 2,
+    padding: 4,
+    alignSelf: 'flex-start',
+  },
+  disclaimer: {
+    color: '#FFD600',
+    fontSize: moderateScale(12),
+    backgroundColor: '#13133D',
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderTopWidth: 1,
+    borderTopColor: '#282871',
+    textAlign: "center",
+    fontFamily: "Geist"
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(10,10,20,0.7)'
+  },
+  modalContent: {
+    backgroundColor: 'black',
+    borderRadius: 10,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: moderateScale(18),
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+    fontFamily: "Geist"
+  },
+  modalMsgPreview: {
+    color: '#eee',
+    fontStyle: 'italic',
+    marginBottom: 18,
+    fontFamily: "Geist"
+  },
+  modalLabel: {
+    color: '#b6b7bb',
+    fontSize: moderateScale(12),
+    marginBottom: 2,
+    fontFamily: "Geist"
+  },
+  modalDropdownContainer: {
+    marginBottom: 2,
+  },
+  dropdown: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginVertical: 4,
+  },
+  dropdownItem: {
+    paddingVertical: 4,
+    paddingHorizontal: 13,
+    borderRadius: 12,
+    backgroundColor: '#21203a',
+    marginRight: 7,
+    marginBottom: 7,
+    borderWidth: 1,
+    borderColor: '#333162',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#47006A',
+    borderColor: '#cbbcfc',
+  },
+  dropdownText: {
+    color: '#eee'
+  },
+  dropdownTextSelected: {
+    color: '#fff',
+    fontWeight: '700'
+  },
+  modalInput: {
+    minHeight: 50,
+    maxHeight: 90,
+    borderColor: '#2D3052',
+    borderWidth: 1,
+    borderRadius: 10,
+    color: '#fff',
+    fontFamily: "Geist",
+    padding: 8,
+    marginBottom: 16,
+    backgroundColor: '#120f1f',
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 5,
+    gap: 9,
+  },
+  modalButton: {
+    paddingVertical: 9,
+    paddingHorizontal: 19,
+    borderRadius: 13,
+    elevation: 2,
+    minWidth: 92,
+    alignItems: 'center'
+  },
+  toast: {
+    position: 'absolute',
+    bottom: 94,
+    alignSelf: 'center',
+    minWidth: '50%',
+    paddingVertical: 10,
+    paddingHorizontal: 21,
+    borderRadius: 14,
+    zIndex: 100,
+    elevation: 12,
+    opacity: 0.95,
+  },
+  toastSuccess: {
+    backgroundColor: '#1ec276'
+  },
+  toastError: {
+    backgroundColor: '#E75552'
+  },
+  toastText: {
+    color: '#fff',
+    fontFamily: "Geist"
+  },
+
+  modalBackground: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
 });

@@ -5,41 +5,68 @@ import {
   View,
   TouchableOpacity,
   Image,
-  ImageBackground,
+  Modal,
+  ScrollView,
   StatusBar,
   Platform,
-  Linking,
-  ScrollView,
 } from "react-native";
 import { router } from "expo-router";
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "@react-navigation/native";
 import { scale, verticalScale, moderateScale } from "react-native-size-matters";
 
+const simpleTermsContent = `
+Terms and Conditions
+
+1. Introduction
+Welcome to OurApp! By using our services, you agree to comply with and be bound by the following terms.
+
+2. Privacy Policy
+We value your privacy. Your personal data is used only for providing and improving our services and will never be sold to third parties. See below for our privacy policy.
+
+Privacy Policy
+
+- We collect basic usage data to enhance your experience.
+- We do not share your personal data with external parties except as required by law or for payment processing.
+
+Shipping Policy
+
+- All products and services are delivered digitally to the provided email or in-app. No physical shipments are made. For any issues, contact our support team.
+
+Contact Us
+
+For questions or support, please contact us at:
+Email: dhruvgdscp@gmail.com
+
+Cancellation and Refunds Policy
+
+- You may cancel your order within 24 hours for a full refund, provided the digital service has not been fulfilled.
+- Refunds will be processed to your original payment method within 7 business days.
+
+By continuing, you accept these conditions.
+`;
+
 export default function TermsAgree() {
   const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const navigation = useNavigation();
 
   useEffect(() => {
     const checkOnboarded = async () => {
       const onboarded = await AsyncStorage.getItem('@user_onboarded');
       if (onboarded === 'true') {
-        router.replace("/edith"); // replaces stack so user can’t go back
+        router.replace("/edith");
       }
     };
     checkOnboarded();
   }, []);
   
   const handleContinue = async () => {
-    router.push("/Onboarding"); // or router.replace("/edith") if you don’t want back navigation
+    router.push("/Onboarding");
   };
-  
-
- 
 
   return (
-  <> 
+    <> 
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -75,29 +102,40 @@ export default function TermsAgree() {
             By continuing you'll agree to all of our{"\n"}
             <Text
               style={styles.link}
-              onPress={() => Linking.openURL("https://yourdomain.com/terms")}
+              onPress={() => setModalVisible(true)}
             >
-              Terms of service
-            </Text>
-            {" "} &amp;{" "}
-            <Text
-              style={styles.link}
-              onPress={() => Linking.openURL("https://yourdomain.com/privacy")}
-            >
-              Privacy policies
+              Terms & Conditions 
             </Text>
             .
           </Text>
         </View>
       </ScrollView>
-      </>
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalView}>
+            <ScrollView contentContainerStyle={styles.modalScrollContent}>
+              <Text style={styles.modalTitle}>Policies and Terms</Text>
+              <Text style={styles.modalText}>{simpleTermsContent}</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.closeButtonText}>Close</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-
-
- 
   background: {
     flex: 1,
     width: "100%",
@@ -176,5 +214,55 @@ const styles = StyleSheet.create({
   link: {
     color: "#3B82F6",
     textDecorationLine: "underline",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  modalView: {
+    width: "100%",
+    maxHeight: "80%",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  modalScrollContent: {
+    paddingBottom: 30,
+  },
+  modalTitle: {
+    fontWeight: "bold",
+    fontSize: moderateScale(20),
+    marginBottom: 12,
+    color: "#111",
+    textAlign: "center",
+  },
+  modalText: {
+    fontSize: moderateScale(14),
+    color: "#333",
+    lineHeight: moderateScale(18),
+    marginBottom: 28,
+    fontFamily: 'Geist',
+    textAlign: "left",
+    whiteSpace: "pre-line", // for web only, ignored on native
+  },
+  closeButton: {
+    backgroundColor: "#3B82F6",
+    borderRadius: 24,
+    paddingVertical: 8,
+    paddingHorizontal: 28,
+    alignSelf: "center",
+  },
+  closeButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: moderateScale(15),
   },
 });
