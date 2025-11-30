@@ -18,7 +18,8 @@ export default function AuthCallback() {
 
         if (error) {
           console.error('Auth callback error:', error);
-          router.replace('/(auth)');
+          console.log('Redirecting to auth due to error');
+          router.replace('/(auth)/index');
           return;
         }
 
@@ -46,15 +47,18 @@ export default function AuthCallback() {
 
           await AsyncStorage.setItem('@user_onboarded', 'true');
 
-          // Navigate to tabs
-          router.replace('/(tabs)');
+          console.log('Auth successful, redirecting to tabs...');
+          // Navigate to tabs using full href for web compatibility
+          router.replace('/(tabs)/index');
         } else {
           // No session, go back to onboarding
-          router.replace('/(auth)');
+          console.log('No session found, redirecting to auth');
+          router.replace('/(auth)/index');
         }
       } catch (err) {
         console.error('Error in auth callback:', err);
-        router.replace('/(auth)');
+        console.log('Redirecting to auth due to error');
+        router.replace('/(auth)/index');
       }
     };
 

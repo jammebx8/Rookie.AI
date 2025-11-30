@@ -1,6 +1,5 @@
-import { View, Text } from 'react-native'
-import React from 'react'
 import { Stack } from 'expo-router'
+import React from 'react'
 
 const AuthStack = () => {
   return (
@@ -8,9 +7,6 @@ const AuthStack = () => {
    <Stack.Screen name="index"/> 
     <Stack.Screen name="terms_agree"/> 
     <Stack.Screen name='edith'/>  
-      <Stack.Screen name='(tabs)'/>  
-  
-
        </Stack>
   )
 }
