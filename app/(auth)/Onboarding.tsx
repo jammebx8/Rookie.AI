@@ -99,11 +99,8 @@ export default function Onboarding() {
       // Determine redirect URL based on platform.
       // For web use the current origin so the same domain (dev/prod) works.
       const redirectUrl = Platform.OS === 'web'
-        ? (typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : 'https://rookie-ai.vercel.app/auth/callback')
-        : makeRedirectUri({
-            scheme: 'com.ttyyy',
-            path: '/callback',
-          });
+      ? (typeof window !== 'undefined' ? `${window.location.origin}/callback` : 'https://rookie-ai.vercel.app/callback')
+      : makeRedirectUri({ scheme: 'com.ttyyy', path: '/callback' });
 
       console.log('Redirect URL:', redirectUrl);
 
@@ -111,7 +108,7 @@ export default function Onboarding() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: redirectUrl,  // Use the computed redirect URL
           skipBrowserRedirect: false,
         },
       });
