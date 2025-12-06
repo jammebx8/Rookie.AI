@@ -191,6 +191,9 @@ paddingBottom: verticalScale(30),
     marginTop: verticalScale(15),
     marginHorizontal: scale(12),
     marginBottom: verticalScale(10),
+    position: 'relative', // make this the positioning context for the absolute dropdown
+    overflow: 'visible', // allow dropdown to overflow on top of other views
+    zIndex: 1,
    
   },
   practiceTitle: {
@@ -224,7 +227,8 @@ paddingBottom: verticalScale(30),
     position: 'absolute',
     right: 0,
     top: 44,
-    zIndex: 10,
+    zIndex: 9999,
+    elevation: 9999, // Android: ensure dropdown renders above other views
     width: 140,
     borderWidth: 1,
     borderColor: '#22223A',

@@ -10,7 +10,6 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "build": "expo export --platform web"
-
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -39,6 +38,7 @@
     "expo-symbols": "~0.4.5",
     "expo-system-ui": "~5.0.10",
     "expo-web-browser": "~14.2.0",
+    "next": "^16.0.6",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.5",

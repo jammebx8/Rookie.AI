@@ -38,7 +38,7 @@ const SUPABASE_URL = 'https://rzcizwacjexolkjjczbt.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6Y2l6d2FjamV4b2xrampjemJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTA2ODMsImV4cCI6MjA2MDk4NjY4M30.I5TO7lLOuBwe6T5wllcx3FK_is0pammMtVw-oevfTws';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const GROQ_API_KEY = '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';
+const GROQ_API_KEY = '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';
 const OCR_API_KEY = 'K88346068688957';
 
 const REPORT_REASONS = [
