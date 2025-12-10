@@ -152,11 +152,21 @@ export default function Onboarding() {
       }
 
       // Determine redirect URL based on platform
-      const redirectUrl = Platform.OS === 'web'
-        ? (typeof window !== 'undefined' ? `${window.location.origin}/api/auth/callback` : 'https://rookie-ai.vercel.app/api/auth/callback')
-        : makeRedirectUri({ scheme: 'com.ttyyy', path: 'callback' });
+      let redirectUrl: string;
+      
+      if (Platform.OS === 'web') {
+        // For web, use the API callback endpoint
+        redirectUrl = (typeof window !== 'undefined' ? `${window.location.origin}/api/auth/callback` : 'https://rookie-ai.vercel.app/api/auth/callback');
+      } else {
+        // For native, use deep linking with the callback route
+        redirectUrl = makeRedirectUri({
+          scheme: 'com.ttyyy',
+          path: '/callback',
+        });
+      }
 
       console.log('Redirect URL:', redirectUrl);
+      console.log('Platform:', Platform.OS);
 
       // Start OAuth flow
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -179,16 +189,25 @@ export default function Onboarding() {
 
       // Open browser for OAuth
       if (Platform.OS === 'web') {
+        // For web, redirect directly
         window.location.href = data.url;
       } else {
-        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        // The onAuthStateChange listener will handle the authentication
+        // For mobile/Expo, use WebBrowser to handle the OAuth flow
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('WebBrowser result:', result);
+        
+        // Check if user dismissed the browser
+        if (result.type === 'dismiss') {
+          setAuthLoading(false);
+          Alert.alert('Authentication Cancelled', 'You cancelled the authentication process.');
+        }
+        // The callback route will handle session and navigation
       }
     } catch (error) {
       console.error('Google Auth error:', error);
       Alert.alert(
         "Authentication Error",
-        error.message || "Google authentication failed. Please check your Supabase configuration."
+        error instanceof Error ? error.message : "Google authentication failed. Please check your Supabase configuration."
       );
       setAuthLoading(false);
     }
