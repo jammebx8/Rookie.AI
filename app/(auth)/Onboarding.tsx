@@ -45,7 +45,7 @@ export default function Onboarding() {
         if (session?.user) {
           // User is logged in, fetch their profile
           const { data, error } = await supabase
-            .from('users')
+            .from('Newusers')
             .select('*')
             .eq('id', session.user.id)
             .single();
@@ -88,16 +88,23 @@ export default function Onboarding() {
             const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || "User";
             const avatarUrl = user.user_metadata?.avatar_url || "";
 
+            console.log('User signed in:', userEmail, userName);
+
             // Check if user already has profile
-            const { data: existingUser } = await supabase
-              .from('users')
+            const { data: existingUser, error } = await supabase
+              .from('Newusers')
               .select('*')
               .eq('id', user.id)
               .single();
 
-            if (existingUser) {
-              // User exists, redirect to tabs
-              await AsyncStorage.setItem('@user_onboarded', 'true');
+            if (error && error.code !== 'PGRST116') {
+              console.error('Database query error:', error);
+              throw error;
+            }
+
+            if (existingUser && existingUser.gender && existingUser.exam) {
+              // User exists AND has completed onboarding, redirect to tabs
+              console.log('Existing user with complete profile, navigating to tabs');
               await AsyncStorage.setItem('@user', JSON.stringify({
                 id: user.id,
                 email: userEmail,
@@ -106,19 +113,22 @@ export default function Onboarding() {
                 exam: existingUser.exam,
                 avatar_url: existingUser.avatar_url || avatarUrl,
               }));
+              await AsyncStorage.setItem('@user_onboarded', 'true');
+              
               navigation.reset({
                 index: 0,
                 routes: [{ name: "(tabs)" }],
               });
             } else {
-              // First time user, show form to complete profile
+              // New user or incomplete profile, show form to complete
+              console.log('New or incomplete user, showing form');
               setFullName(userName);
-              // Clear other fields so user completes them
               setGender("");
               setExam("");
             }
           } catch (error) {
             console.error('Auth state change error:', error);
+            Alert.alert('Error', 'An error occurred during authentication. Please try again.');
           }
         }
       }
@@ -145,7 +155,7 @@ export default function Onboarding() {
 
       // Check if user exists in database
       const { data: existingUser, error: selectError } = await supabase
-        .from('users')
+        .from('Newusers')
         .select('*')
         .eq('id', user.id)
         .single();
@@ -155,30 +165,40 @@ export default function Onboarding() {
       }
 
       if (existingUser) {
-        // User exists - store their details in local storage
-        console.log('User exists in database, storing in local storage');
-        await AsyncStorage.setItem('@user', JSON.stringify({
-          id: user.id,
-          email: userEmail,
-          name: existingUser.name,
-          gender: existingUser.gender,
-          exam: existingUser.exam,
-          avatar_url: existingUser.avatar_url || avatarUrl,
-        }));
-        await AsyncStorage.setItem('@user_onboarded', 'true');
+        // User exists in database
+        console.log('User exists in database');
+        
+        // Check if onboarding is complete
+        if (existingUser.gender && existingUser.exam) {
+          // Onboarding complete - save and navigate
+          console.log('User onboarding complete, preparing to navigate');
+          await AsyncStorage.setItem('@user', JSON.stringify({
+            id: user.id,
+            email: userEmail,
+            name: existingUser.name,
+            gender: existingUser.gender,
+            exam: existingUser.exam,
+            avatar_url: existingUser.avatar_url || avatarUrl,
+          }));
+          await AsyncStorage.setItem('@user_onboarded', 'true');
 
-        return { userExists: true, userData: existingUser };
+          return { userExists: true, onboardingComplete: true, userData: existingUser };
+        } else {
+          // Onboarding incomplete - let user complete form
+          console.log('User exists but onboarding incomplete');
+          return { userExists: true, onboardingComplete: false, userData: existingUser };
+        }
       } else {
-        // User doesn't exist - insert their initial details
-        console.log('New user, inserting into database');
+        // User doesn't exist - create new user record
+        console.log('New user, creating database record');
         const { data: newUser, error: insertError } = await supabase
-          .from('users')
+          .from('Newusers')
           .insert([{
             id: user.id,
             email: userEmail,
             name: userName,
-            gender: null, // Will be filled during onboarding
-            exam: null,   // Will be filled during onboarding
+            gender: null,
+            exam: null,
             avatar_url: avatarUrl,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -190,12 +210,8 @@ export default function Onboarding() {
           throw new Error(`Insert error: ${insertError.message}`);
         }
 
-        // Store temporary data for onboarding form
-        await AsyncStorage.setItem('@temp_user_email', userEmail);
-        await AsyncStorage.setItem('@temp_user_name', userName);
-        await AsyncStorage.setItem('@temp_avatar_url', avatarUrl);
-
-        return { userExists: false, userData: newUser };
+        console.log('New user record created successfully');
+        return { userExists: false, onboardingComplete: false, userData: newUser };
       }
     } catch (error) {
       console.error('Check/Create user error:', error);
@@ -213,18 +229,24 @@ export default function Onboarding() {
 
       if (session?.user) {
         // Already logged in, check user in database
+        console.log('Session already exists, checking user status');
         const result = await checkAndCreateUser(session.user);
-        if (result.userExists) {
+        
+        if (result.onboardingComplete) {
+          // User already completed onboarding
+          console.log('User already onboarded, navigating to tabs');
           navigation.reset({
             index: 0,
             routes: [{ name: '(tabs)' }],
           });
         } else {
-          // New user, populate form with name
-          setFullName(result.userData.name);
+          // User needs to complete onboarding
+          console.log('User needs to complete onboarding');
+          setFullName(result.userData.name || '');
           setGender('');
           setExam('');
         }
+        setAuthLoading(false);
         return;
       }
 
@@ -239,7 +261,7 @@ export default function Onboarding() {
         // For native, use deep linking with the callback route
         redirectUrl = makeRedirectUri({
           scheme: 'com.ttyyy',
-          path: '/callback',
+          path: '(tabs)',
         });
       }
 
@@ -279,7 +301,7 @@ export default function Onboarding() {
           setAuthLoading(false);
           Alert.alert('Authentication Cancelled', 'You cancelled the authentication process.');
         }
-        // The callback route will handle session and navigation
+        // The auth state subscription will handle session and navigation
       }
     } catch (error) {
       console.error('Google Auth error:', error);
@@ -316,7 +338,7 @@ export default function Onboarding() {
 
       // Update user profile with onboarding details
       const { error: updateError } = await supabase
-        .from('users')
+        .from('Newusers')
         .update({
           name: fullName.trim(),
           gender,
@@ -329,17 +351,19 @@ export default function Onboarding() {
         throw new Error(`Update error: ${updateError.message}`);
       }
 
-      // Save to AsyncStorage for quick access
-      await AsyncStorage.setItem('@user', JSON.stringify({
+      // Save complete user data to AsyncStorage
+      const userData = {
         id: user.id,
         email: userEmail,
         name: fullName.trim(),
         gender,
         exam,
         avatar_url: avatarUrl,
-      }));
+      };
 
-      // Mark user as onboarded
+      console.log('Saving user data to local storage:', userData);
+
+      await AsyncStorage.setItem('@user', JSON.stringify(userData));
       await AsyncStorage.setItem('@user_onboarded', 'true');
 
       // Clear temporary data
@@ -347,7 +371,7 @@ export default function Onboarding() {
       await AsyncStorage.removeItem('@temp_user_name');
       await AsyncStorage.removeItem('@temp_avatar_url');
 
-      console.log('User profile updated successfully');
+      console.log('User profile updated and saved successfully');
 
       // Navigate to tabs
       navigation.reset({
