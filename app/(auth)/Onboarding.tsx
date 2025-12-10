@@ -156,7 +156,8 @@ export default function Onboarding() {
       
       if (Platform.OS === 'web') {
         // For web, use the API callback endpoint
-        redirectUrl = (typeof window !== 'undefined' ? `${window.location.origin}/api/auth/callback` : 'https://rookie-ai.vercel.app/api/auth/callback');
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rookie-ai.vercel.app';
+        redirectUrl = `${baseUrl}/api/auth/callback`;
       } else {
         // For native, use deep linking with the callback route
         redirectUrl = makeRedirectUri({

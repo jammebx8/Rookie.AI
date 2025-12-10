@@ -19,15 +19,19 @@ export default function AuthCallback() {
       try {
         setLoading(true);
 
+        // Give Supabase a moment to process the session
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         // Get the current session (Supabase should have set it after OAuth)
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (sessionError) {
-          throw sessionError;
+          throw new Error(`Session error: ${sessionError.message}`);
         }
 
         if (!session?.user) {
           setError('No session found. Authentication may have failed.');
+          console.error('No session found after OAuth callback');
           return;
         }
 
@@ -35,6 +39,8 @@ export default function AuthCallback() {
         const userEmail = user.email;
         const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
         const avatarUrl = user.user_metadata?.avatar_url || '';
+
+        console.log('Auth callback - User authenticated:', userEmail);
 
         // Check if user has a profile in the users table
         const { data: existingUser, error: selectError } = await supabase
@@ -45,7 +51,7 @@ export default function AuthCallback() {
 
         if (selectError && selectError.code !== 'PGRST116') {
           // PGRST116 is "no rows found" which is expected for new users
-          throw selectError;
+          throw new Error(`Database error: ${selectError.message}`);
         }
 
         if (existingUser) {
@@ -70,10 +76,12 @@ export default function AuthCallback() {
           await AsyncStorage.setItem('@temp_user_name', userName);
           await AsyncStorage.setItem('@temp_avatar_url', avatarUrl);
 
-          // Navigate back to onboarding to complete profile
+          console.log('New user - redirecting to onboarding');
+
+          // Navigate to onboarding to complete profile
           navigation.reset({
             index: 0,
-            routes: [{ name: '(auth)', params: { screen: 'index' } }],
+            routes: [{ name: '(auth)', params: { screen: 'Onboarding' } }],
           });
         }
       } catch (err) {
@@ -85,7 +93,7 @@ export default function AuthCallback() {
             index: 0,
             routes: [{ name: '(auth)', params: { screen: 'index' } }],
           });
-        }, 2000);
+        }, 3000);
       } finally {
         setLoading(false);
       }
