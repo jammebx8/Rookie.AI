@@ -134,26 +134,103 @@ export default function Onboarding() {
     setInputComplete(fullName.trim().length > 0 && !!gender && !!exam);
   }, [fullName, gender, exam]);
 
+  // === CHECK AND MANAGE USER IN DATABASE ===
+  const checkAndCreateUser = async (user: any) => {
+    try {
+      const userEmail = user.email;
+      const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
+      const avatarUrl = user.user_metadata?.avatar_url || '';
+
+      console.log('Checking user existence:', userEmail);
+
+      // Check if user exists in database
+      const { data: existingUser, error: selectError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (selectError && selectError.code !== 'PGRST116') {
+        throw new Error(`Database error: ${selectError.message}`);
+      }
+
+      if (existingUser) {
+        // User exists - store their details in local storage
+        console.log('User exists in database, storing in local storage');
+        await AsyncStorage.setItem('@user', JSON.stringify({
+          id: user.id,
+          email: userEmail,
+          name: existingUser.name,
+          gender: existingUser.gender,
+          exam: existingUser.exam,
+          avatar_url: existingUser.avatar_url || avatarUrl,
+        }));
+        await AsyncStorage.setItem('@user_onboarded', 'true');
+
+        return { userExists: true, userData: existingUser };
+      } else {
+        // User doesn't exist - insert their initial details
+        console.log('New user, inserting into database');
+        const { data: newUser, error: insertError } = await supabase
+          .from('users')
+          .insert([{
+            id: user.id,
+            email: userEmail,
+            name: userName,
+            gender: null, // Will be filled during onboarding
+            exam: null,   // Will be filled during onboarding
+            avatar_url: avatarUrl,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }])
+          .select()
+          .single();
+
+        if (insertError) {
+          throw new Error(`Insert error: ${insertError.message}`);
+        }
+
+        // Store temporary data for onboarding form
+        await AsyncStorage.setItem('@temp_user_email', userEmail);
+        await AsyncStorage.setItem('@temp_user_name', userName);
+        await AsyncStorage.setItem('@temp_avatar_url', avatarUrl);
+
+        return { userExists: false, userData: newUser };
+      }
+    } catch (error) {
+      console.error('Check/Create user error:', error);
+      throw error;
+    }
+  };
+
   // === GOOGLE AUTHENTICATION ===
   const signInWithGoogle = async () => {
     try {
       setAuthLoading(true);
-      
+
       // Get the current session first to see if already logged in
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (session?.user) {
-        // Already logged in, just navigate
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "(tabs)" }],
-        });
+        // Already logged in, check user in database
+        const result = await checkAndCreateUser(session.user);
+        if (result.userExists) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: '(tabs)' }],
+          });
+        } else {
+          // New user, populate form with name
+          setFullName(result.userData.name);
+          setGender('');
+          setExam('');
+        }
         return;
       }
 
       // Determine redirect URL based on platform
       let redirectUrl: string;
-      
+
       if (Platform.OS === 'web') {
         // For web, use the API callback endpoint
         const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rookie-ai.vercel.app';
@@ -196,7 +273,7 @@ export default function Onboarding() {
         // For mobile/Expo, use WebBrowser to handle the OAuth flow
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         console.log('WebBrowser result:', result);
-        
+
         // Check if user dismissed the browser
         if (result.type === 'dismiss') {
           setAuthLoading(false);
@@ -207,8 +284,8 @@ export default function Onboarding() {
     } catch (error) {
       console.error('Google Auth error:', error);
       Alert.alert(
-        "Authentication Error",
-        error instanceof Error ? error.message : "Google authentication failed. Please check your Supabase configuration."
+        'Authentication Error',
+        error instanceof Error ? error.message : 'Google authentication failed. Please check your Supabase configuration.'
       );
       setAuthLoading(false);
     }
@@ -216,7 +293,7 @@ export default function Onboarding() {
 
   const handleContinue = async () => {
     if (!inputComplete) {
-      Alert.alert("Error", "Please fill in all fields");
+      Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
@@ -224,33 +301,32 @@ export default function Onboarding() {
     try {
       // Get current authenticated user
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session?.user) {
-        Alert.alert("Error", "Please sign in with Google first");
+        Alert.alert('Error', 'Please sign in with Google first');
         setLoading(false);
         return;
       }
 
       const user = session.user;
       const userEmail = user.email;
-      const avatarUrl = user.user_metadata?.avatar_url || "";
+      const avatarUrl = user.user_metadata?.avatar_url || '';
 
-      // Create/Update user profile in Supabase
-      const { error: upsertError } = await supabase.from('users').upsert(
-        [{
-          id: user.id,
-          email: userEmail,
+      console.log('Updating user profile:', userEmail);
+
+      // Update user profile with onboarding details
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
           name: fullName.trim(),
           gender,
           exam,
-          avatar_url: avatarUrl,
           updated_at: new Date().toISOString(),
-        }],
-        { onConflict: 'id' }
-      );
+        })
+        .eq('id', user.id);
 
-      if (upsertError) {
-        throw upsertError;
+      if (updateError) {
+        throw new Error(`Update error: ${updateError.message}`);
       }
 
       // Save to AsyncStorage for quick access
@@ -266,18 +342,23 @@ export default function Onboarding() {
       // Mark user as onboarded
       await AsyncStorage.setItem('@user_onboarded', 'true');
 
-      console.log('User profile saved successfully');
+      // Clear temporary data
+      await AsyncStorage.removeItem('@temp_user_email');
+      await AsyncStorage.removeItem('@temp_user_name');
+      await AsyncStorage.removeItem('@temp_avatar_url');
+
+      console.log('User profile updated successfully');
 
       // Navigate to tabs
       navigation.reset({
         index: 0,
-        routes: [{ name: "(tabs)" }],
+        routes: [{ name: '(tabs)' }],
       });
     } catch (error) {
-      console.error('Save profile error:', error);
+      console.error('Update profile error:', error);
       Alert.alert(
-        "Error",
-        error.message || "Failed to save your profile. Please try again."
+        'Error',
+        error instanceof Error ? error.message : 'Failed to save your profile. Please try again.'
       );
       setLoading(false);
     }
