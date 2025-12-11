@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "@react-navigation/native";
 import { makeRedirectUri } from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
-import React, { useEffect, useRef, useState } from "react";
+import * as WebBrowser from 'expo-web-browser'; // If using Expo
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,13 +18,13 @@ import {
   View,
 } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
-import { supabase } from "../../src/utils/supabase";
+import { supabase } from "../../src/utils/supabase"; // adjust path as needed
 
 
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 const EXAM_OPTIONS = ["JEE Mains", "NEET", "JEE Advanced", "Other"];
 
-WebBrowser.maybeCompleteAuthSession();
+WebBrowser.maybeCompleteAuthSession(); // Needed for Expo Auth flows
 
 export default function Onboarding() {
   const navigation = useNavigation();
@@ -34,109 +34,49 @@ export default function Onboarding() {
   const [inputComplete, setInputComplete] = useState(false);
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
-  const authSubscriptionRef = useRef(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check if user is already authenticated and onboarded
   useEffect(() => {
-    const checkAuthStatus = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          // User is logged in, fetch their profile
-          const { data, error } = await supabase
-            .from('Newusers')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          if (data) {
-            // User has completed onboarding, navigate to tabs
-            await AsyncStorage.setItem('@user_onboarded', 'true');
-            await AsyncStorage.setItem('@user', JSON.stringify({
-              id: data.id,
-              email: data.email,
-              name: data.name,
-              gender: data.gender,
-              exam: data.exam,
-              avatar_url: data.avatar_url || "",
-            }));
-            navigation.reset({
-              index: 0,
-              routes: [{ name: "(tabs)" }],
-            });
-          }
-        }
-      } catch (error) {
-        console.log('Auth check error:', error.message);
+    // Check if user is already onboarded
+    const checkOnboarded = async () => {
+      const onboarded = await AsyncStorage.getItem('@user_onboarded');
+      if (onboarded === 'true') {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "(tabs)" }],
+        });
       }
     };
+    checkOnboarded();
 
-    checkAuthStatus();
-  }, [navigation]);
-
-  // Listen for auth state changes from OAuth redirect
-  useEffect(() => {
+    // Listen for auth state changes (from Google OAuth redirect)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state event:', event, session?.user?.email);
+        console.log('Auth state changed:', event, session?.user?.email);
         
         if (event === 'SIGNED_IN' && session?.user) {
-          try {
-            const user = session.user;
-            const userEmail = user.email;
-            const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || "User";
-            const avatarUrl = user.user_metadata?.avatar_url || "";
-
-            console.log('User signed in:', userEmail, userName);
-
-            // Check if user already has profile
-            const { data: existingUser, error } = await supabase
-              .from('Newusers')
-              .select('*')
-              .eq('id', user.id)
-              .single();
-
-            if (error && error.code !== 'PGRST116') {
-              console.error('Database query error:', error);
-              throw error;
-            }
-
-            if (existingUser && existingUser.gender && existingUser.exam) {
-              // User exists AND has completed onboarding, redirect to tabs
-              console.log('Existing user with complete profile, navigating to tabs');
-              await AsyncStorage.setItem('@user', JSON.stringify({
-                id: user.id,
-                email: userEmail,
-                name: existingUser.name,
-                gender: existingUser.gender,
-                exam: existingUser.exam,
-                avatar_url: existingUser.avatar_url || avatarUrl,
-              }));
-              await AsyncStorage.setItem('@user_onboarded', 'true');
-              
-              navigation.reset({
-                index: 0,
-                routes: [{ name: "(tabs)" }],
-              });
-            } else {
-              // New user or incomplete profile, show form to complete
-              console.log('New or incomplete user, showing form');
-              setFullName(userName);
-              setGender("");
-              setExam("");
-            }
-          } catch (error) {
-            console.error('Auth state change error:', error);
-            Alert.alert('Error', 'An error occurred during authentication. Please try again.');
+          // User just signed in via Google
+          const user = session.user;
+          setIsAuthenticated(true);
+          
+          // Pre-fill the name from Google profile
+          if (user.user_metadata?.full_name) {
+            setFullName(user.user_metadata.full_name);
           }
+          
+          console.log('User authenticated:', user.email);
+        } else if (event === 'SIGNED_OUT') {
+          setIsAuthenticated(false);
+          setFullName("");
+          setGender("");
+          setExam("");
         }
       }
     );
 
-    authSubscriptionRef.current = subscription;
+    // Cleanup subscription on unmount
     return () => {
-      authSubscriptionRef.current?.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, [navigation]);
 
@@ -144,140 +84,30 @@ export default function Onboarding() {
     setInputComplete(fullName.trim().length > 0 && !!gender && !!exam);
   }, [fullName, gender, exam]);
 
-  // === CHECK AND MANAGE USER IN DATABASE ===
-  const checkAndCreateUser = async (user: any) => {
-    try {
-      const userEmail = user.email;
-      const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
-      const avatarUrl = user.user_metadata?.avatar_url || '';
-
-      console.log('Checking user existence:', userEmail);
-
-      // Check if user exists in database
-      const { data: existingUser, error: selectError } = await supabase
-        .from('Newusers')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (selectError && selectError.code !== 'PGRST116') {
-        throw new Error(`Database error: ${selectError.message}`);
-      }
-
-      if (existingUser) {
-        // User exists in database
-        console.log('User exists in database');
-        
-        // Check if onboarding is complete
-        if (existingUser.gender && existingUser.exam) {
-          // Onboarding complete - save and navigate
-          console.log('User onboarding complete, preparing to navigate');
-          await AsyncStorage.setItem('@user', JSON.stringify({
-            id: user.id,
-            email: userEmail,
-            name: existingUser.name,
-            gender: existingUser.gender,
-            exam: existingUser.exam,
-            avatar_url: existingUser.avatar_url || avatarUrl,
-          }));
-          await AsyncStorage.setItem('@user_onboarded', 'true');
-
-          return { userExists: true, onboardingComplete: true, userData: existingUser };
-        } else {
-          // Onboarding incomplete - let user complete form
-          console.log('User exists but onboarding incomplete');
-          return { userExists: true, onboardingComplete: false, userData: existingUser };
-        }
-      } else {
-        // User doesn't exist - create new user record
-        console.log('New user, creating database record');
-        const { data: newUser, error: insertError } = await supabase
-          .from('Newusers')
-          .insert([{
-            id: user.id,
-            email: userEmail,
-            name: userName,
-            gender: null,
-            exam: null,
-            avatar_url: avatarUrl,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }])
-          .select()
-          .single();
-
-        if (insertError) {
-          throw new Error(`Insert error: ${insertError.message}`);
-        }
-
-        console.log('New user record created successfully');
-        return { userExists: false, onboardingComplete: false, userData: newUser };
-      }
-    } catch (error) {
-      console.error('Check/Create user error:', error);
-      throw error;
-    }
-  };
-
   // === GOOGLE AUTHENTICATION ===
   const signInWithGoogle = async () => {
     try {
       setAuthLoading(true);
-
-      // Get the current session first to see if already logged in
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        // Already logged in, check user in database
-        console.log('Session already exists, checking user status');
-        const result = await checkAndCreateUser(session.user);
-        
-        if (result.onboardingComplete) {
-          // User already completed onboarding
-          console.log('User already onboarded, navigating to tabs');
-          navigation.reset({
-            index: 0,
-            routes: [{ name: '(tabs)' }],
-          });
-        } else {
-          // User needs to complete onboarding
-          console.log('User needs to complete onboarding');
-          setFullName(result.userData.name || '');
-          setGender('');
-          setExam('');
-        }
-        setAuthLoading(false);
-        return;
-      }
-
-      // Determine redirect URL based on platform
-      let redirectUrl: string;
-
-      if (Platform.OS === 'web') {
-        // For web, use the API callback endpoint
-        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rookie-ai.vercel.app';
-        redirectUrl = `${baseUrl}/api/auth/callback`;
-      } else {
-        // For native, use deep linking with the callback route
-        redirectUrl = makeRedirectUri({
-          scheme: 'com.ttyyy',
-          path: '(tabs)',
-        });
-      }
+      
+      // Determine redirect URL based on platform.
+      // For web use the current origin so the same domain (dev/prod) works.
+      const redirectUrl = Platform.OS === 'web'
+      ? (typeof window !== 'undefined' ? `${window.location.origin}(tabs)` : 'https://rookie-ai.vercel.app/(tabs)')
+      : makeRedirectUri({ scheme: 'com.ttyyy', path: '/(tabs)' });
 
       console.log('Redirect URL:', redirectUrl);
-      console.log('Platform:', Platform.OS);
 
       // Start OAuth flow
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: redirectUrl,  // Use the computed redirect URL
           skipBrowserRedirect: false,
         },
       });
 
       if (error) {
+        console.error('OAuth error:', error);
         throw error;
       }
 
@@ -285,107 +115,115 @@ export default function Onboarding() {
         throw new Error('No OAuth URL received from Supabase');
       }
 
-      console.log('OAuth URL generated, opening browser');
+      console.log('OAuth URL:', data.url);
 
       // Open browser for OAuth
       if (Platform.OS === 'web') {
-        // For web, redirect directly
+        // For web, open in same window
+        // The onAuthStateChange listener will handle the redirect
         window.location.href = data.url;
       } else {
-        // For mobile/Expo, use WebBrowser to handle the OAuth flow
+        // For mobile/Expo
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         console.log('WebBrowser result:', result);
-
-        // Check if user dismissed the browser
-        if (result.type === 'dismiss') {
-          setAuthLoading(false);
-          Alert.alert('Authentication Cancelled', 'You cancelled the authentication process.');
-        }
-        // The auth state subscription will handle session and navigation
+        
+        // The onAuthStateChange listener will handle the session
       }
+      
+      // Note: Don't check session here - the listener will handle it
     } catch (error) {
-      console.error('Google Auth error:', error);
+      console.error('Full error:', error);
       Alert.alert(
-        'Authentication Error',
-        error instanceof Error ? error.message : 'Google authentication failed. Please check your Supabase configuration.'
+        "Authentication Error", 
+        error.message || "Google Auth failed. Make sure redirect URL is configured in Supabase."
       );
       setAuthLoading(false);
     }
   };
 
   const handleContinue = async () => {
-    if (!inputComplete) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
     setLoading(true);
     try {
-      // Get current authenticated user
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get current auth user (if authenticated via Google)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const user = session?.user;
 
-      if (!session?.user) {
-        Alert.alert('Error', 'Please sign in with Google first');
-        setLoading(false);
-        return;
+      if (sessionError) {
+        console.error('Session error:', sessionError);
       }
 
-      const user = session.user;
-      const userEmail = user.email;
-      const avatarUrl = user.user_metadata?.avatar_url || '';
+      // If user is authenticated via Google, use their data
+      if (user) {
+        console.log('Saving user profile for Google user:', user.email);
 
-      console.log('Updating user profile:', userEmail);
-
-      // Update user profile with onboarding details
-      const { error: updateError } = await supabase
-        .from('Newusers')
-        .update({
+        const userProfile = {
+          id: user.id,
+          email: user.email,
           name: fullName.trim(),
           gender,
           exam,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
+          avatar_url: user.user_metadata?.avatar_url || "",
+        };
 
-      if (updateError) {
-        throw new Error(`Update error: ${updateError.message}`);
+        // Save to AsyncStorage
+        await AsyncStorage.setItem('@user', JSON.stringify(userProfile));
+        console.log('Saved to AsyncStorage');
+
+        // Save to Supabase users table
+        const { error: upsertError } = await supabase.from('users').upsert([userProfile]);
+        
+        if (upsertError) {
+          console.error('Supabase upsert error:', upsertError);
+          Alert.alert("Error", "Failed to save profile to database: " + upsertError.message);
+          setLoading(false);
+          return;
+        }
+
+        console.log('Saved to Supabase');
+      } else {
+        // Manual signup without Google - save to Supabase as new user without auth
+        console.log('Saving user profile for manual signup');
+
+        const userProfile = {
+          name: fullName.trim(),
+          gender,
+          exam,
+        
+        };
+
+        // Save to AsyncStorage
+        await AsyncStorage.setItem('@user', JSON.stringify(userProfile));
+        console.log('Saved to AsyncStorage');
+
+        // Save to Supabase users table (without id, it will be auto-generated)
+        const { data: insertedData, error: insertError } = await supabase
+          .from('users')
+          .insert([userProfile])
+          .select();
+        
+        if (insertError) {
+          console.error('Supabase insert error:', insertError);
+          Alert.alert("Error", "Failed to save profile to database: " + insertError.message);
+          setLoading(false);
+          return;
+        }
+
+        console.log('Saved to Supabase:', insertedData);
       }
 
-      // Save complete user data to AsyncStorage
-      const userData = {
-        id: user.id,
-        email: userEmail,
-        name: fullName.trim(),
-        gender,
-        exam,
-        avatar_url: avatarUrl,
-      };
-
-      console.log('Saving user data to local storage:', userData);
-
-      await AsyncStorage.setItem('@user', JSON.stringify(userData));
+      // Mark as onboarded
       await AsyncStorage.setItem('@user_onboarded', 'true');
-
-      // Clear temporary data
-      await AsyncStorage.removeItem('@temp_user_email');
-      await AsyncStorage.removeItem('@temp_user_name');
-      await AsyncStorage.removeItem('@temp_avatar_url');
-
-      console.log('User profile updated and saved successfully');
-
-      // Navigate to tabs
+      
+      console.log('Navigation to (tabs)');
       navigation.reset({
         index: 0,
-        routes: [{ name: '(tabs)' }],
+        routes: [{ name: "(tabs)" }],
       });
-    } catch (error) {
-      console.error('Update profile error:', error);
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to save your profile. Please try again.'
-      );
-      setLoading(false);
+    } catch (err) {
+      console.error('Error saving user data:', err);
+      Alert.alert("Error", err.message || "Something went wrong saving your data");
     }
+    setLoading(false);
   };
 
   return (
@@ -434,7 +272,6 @@ export default function Onboarding() {
               onChangeText={setFullName}
               placeholder="Your full name"
               placeholderTextColor="#888"
-              editable={!loading}
             />
             <Text style={styles.label}>Gender</Text>
             <View style={styles.buttonGroup}>
@@ -445,17 +282,12 @@ export default function Onboarding() {
                     styles.selectButton,
                     gender === g && styles.selectedButton,
                   ]}
-                  onPress={() => !loading && setGender(g)}
-                  disabled={loading}
+                  onPress={() => setGender(g)}
                 >
-                  <Text
-                    style={[
-                      styles.selectButtonText,
-                      gender === g && styles.selectedButtonText,
-                    ]}
-                  >
-                    {g}
-                  </Text>
+                  <Text style={[
+                    styles.selectButtonText,
+                    gender === g && styles.selectedButtonText
+                  ]}>{g}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -468,23 +300,16 @@ export default function Onboarding() {
                     styles.selectButton,
                     exam === e && styles.selectedButton,
                   ]}
-                  onPress={() => !loading && setExam(e)}
-                  disabled={loading}
+                  onPress={() => setExam(e)}
                 >
-                  <Text
-                    style={[
-                      styles.selectButtonText,
-                      exam === e && styles.selectedButtonText,
-                    ]}
-                  >
-                    {e}
-                  </Text>
+                  <Text style={[
+                    styles.selectButtonText,
+                    exam === e && styles.selectedButtonText
+                  ]}>{e}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
-
-          {/* Complete Profile Button */}
           <TouchableOpacity
             style={[
               styles.continueButton,
@@ -497,37 +322,20 @@ export default function Onboarding() {
             {loading ? (
               <ActivityIndicator size="small" color="#181f2b" />
             ) : (
-              <Text
-                style={[
-                  styles.continueButtonText,
-                  !inputComplete && styles.continueButtonTextInactive,
-                ]}
-              >
-                Complete Profile
+              <Text style={[
+                styles.continueButtonText,
+                !inputComplete && styles.continueButtonTextInactive
+              ]}>
+                {isAuthenticated ? 'Complete Profile' : 'Continue'}
               </Text>
             )}
           </TouchableOpacity>
-
-          {/* Bottom Section with Student Stats */}
-          {/* Bottom Section with Student Stats */}
           <View style={styles.bottomSection}>
             <View style={styles.avatarRow}>
-              <Image
-                source={require("../../src/assets/images/avatar1.png")}
-                style={styles.avatar}
-              />
-              <Image
-                source={require("../../src/assets/images/avatar2.png")}
-                style={styles.avatar}
-              />
-              <Image
-                source={require("../../src/assets/images/avatar3.png")}
-                style={styles.avatar}
-              />
-              <Image
-                source={require("../../src/assets/images/avatar4.png")}
-                style={styles.avatar}
-              />
+              <Image source={require('../../src/assets/images/avatar1.png')} style={styles.avatar} />
+              <Image source={require('../../src/assets/images/avatar2.png')} style={styles.avatar} />
+              <Image source={require('../../src/assets/images/avatar3.png')} style={styles.avatar} />
+              <Image source={require('../../src/assets/images/avatar4.png')} style={styles.avatar} />
               <View style={styles.avatarPlus}>
                 <Text style={styles.avatarPlusText}>+129</Text>
               </View>
