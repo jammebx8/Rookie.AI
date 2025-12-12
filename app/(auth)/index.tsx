@@ -79,7 +79,7 @@ const Auth = () => {
   // ../../src/assets/images/bg_texture.png  (the background)
   // and use imagepath.homelogo (existing) or ../../src/assets/images/event_edge_logo.png for the centered logo.
   const backgroundImage = require('../../src/assets/images/webbackground.jpg');
-
+  const homelogo = require('../../src/assets/images/meetup_logo-removebg-preview.png');
   return (
     
       <SafeAreaView style={style.container}>
@@ -95,13 +95,13 @@ const Auth = () => {
             style={style.logo_style}
             resizeMode="contain"
           />
-          <Text style={style.app_name}>Event Edge</Text>
+         
           <Text style={style.tagline}>Gwalior events. Always ahead.</Text>
         </View>
 
         {/* Footer: simple attribution / entry helpers - GIF removed as requested */}
         <View style={style.footer}>
-          <Text style={style.from_text}>By</Text>
+          <Text style={style.from_text}>From</Text>
           <Text style={style.pookie_text}>Innovators</Text>
         </View>
       </SafeAreaView>
@@ -127,6 +127,7 @@ const style = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingBottom:110
   },
   footer: {
     height: 80,
@@ -135,30 +136,27 @@ const style = StyleSheet.create({
     paddingBottom: 20,
   },
   from_text: {
-    fontSize: 12,
-    color: '#ffffffaa',
+    fontSize: 16,
+    color: '#000',
   },
   pookie_text: {
-    color: '#ffffff',
+    color: '#000',
     paddingTop: 6,
+    fontSize: 16,
     fontWeight: '700',
   },
   logo_style: {
-    width: 220,
-    height: 220,
-    marginBottom: 12,
+    width: 420,
+    height: 420,
+    marginBottom: 15,
+   
   },
-  app_name: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 6,
-    letterSpacing: 1,
-  },
+
   tagline: {
-    color: '#ffffffcc',
-    fontSize: 12,
+    color: '#000',
+    fontSize: 20,
     marginTop: 4,
+    fontWeight:'600'
   },
 });
 

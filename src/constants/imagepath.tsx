@@ -1,6 +1,6 @@
 
 export default  {
-    homelogo: require("../../src/assets/images/lggg.png"),
+   
     level1: require("../../src/assets/images/bggg.png"),
 logo:require("../../src/assets/images/lg.png"),
 welcome:require( "../../src/assets/images/backgound 3.png"),
@@ -23,7 +23,7 @@ Biology: require("../../src/assets/images/maths.png"),
 DeleteIcon: require("../../src/assets/images/bin.png"),
 LogoutIcon : require("../../src/assets/images/door.png"),
  TickIcon: require("../../src/assets/images/ticck.png"),
- 
+ homelogo: require("../../src/assets/images/meetup_logo-removebg-preview.png"),
  LoadSolGif: require("../../src/assets/images/loadsol.gif"),
 } 
 

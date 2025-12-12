@@ -29,9 +29,11 @@ const EXAM_OPTIONS = ["Technology", "Sports", "Stand ups", "Politics", "Spiritua
 
 export default function Onboarding() {
   const navigation = useNavigation<any>();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
-  const isNarrow = windowWidth < 900; // break at ~900px
+
+  // Force two-column on wide screens; stack on small screens
+  const isTwoColumn = windowWidth >= 900;
 
   const [fullName, setFullName] = useState("");
   const [gender, setGender] = useState("");
@@ -40,6 +42,9 @@ export default function Onboarding() {
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // local google icon asset (add ../../src/assets/images/google.png to your project)
+  const googleIcon = require('../../src/assets/images/googlelogo.png');
 
   // Helper: when a signed-in user is detected, ensure DB row exists,
   // then if onboarding fields present, persist to AsyncStorage and navigate.
@@ -352,385 +357,357 @@ export default function Onboarding() {
     >
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          isWeb && !isNarrow ? styles.scrollContentWeb : null
-        ]}
+        contentContainerStyle={[styles.scrollContent, { paddingVertical: verticalScale(24) }]}
         keyboardShouldPersistTaps="handled"
         bounces={false}
       >
-        <View style={[
-          styles.innerWrapper,
-          isWeb && !isNarrow ? styles.innerWrapperWeb : null
-        ]}>
-          {/* Left column: form and controls */}
-          <View style={[
-            styles.leftPanel,
-            isWeb && !isNarrow ? styles.leftPanelWeb : null
-          ]}>
-            <Text style={styles.title}>Hey, kiddo!</Text>
-            <Text style={styles.subtitle}>Let us know you</Text>
+        <View style={[styles.container, { flexDirection: isTwoColumn ? 'row' : 'column' }]}>
+          {/* Left card */}
+          <View style={[styles.leftCard, isTwoColumn ? { marginRight: 28 } : { width: '100%' }]}>
+            <Text style={styles.hero}>Hey, There!</Text>
+            <Text style={styles.sub}>Let us know you</Text>
 
             <TouchableOpacity
-              style={[styles.continueButton, authLoading && styles.continueButtonInactive, styles.googleBtn]}
+              style={[styles.googleButton, authLoading && styles.buttonDisabled]}
               onPress={signInWithGoogle}
               disabled={authLoading}
-              activeOpacity={authLoading ? 1 : 0.8}
+              activeOpacity={authLoading ? 1 : 0.85}
             >
               {authLoading ? (
                 <ActivityIndicator size="small" color="#181f2b" />
               ) : (
-                <Text style={styles.continueButtonText}>
-                  Continue with Google
-                </Text>
+                <View style={styles.googleContent}>
+                  <Image source={googleIcon} style={styles.googleIcon} />
+                  <Text style={styles.googleText}>Continue with Google</Text>
+                </View>
               )}
             </TouchableOpacity>
 
-            <Text style={styles.orText}>OR</Text>
+            <Text style={styles.or}>OR</Text>
 
-            <View style={styles.infoBox}>
-              <Text style={styles.label}>Full Name</Text>
+            <View style={styles.formCard}>
+              <Text style={styles.fieldLabel}>Full Name</Text>
               <TextInput
                 style={styles.input}
                 value={fullName}
                 onChangeText={setFullName}
                 placeholder="Your full name"
-                placeholderTextColor="#888"
+                placeholderTextColor="#5b6470"
               />
 
-              <Text style={styles.label}>Gender</Text>
-              <View style={styles.buttonGroup}>
+              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Gender</Text>
+              <View style={styles.rowGroup}>
                 {GENDER_OPTIONS.map((g) => (
                   <TouchableOpacity
                     key={g}
-                    style={[
-                      styles.selectButton,
-                      gender === g && styles.selectedButton,
-                    ]}
+                    style={[styles.chip, gender === g && styles.chipSelected]}
                     onPress={() => setGender(g)}
+                    activeOpacity={0.85}
                   >
-                    <Text style={[
-                      styles.selectButtonText,
-                      gender === g && styles.selectedButtonText
-                    ]}>{g}</Text>
+                    <Text style={[styles.chipText, gender === g && styles.chipTextSelected]}>{g}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.label}>Interests</Text>
-              <View style={styles.buttonGroup}>
+              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Interests</Text>
+              <View style={styles.rowGroup}>
                 {EXAM_OPTIONS.map((e) => (
                   <TouchableOpacity
                     key={e}
-                    style={[
-                      styles.selectButton,
-                      exam === e && styles.selectedButton,
-                    ]}
+                    style={[styles.chip, exam === e && styles.chipSelected]}
                     onPress={() => setExam(e)}
+                    activeOpacity={0.85}
                   >
-                    <Text style={[
-                      styles.selectButtonText,
-                      exam === e && styles.selectedButtonText
-                    ]}>{e}</Text>
+                    <Text style={[styles.chipText, exam === e && styles.chipTextSelected]}>{e}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
 
             <TouchableOpacity
-              style={[
-                styles.continueButton,
-                (!inputComplete || loading) && styles.continueButtonInactive,
-              ]}
+              style={[styles.continueBtn, (!inputComplete || loading) && styles.continueBtnDisabled]}
               onPress={handleContinue}
               disabled={!inputComplete || loading}
-              activeOpacity={inputComplete && !loading ? 0.8 : 1}
+              activeOpacity={(!inputComplete || loading) ? 1 : 0.85}
             >
               {loading ? (
                 <ActivityIndicator size="small" color="#181f2b" />
               ) : (
-                <Text style={[
-                  styles.continueButtonText,
-                  !inputComplete && styles.continueButtonTextInactive
-                ]}>
+                <Text style={[styles.continueText, (!inputComplete) && styles.continueTextInactive]}>
                   {isAuthenticated ? 'Complete Profile' : 'Continue'}
                 </Text>
               )}
             </TouchableOpacity>
 
-            <View style={styles.bottomSection}>
-              <View style={styles.avatarRow}>
-                <Image source={require('../../src/assets/images/avatar1.png')} style={styles.avatar} />
-                <Image source={require('../../src/assets/images/avatar2.png')} style={styles.avatar} />
-                <Image source={require('../../src/assets/images/avatar3.png')} style={styles.avatar} />
-                <Image source={require('../../src/assets/images/avatar4.png')} style={styles.avatar} />
-                <View style={styles.avatarPlus}>
-                  <Text style={styles.avatarPlusText}>+129</Text>
-                </View>
+            <View style={styles.bottomRow}>
+              <View style={styles.avatarStack}>
+                <Image source={require('../../src/assets/images/avatar1.png')} style={styles.smallAvatar} />
+                <Image source={require('../../src/assets/images/avatar2.png')} style={styles.smallAvatar} />
+                <Image source={require('../../src/assets/images/avatar3.png')} style={styles.smallAvatar} />
+                <Image source={require('../../src/assets/images/avatar4.png')} style={styles.smallAvatar} />
+                <View style={styles.plusAvatar}><Text style={styles.plusText}>+129</Text></View>
               </View>
-              <Text style={styles.studentStats}>
+              <Text style={styles.stats}>
                 Out of 15,00,000 students{"\n"}
                 234+ Student are already practicing with us
               </Text>
             </View>
           </View>
 
-          {/* Right column: semi-transparent illustration for web / hidden on narrow screens */}
-          {!isNarrow ? (
-            <View style={[styles.rightPanel, isWeb ? styles.rightPanelWeb : null]}>
-              <View style={styles.illustrationContainer}>
-                <Image
-                  source={illustration}
-                  style={styles.illustration}
-                  resizeMode="contain"
-                />
-                {/* subtle overlay to make illustration slightly transparent */}
-                <View style={styles.illustrationOverlay} pointerEvents="none" />
-              </View>
+          {/* Right illustration */}
+          <View style={[styles.rightCard, isTwoColumn ? {} : { marginTop: 28 }]}>
+            <View style={styles.illustrationWrap}>
+              <Image
+                source={illustration}
+                style={styles.illustration}
+                resizeMode="contain"
+              />
             </View>
-          ) : null}
+          </View>
         </View>
       </ScrollView>
     </ImageBackground>
   );
 }
 
-// ...styles kept similar but extended for web two-column layout...
 const styles = StyleSheet.create({
   background: {
     flex: 1,
     width: "100%",
     minHeight: Dimensions.get('window').height,
-    
+    backgroundColor: '#f3f3f3',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingVertical: verticalScale(32),
+    paddingHorizontal: moderateScale(24),
   },
-  scrollContentWeb: {
-    paddingVertical: verticalScale(48),
+  container: {
+    width: '100%',
+    maxWidth: 1280,
+    alignSelf: 'center',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingVertical: verticalScale(12),
   },
-  innerWrapper: {
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
+
+  // LEFT
+  leftCard: {
+    backgroundColor: '#000',
+    borderRadius: 14,
+    padding: moderateScale(22),
+    width: '64%',
+    minWidth: 420,
+    // deep shadow like the image
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    shadowOffset: { width: 6, height: 8 },
+    elevation: 12,
   },
-  innerWrapperWeb: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    justifyContent: "space-between",
-    paddingHorizontal: moderateScale(40),
-  },
-  leftPanel: {
-    width: "90%",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    paddingTop: Platform.OS === "android" ? verticalScale(30) : verticalScale(40),
-  },
-  leftPanelWeb: {
-    width: "48%",
-    alignItems: "flex-start",
-    justifyContent: "center",
-    paddingVertical: moderateScale(30),
-    paddingRight: moderateScale(40),
-    backgroundColor: '#000', // subtle glass panel
-    borderRadius: moderateScale(16),
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
-    boxShadow: '0px 10px 30px rgba(0,0,0,0.5)' as any, // for web; ignored on native
-    overflow: 'hidden',
-  },
-  rightPanel: {
-    width: "90%",
-    marginTop: verticalScale(20),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rightPanelWeb: {
-    width: "48%",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingLeft: moderateScale(30),
-    paddingVertical: moderateScale(20),
-  },
-  illustrationContainer: {
-    width: "100%",
-    height: 520,
-    alignItems: "center",
-    justifyContent: "center",
-    position: 'relative',
-  },
-  illustration: {
-    width: "110%",
-    height: "110%",
-    opacity: 1, // makes the illustration transparent as requested
-    transform: [{ translateX: 10 }],
-  },
-  illustrationOverlay: {
-    position: 'absolute',
-    left: 0, top: 0, right: 0, bottom: 0,
-    backgroundColor: 'transparent',
-  },
-  title: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontFamily: 'Geist',
+  hero: {
+    color: '#fff',
     fontSize: moderateScale(36),
+    fontWeight: '900',
     marginBottom: verticalScale(6),
-    alignSelf: "flex-start",
   },
-  subtitle: {
-    color: "#d2d2e0",
-    fontSize: moderateScale(17),
-    fontFamily: 'Geist',
-    marginBottom: verticalScale(12),
-    alignSelf: "flex-start",
+  sub: {
+    color: '#c8cbd0',
+    fontSize: moderateScale(14),
+    marginBottom: verticalScale(14),
   },
-  infoBox: {
-    backgroundColor: "rgba(3,6,15,0.6)",
-    borderRadius: moderateScale(14),
-    padding: moderateScale(20),
-    width: "100%",
-    marginBottom: verticalScale(18),
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.04)",
-    alignSelf: "center",
+
+  googleButton: {
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    height: verticalScale(46),
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+    paddingHorizontal: scale(14),
   },
-  label: {
-    color: "#fff",
+  googleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleIcon: {
+    width: scale(18),
+    height: scale(18),
+    marginRight: scale(10),
+    resizeMode: 'contain',
+  },
+  googleText: {
+    color: '#181f2b',
+    fontWeight: '700',
     fontSize: moderateScale(15),
-    fontFamily: 'Geist',
-    fontWeight: "500",
-    marginBottom: verticalScale(6),
-    marginTop: verticalScale(10),
   },
-  input: {
-    backgroundColor: "#0C111D",
-    borderRadius: moderateScale(10),
-    color: "#fff",
-    fontFamily: 'Geist',
-    paddingHorizontal: scale(16),
-    paddingVertical: verticalScale(10),
-    fontSize: moderateScale(16),
-    marginBottom: verticalScale(8),
+  buttonDisabled: {
+    opacity: 0.9,
+  },
+
+  or: {
+    textAlign: 'center',
+    color: '#9aa0a9',
+    marginVertical: moderateScale(12),
+    fontSize: moderateScale(12),
+  },
+
+  formCard: {
+    backgroundColor: '#07070a',
+    borderRadius: 12,
+    padding: moderateScale(14),
     borderWidth: 1,
-    borderColor: "#344054",
+    borderColor: 'rgba(255,255,255,0.03)',
   },
-  buttonGroup: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+
+  fieldLabel: {
+    color: '#fff',
+    fontSize: moderateScale(14),
     marginBottom: verticalScale(8),
+    fontWeight: '600',
+  },
+
+  input: {
+    backgroundColor: '#0b0d11',
+    borderRadius: 12,
+    color: '#fff',
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(15),
+    borderWidth: 1,
+    borderColor: '#1e2730',
+    // subtle inner shadow imitation via elevation/shadow on android can be omitted
+  },
+
+  rowGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     marginTop: verticalScale(4),
   },
-  selectButton: {
-    backgroundColor: "#0C111D",
-    borderRadius: moderateScale(18),
-    paddingHorizontal: scale(18),
-    paddingVertical: verticalScale(8),
-    marginRight: scale(10),
-    marginBottom: verticalScale(8),
+
+  chip: {
+    backgroundColor: '#181818ff',
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginRight: 10,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#262626",
-    fontFamily: 'Geist',
+    borderColor: '#16191d',
+    minWidth: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  selectedButton: {
-    backgroundColor: "#fff",
-    borderColor: "#344054",
+  chipSelected: {
+    backgroundColor: '#fff',
+    borderColor: '#fff',
   },
-  selectButtonText: {
-    color: "#fff",
-    fontSize: moderateScale(15),
-    fontWeight: "500",
-    fontFamily: 'Geist',
-  },
-  selectedButtonText: {
-    color: "#181f2b",
-    fontWeight: "bold",
-    fontFamily: 'Geist',
-  },
-  continueButton: {
-    width: "100%",
-    height: verticalScale(38),
-    borderRadius: moderateScale(27),
- 
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: verticalScale(18),
-    marginBottom: verticalScale(8),
-    shadowColor: "#000",
-    shadowOpacity: 0.10,
-    shadowRadius: moderateScale(8),
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  googleBtn: {
-    marginTop: 0,
-  },
-  continueButtonInactive: {
-    backgroundColor: "#F2F4F7",
-  },
-  continueButtonText: {
-    color: "#181f2b",
-    fontWeight: "bold",
-    fontSize: moderateScale(17),
-    fontFamily: 'Geist',
-  },
-  continueButtonTextInactive: {
-    color: "#667085",
-    fontFamily: 'Geist',
-  },
-  orText: {
-    color: "#b5b6c9",
-    marginVertical: moderateScale(8),
-    fontFamily: 'Geist',
-    fontSize: moderateScale(13),
-    alignSelf: 'center',
-  },
-  bottomSection: {
-    alignItems: "center",
-    marginTop: verticalScale(16),
-    width: "100%",
-  },
-  avatarRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: verticalScale(8),
-  },
-  avatar: {
-    width: scale(38),
-    height: scale(38),
-    borderRadius: scale(19),
-    marginLeft: -scale(10),
-    borderWidth: 2,
-    borderColor: "#22223f",
-    backgroundColor: "#22223f",
-  },
-  avatarPlus: {
-    width: scale(38),
-    height: scale(38),
-    borderRadius: scale(19),
-    backgroundColor: "#651a1a",
-    justifyContent: "center",
-    alignItems: "center",
-    marginLeft: -scale(10),
-    borderWidth: 2,
-    borderColor: "#22223f",
-  },
-  avatarPlusText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: moderateScale(15),
-    fontFamily: 'Geist',
-  },
-  studentStats: {
-    color: "#fff",
+  chipText: {
+    color: '#cfd6dc',
+    fontWeight: '500',
     fontSize: moderateScale(14),
-    textAlign: "center",
-    marginTop: verticalScale(2),
-    marginBottom: verticalScale(30),
+  },
+  chipTextSelected: {
+    color: '#081022',
+    fontWeight: '700',
+  },
+
+  continueBtn: {
+    marginTop: verticalScale(18),
+    backgroundColor: '#eef0f3',
+    borderRadius: 999,
+    height: verticalScale(46),
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  continueBtnDisabled: {
+    opacity: 0.9,
+  },
+  continueText: {
+    color: '#596272',
+    fontSize: moderateScale(16),
+    fontWeight: '700',
+  },
+  continueTextInactive: {
+    color: '#7d8591',
+  },
+
+  bottomRow: {
+    marginTop: verticalScale(18),
+    alignItems: 'center',
+    width: '100%',
+  },
+  avatarStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: verticalScale(10),
+  },
+  smallAvatar: {
+    width: scale(38),
+    height: scale(38),
+    borderRadius: scale(19),
+    marginLeft: -scale(10),
+    borderWidth: 2,
+    borderColor: '#111217',
+    backgroundColor: '#22223f',
+  },
+  plusAvatar: {
+    width: scale(38),
+    height: scale(38),
+    borderRadius: scale(19),
+    backgroundColor: '#651a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: -scale(10),
+    borderWidth: 2,
+    borderColor: '#111217',
+  },
+  plusText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: moderateScale(12),
+  },
+  stats: {
+    color: '#bfc6cc',
+    fontSize: moderateScale(13),
+    textAlign: 'center',
     lineHeight: moderateScale(20),
-    fontFamily: 'Geist',
+  },
+
+  // RIGHT
+  rightCard: {
+    width: '52%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 420,
+    paddingLeft: moderateScale(18),
+  },
+  illustrationWrap: {
+    width: '100%',
+    maxWidth: 560,
+    height: 520,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // keep illustration visually on the right side with whitespace as in image
+  },
+  illustration: {
+    width: '100%',
+    height: '100%',
+  },
+
+  // responsive tweaks
+  '@media (max-width: 900px)': {
+
+    rightCard: {
+      width: '100%',
+      paddingLeft: 0,
+    },
   },
 });
