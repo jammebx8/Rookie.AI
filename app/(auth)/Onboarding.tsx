@@ -80,13 +80,13 @@ export default function Onboarding() {
         try {
           await AsyncStorage.setItem('@user', JSON.stringify(toSave));
           await AsyncStorage.setItem('@user_onboarded', 'true');
-          console.log('Saved @user and @user_onboarded after Google sign-in; navigating to (tabs)');
+          console.log('Saved @user and @user_onboarded after Google sign-in; navigating to homepage');
           setIsAuthenticated(true);
           setAuthLoading(false);
           // Navigate to tabs (reset stack)
           navigation.reset({
             index: 0,
-            routes: [{ name: "(tabs)" }],
+            routes: [{ name: "homepage" }],
           });
           return;
         } catch (storageErr) {
@@ -108,13 +108,13 @@ export default function Onboarding() {
         };
         await AsyncStorage.setItem('@user', JSON.stringify(toSave));
         await AsyncStorage.setItem('@user_onboarded', 'true');
-        console.log('Saved @user and @user_onboarded; navigating to (tabs)');
+        console.log('Saved @user and @user_onboarded; navigating to homepage');
         setIsAuthenticated(true);
         setAuthLoading(false);
         // Navigate to tabs (reset stack)
         navigation.reset({
           index: 0,
-          routes: [{ name: "(tabs)" }],
+          routes: [{ name: "homepage" }],
         });
         return;
       }
@@ -141,7 +141,7 @@ export default function Onboarding() {
         if (onboarded === 'true') {
           navigation.reset({
             index: 0,
-            routes: [{ name: "(tabs)" }],
+            routes: [{ name: "homepage" }],
           });
           return;
         }
@@ -191,7 +191,7 @@ export default function Onboarding() {
           // replace the navigation.reset below with await handleSignedInUser(sessionUser) instead.
           navigation.reset({
             index: 0,
-            routes: [{ name: "(tabs)" }],
+            routes: [{ name: "homepage" }],
           });
           return;
         }
@@ -207,7 +207,7 @@ export default function Onboarding() {
             // If a sign-in event occurs while on this screen, immediately send to tabs
             navigation.reset({
               index: 0,
-              routes: [{ name: "(tabs)" }],
+              routes: [{ name: "homepage" }],
             });
           } else if (event === 'SIGNED_OUT') {
             setIsAuthenticated(false);
@@ -240,7 +240,7 @@ export default function Onboarding() {
       // For web we should redirect back to the app origin so Onboarding can call getSessionFromUrl().
       const redirectUrl = Platform.OS === 'web'
         ? (typeof window !== 'undefined' ? `${window.location.origin}` : 'https://rookie-ai.vercel.app')
-        : makeRedirectUri({ scheme: 'com.ttyyy', path: '/(tabs)', useProxy: true }); // useProxy helps with Expo Go/dev client testing
+        : makeRedirectUri({ scheme: 'com.ttyyy', path: '/homepage', useProxy: true }); // useProxy helps with Expo Go/dev client testing
 
       console.log('Redirect URL:', redirectUrl);
 
@@ -352,7 +352,7 @@ export default function Onboarding() {
       // Navigate to tabs after saving
       navigation.reset({
         index: 0,
-        routes: [{ name: "(tabs)" }],
+        routes: [{ name: "homepage" }],
       });
     } catch (err) {
       console.error('Error saving user data:', err);
