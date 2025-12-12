@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Image, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Image, StatusBar, ImageBackground } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import { router, useNavigation } from 'expo-router';
 import imagepath from '../../src/constants/imagepath';
@@ -8,15 +8,15 @@ import { supabase } from '../../src/utils/supabase';
 
 const Auth = () => {
   const [isloading, setIsLoading] = useState(false);
-  const gifDisplayTime = 3000; // GIF display time in milliseconds
+  const gifDisplayTime = 3000; // time before routing (ms)
 
   let navigate_to_terms = () => {
-    router.push('/terms_agree');
+    router.push('/Onboarding');
   };
 
   const navigation = useNavigation();
 
-  // Show the GIF and after gifDisplayTime navigate to terms_agree
+  // Keep the same splash timing behavior, but no GIF in the footer.
   let loading_timeout = () => {
     setIsLoading(true);
     setTimeout(navigate_to_terms, gifDisplayTime);
@@ -52,7 +52,7 @@ const Auth = () => {
         console.warn('Error reading @user_onboarded in splash:', err);
       }
 
-      // 3) No session and not onboarded: show GIF then push to terms_agree
+      // 3) No session and not onboarded: show splash (background + centered logo) then push to terms_agree
       loading_timeout();
     };
 
@@ -74,74 +74,91 @@ const Auth = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Background image - replace this require with your actual background asset path if different.
+  // The user provided two images; place them in the project at:
+  // ../../src/assets/images/bg_texture.png  (the background)
+  // and use imagepath.homelogo (existing) or ../../src/assets/images/event_edge_logo.png for the centered logo.
+  const backgroundImage = require('../../src/assets/images/webbackground.jpg');
+
   return (
-    <SafeAreaView style={style.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+    
+      <SafeAreaView style={style.container}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <View style={style.header}></View>
+        {/* Header left intentionally empty to keep focus on centered entry point */}
+        <View style={style.header} />
 
-      <View style={style.body}>
-        <Image source={imagepath.homelogo} style={style.logo_style} resizeMode="contain" />
-      </View>
+        {/* Main: centered logo and optional title - this is the entry point */}
+        <View style={style.body}>
+          <Image
+            source={imagepath.homelogo}
+            style={style.logo_style}
+            resizeMode="contain"
+          />
+          <Text style={style.app_name}>Event Edge</Text>
+          <Text style={style.tagline}>Gwalior events. Always ahead.</Text>
+        </View>
 
-      <View style={style.footer}>
-        {isloading ? (
-          <View style={{ alignItems: 'center' }}>
-            <Image
-              source={require('../../src/assets/images/667.gif')}
-              style={{ width: 60, height: 60 }}
-            />
-          </View>
-        ) : (
-          <View style={{ alignItems: 'center' }}>
-            <Text style={style.from_text}>From</Text>
-            <Text style={style.pookie_text}>Dhruv Pathak</Text>
-          </View>
-        )}
-      </View>
-
-    </SafeAreaView>
+        {/* Footer: simple attribution / entry helpers - GIF removed as requested */}
+        <View style={style.footer}>
+          <Text style={style.from_text}>By</Text>
+          <Text style={style.pookie_text}>Innovators</Text>
+        </View>
+      </SafeAreaView>
+ 
   );
 };
 
 const style = StyleSheet.create({
-  background_image: {
+  background: {
     flex: 1,
-    width: 'auto',
-    height: 'auto',
+    width: '100%',
+    height: '100%',
   },
-
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
   },
-  header: {},
+  header: {
+    height: 40,
+  },
   body: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 24,
   },
   footer: {
-    height: 100,
+    height: 80,
     alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 20,
   },
   from_text: {
     fontSize: 12,
-    color: 'white',
+    color: '#ffffffaa',
   },
   pookie_text: {
-    color: 'white',
-    paddingTop: 20,
-    fontWeight: 'bold',
-    marginBottom: 40,
+    color: '#ffffff',
+    paddingTop: 6,
+    fontWeight: '700',
   },
   logo_style: {
-    width: 200,
-    height: 200,
+    width: 220,
+    height: 220,
+    marginBottom: 12,
   },
-  loading_text: {
-    color: 'white',
-    marginTop: 15,
+  app_name: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '800',
+    marginTop: 6,
+    letterSpacing: 1,
+  },
+  tagline: {
+    color: '#ffffffcc',
+    fontSize: 12,
+    marginTop: 4,
   },
 });
 

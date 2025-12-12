@@ -113,7 +113,7 @@ export default function HomeScreen() {
           <View style={styles.centerHero}>
             <Text style={styles.title}>
               <Text>The </Text>
-              <Text style={styles.emoji}>👥</Text>
+              <Text style={styles.emoji}></Text>
               <Text> people platform.{'\n'}</Text>
               <Text style={styles.titleLine2}>
                 Where <Text style={styles.emoji}>⚙️</Text> interests{'\n'}become <Text style={styles.emoji}>💖</Text> friendships.
