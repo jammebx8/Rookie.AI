@@ -43,7 +43,7 @@ interface UserData {
 const DUMMY_EVENTS: Event[] = [
   {
     id: '1',
-    title: '10th International Agri & Horti Technology Expo 2025',
+    title: 'DevFest 2025 by GDGC India',
     date: 'Fri, 26 Dec',
     time: '10:00 AM',
     location: 'CIAE Ground, Nabi Bagh, Berasia Road, Bhopal',
@@ -54,7 +54,7 @@ const DUMMY_EVENTS: Event[] = [
   },
   {
     id: '2',
-    title: 'Ferry Tales: Stories Across the Lake',
+    title: 'Workshop on Startup Networking',
     date: 'Sat, 13 Dec',
     time: '04:00 PM',
     location: 'Bhopal - The City Of Lakes',
@@ -69,7 +69,7 @@ const DUMMY_EVENTS: Event[] = [
     date: 'Sat, 20 Dec',
     time: '06:00 PM',
     location: 'Hotel La Pearl: Bhopal',
-    image: require('../src/assets/images/event06.jpeg'),
+    image: require('../src/assets/images/standup.jpeg'),
 
     interested: '836+ Interested',
     price: '₹ 599',
@@ -77,7 +77,7 @@ const DUMMY_EVENTS: Event[] = [
   },
   {
     id: '4',
-    title: 'National Open Championship',
+    title: 'Multi Country Education Fair',
     date: 'Sun, 28 Dec',
     time: '12:00 AM',
     location: 'Bhopal City',
@@ -88,7 +88,7 @@ const DUMMY_EVENTS: Event[] = [
   },
   {
     id: '5',
-    title: 'Rivayat-E-Bhopal',
+    title: 'WordCamp Bhopal 2025',
     date: 'Wed, 17 Dec',
     time: '07:00 PM',
     location: 'Ravindra Bhawan Bhopal',
@@ -100,7 +100,7 @@ const DUMMY_EVENTS: Event[] = [
   },
   {
     id: '6',
-    title: 'WordCamp Bhopal 2025',
+    title: 'Riyaz Bhopal 2025',
     date: 'Sun, 21 Dec',
     time: '10:00 AM',
     location: 'Courtyard By Marriott Bhopal',
@@ -111,7 +111,7 @@ const DUMMY_EVENTS: Event[] = [
   },
   {
     id: '7',
-    title: 'Multi Country Education Fair',
+    title: '10th International Agri & Horti Technology Expo 2025',
     date: 'Sat, 13 Dec',
     time: '09:30 AM',
     location: 'Global Reach Bhopal',
