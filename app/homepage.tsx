@@ -69,7 +69,7 @@ const DUMMY_EVENTS: Event[] = [
     date: 'Sat, 20 Dec',
     time: '06:00 PM',
     location: 'Hotel La Pearl: Bhopal',
-    image: require('../src/assets/images/event03.jpeg'),
+    image: require('../src/assets/images/event06.jpeg'),
 
     interested: '836+ Interested',
     price: '₹ 599',
@@ -104,7 +104,7 @@ const DUMMY_EVENTS: Event[] = [
     date: 'Sun, 21 Dec',
     time: '10:00 AM',
     location: 'Courtyard By Marriott Bhopal',
-    image: require('../src/assets/images/neutral.png'),
+    image: require('../src/assets/images/event06.jpeg'),
 
     interested: '4+ Interested',
     category: 'Technology',
@@ -115,7 +115,7 @@ const DUMMY_EVENTS: Event[] = [
     date: 'Sat, 13 Dec',
     time: '09:30 AM',
     location: 'Global Reach Bhopal',
-    image: require('../src/assets/images/neutral.png'),
+    image: require('../src/assets/images/event07.jpeg'),
 
     interested: '0+ Interested',
     price: 'Free',
@@ -127,7 +127,7 @@ const DUMMY_EVENTS: Event[] = [
     date: 'Fri, 09 Jan',
     time: '09:00 AM',
     location: 'Bharat Bhavan Bhopal',
-    image: require('../src/assets/images/neutral.png'),
+    image: require('../src/assets/images/event08.jpeg'),
 
     interested: '242+ Interested',
     category: 'Spiritual',
@@ -387,7 +387,7 @@ export default function Homepage() {
                   <Image 
                     source={event.image} 
                     style={styles.eventImage}
-                    resizeMode="cover"
+                    resizeMode="contain"
                   />
                   <TouchableOpacity style={styles.favoriteBtn}>
                     <Ionicons name="heart-outline" size={20} color="#fff" />
@@ -625,10 +625,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: verticalScale(140),
     position: 'relative',
+
+
   },
   eventImage: {
     width: '100%',
     height: '100%',
+   
+
   },
   favoriteBtn: {
     position: 'absolute',
