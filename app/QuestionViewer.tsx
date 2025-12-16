@@ -16,7 +16,7 @@ import NetInfo from '@react-native-community/netinfo';
 
 const windowWidth = Dimensions.get('window').width;
 const botGradient = ['#47006A', '#0031D0'];
-const GROQ_API_KEY = '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';
+const GROQ_API_KEY = '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';
 const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
 
