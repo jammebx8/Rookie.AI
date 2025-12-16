@@ -34,7 +34,7 @@ export default function Onboarding() {
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
+  const googleIcon = require('../../src/assets/images/googlelogo.png');
   // Helper: when a signed-in user is detected, ensure DB row exists,
   // then if onboarding fields present, persist to AsyncStorage and navigate.
   const handleSignedInUser = async (user) => {
@@ -387,9 +387,10 @@ export default function Onboarding() {
             {authLoading ? (
               <ActivityIndicator size="small" color="#181f2b" />
             ) : (
-              <Text style={styles.continueButtonText}>
-                Continue with Google
-              </Text>
+              <View style={styles.googleContent}>
+                  <Image source={googleIcon} style={styles.googleIcon} />
+                  <Text style={styles.googleText}>Continue with Google</Text>
+                </View>
             )}
           </TouchableOpacity>
 
@@ -668,5 +669,22 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(40),
     lineHeight: moderateScale(20),
     fontFamily: 'Geist',
+  },
+
+  googleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleIcon: {
+    width: scale(18),
+    height: scale(18),
+    marginRight: scale(10),
+    resizeMode: 'contain',
+  },
+  googleText: {
+    color: '#181f2b',
+    fontWeight: '700',
+    fontSize: moderateScale(15),
   },
 });
