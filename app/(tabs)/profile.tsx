@@ -310,6 +310,18 @@ const handleSubscribe = () => {
             placeholderTextColor="#888"
           />
         </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={[styles.input, !editing && styles.inputReadOnly]}
+            value={name}
+            editable={editing}
+            onChangeText={setName}
+            placeholder="your email"
+            placeholderTextColor="#888"
+          />
+        </View>
        
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Exam preparing for</Text>

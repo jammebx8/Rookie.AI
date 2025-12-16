@@ -16,8 +16,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
-  Dimensions,
 } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 import { supabase } from "../../src/utils/supabase"; // adjust path as needed
@@ -25,16 +23,10 @@ import { supabase } from "../../src/utils/supabase"; // adjust path as needed
 WebBrowser.maybeCompleteAuthSession(); // Needed for Expo Auth flows
 
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
-const EXAM_OPTIONS = ["Technology", "Sports", "Stand ups", "Politics", "Spiritual", "Concerts", "Self growth", "Health", "Buisness"];
+const EXAM_OPTIONS = ["JEE Mains", "NEET", "JEE Advanced", "Other"];
 
 export default function Onboarding() {
-  const navigation = useNavigation<any>();
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const isWeb = Platform.OS === 'web';
-
-  // Force two-column on wide screens; stack on small screens
-  const isTwoColumn = windowWidth >= 900;
-
+  const navigation = useNavigation();
   const [fullName, setFullName] = useState("");
   const [gender, setGender] = useState("");
   const [exam, setExam] = useState("");
@@ -43,12 +35,9 @@ export default function Onboarding() {
   const [authLoading, setAuthLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // local google icon asset (add ../../src/assets/images/google.png to your project)
-  const googleIcon = require('../../src/assets/images/googlelogo.png');
-
   // Helper: when a signed-in user is detected, ensure DB row exists,
   // then if onboarding fields present, persist to AsyncStorage and navigate.
-  const handleSignedInUser = async (user: any) => {
+  const handleSignedInUser = async (user) => {
     if (!user) return;
     try {
       // Try to read user from users table
@@ -91,13 +80,13 @@ export default function Onboarding() {
         try {
           await AsyncStorage.setItem('@user', JSON.stringify(toSave));
           await AsyncStorage.setItem('@user_onboarded', 'true');
-          console.log('Saved @user and @user_onboarded after Google sign-in; navigating to homepage');
+          console.log('Saved @user and @user_onboarded after Google sign-in; navigating to (tabs)');
           setIsAuthenticated(true);
           setAuthLoading(false);
           // Navigate to tabs (reset stack)
           navigation.reset({
             index: 0,
-            routes: [{ name: "homepage" }],
+            routes: [{ name: "(tabs)" }],
           });
           return;
         } catch (storageErr) {
@@ -119,13 +108,13 @@ export default function Onboarding() {
         };
         await AsyncStorage.setItem('@user', JSON.stringify(toSave));
         await AsyncStorage.setItem('@user_onboarded', 'true');
-        console.log('Saved @user and @user_onboarded; navigating to homepage');
+        console.log('Saved @user and @user_onboarded; navigating to (tabs)');
         setIsAuthenticated(true);
         setAuthLoading(false);
         // Navigate to tabs (reset stack)
         navigation.reset({
           index: 0,
-          routes: [{ name: "homepage" }],
+          routes: [{ name: "(tabs)" }],
         });
         return;
       }
@@ -142,13 +131,17 @@ export default function Onboarding() {
 
   useEffect(() => {
     // On mount: check local onboard flag and also check existing Supabase session.
+    // Important: For web we first attempt to process the redirect URL (getSessionFromUrl)
+    // so the Supabase client will have session stored. After that we read session and if
+    // a Google-authenticated session exists we send the user to (tabs).
     const init = async () => {
       try {
+        // If already marked onboarded locally, go straight to tabs
         const onboarded = await AsyncStorage.getItem('@user_onboarded');
         if (onboarded === 'true') {
           navigation.reset({
             index: 0,
-            routes: [{ name: "homepage" }],
+            routes: [{ name: "(tabs)" }],
           });
           return;
         }
@@ -156,24 +149,28 @@ export default function Onboarding() {
         console.warn('Error reading onboarding flag', e);
       }
 
-      // WEB OAuth redirect handling:
+      // WEB OAuth redirect handling: if Google redirected back with tokens in URL,
+      // we must parse & store the session with getSessionFromUrl() so the client knows we're signed in.
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         try {
           const url = window.location.href;
+          // crude detection — adjust if you have a different redirect param pattern
           if (url.includes('access_token') || url.includes('refresh_token') || url.includes('code') || url.includes('provider_token')) {
             console.log('Detected OAuth tokens in URL, calling getSessionFromUrl()');
             const { data, error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
             if (error) {
               console.warn('getSessionFromUrl error', error);
             } else if (data?.session?.user) {
+              // handle the just-signed-in user (this will upsert / set AsyncStorage and navigate if ready)
               await handleSignedInUser(data.session.user);
-              return;
+              return; // handleSignedInUser will navigate if appropriate
             }
+            // clean the URL so tokens are not re-processed on reload
             try {
               const cleanUrl = window.location.origin + window.location.pathname + window.location.search;
               window.history.replaceState({}, document.title, cleanUrl);
             } catch (e) {
-              // ignore
+              // ignore if replaceState fails in some envs
             }
           }
         } catch (err) {
@@ -181,6 +178,8 @@ export default function Onboarding() {
         }
       }
 
+      // If there's an active session already (user returned after OAuth or cached), send them to (tabs).
+      // NOTE: This implements "if user is authenticated already by Google then send user to (tabs)".
       try {
         const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
         if (sessionErr) {
@@ -188,9 +187,11 @@ export default function Onboarding() {
         }
         const sessionUser = session?.user;
         if (sessionUser) {
+          // If you want to require profile completion (gender/exam) before allowing to use the app,
+          // replace the navigation.reset below with await handleSignedInUser(sessionUser) instead.
           navigation.reset({
             index: 0,
-            routes: [{ name: "homepage" }],
+            routes: [{ name: "(tabs)" }],
           });
           return;
         }
@@ -198,19 +199,22 @@ export default function Onboarding() {
         console.warn('Error checking existing session', err);
       }
 
+      // Listen for auth state changes (Google OAuth redirect etc.)
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           console.log('Auth state changed:', event, session?.user?.email);
           if (event === 'SIGNED_IN' && session?.user) {
+            // If a sign-in event occurs while on this screen, immediately send to tabs
             navigation.reset({
               index: 0,
-              routes: [{ name: "homepage" }],
+              routes: [{ name: "(tabs)" }],
             });
           } else if (event === 'SIGNED_OUT') {
             setIsAuthenticated(false);
             setFullName("");
             setGender("");
             setExam("");
+            // Clear local user info on sign out (optional)
             await AsyncStorage.removeItem('@user');
             await AsyncStorage.removeItem('@user_onboarded');
           }
@@ -233,16 +237,19 @@ export default function Onboarding() {
     try {
       setAuthLoading(true);
 
-      const redirectUrl = isWeb
-        ? (typeof window !== 'undefined' ? `${window.location.origin}` : 'https://your-production-url.example')
-        : makeRedirectUri({ scheme: 'com.ttyyy', path: '/homepage', useProxy: true });
+      // For web we should redirect back to the app origin so Onboarding can call getSessionFromUrl().
+      const redirectUrl = Platform.OS === 'web'
+        ? (typeof window !== 'undefined' ? `${window.location.origin}` : 'https://rookie-ai.vercel.app')
+        : makeRedirectUri({ scheme: 'com.ttyyy', path: '/(tabs)', useProxy: true }); // useProxy helps with Expo Go/dev client testing
 
       console.log('Redirect URL:', redirectUrl);
 
+      // Start OAuth flow
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
+          // skipBrowserRedirect: false (default)
         },
       });
 
@@ -257,10 +264,13 @@ export default function Onboarding() {
 
       console.log('OAuth URL:', data.url);
 
-      if (isWeb) {
+      // For web: navigate to the Supabase OAuth URL.
+      if (Platform.OS === 'web') {
         window.location.href = data.url;
       } else {
+        // Mobile/Expo: open auth session
         await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        // authLoading will be cleared in the auth state change handler when SIGNED_IN is received
       }
     } catch (error: any) {
       console.error('Full error:', error);
@@ -273,6 +283,7 @@ export default function Onboarding() {
   };
 
   const handleContinue = async () => {
+    // Save profile (for both Google-authenticated users and manual flows)
     if (!fullName.trim() || !gender || !exam) {
       Alert.alert('Please fill all fields');
       return;
@@ -280,6 +291,7 @@ export default function Onboarding() {
 
     setLoading(true);
     try {
+      // Check if there's an authenticated user (Google)
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       const user = session?.user;
 
@@ -298,6 +310,7 @@ export default function Onboarding() {
           updated_at: new Date().toISOString(),
         };
 
+        // Upsert into Supabase users table
         const { error: upsertError } = await supabase.from('users').upsert([userProfile]);
         if (upsertError) {
           console.error('Supabase upsert error:', upsertError);
@@ -306,10 +319,12 @@ export default function Onboarding() {
           return;
         }
 
+        // Save to AsyncStorage
         await AsyncStorage.setItem('@user', JSON.stringify(userProfile));
         await AsyncStorage.setItem('@user_onboarded', 'true');
         setIsAuthenticated(true);
       } else {
+        // Manual signup (no auth user)
         const userProfile = {
           name: fullName.trim(),
           gender,
@@ -328,14 +343,16 @@ export default function Onboarding() {
           return;
         }
 
+        // Ensure we store an id if returned
         const saved = insertedData?.[0] ? { ...userProfile, id: insertedData[0].id } : userProfile;
         await AsyncStorage.setItem('@user', JSON.stringify(saved));
         await AsyncStorage.setItem('@user_onboarded', 'true');
       }
 
+      // Navigate to tabs after saving
       navigation.reset({
         index: 0,
-        routes: [{ name: "homepage" }],
+        routes: [{ name: "(tabs)" }],
       });
     } catch (err) {
       console.error('Error saving user data:', err);
@@ -345,124 +362,128 @@ export default function Onboarding() {
     }
   };
 
-  // Illustration asset - add your image to src/assets/images/illustration.png
-  // If you don't have one, reuse the background or any other illustration.
-  const illustration = require('../../src/assets/images/sign-in.png');
-
   return (
     <ImageBackground
-      source={require("../../src/assets/images/webbackground.jpg")}
+      source={require("../../src/assets/images/bg2.png")}
       style={styles.background}
       resizeMode="cover"
     >
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingVertical: verticalScale(24) }]}
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         bounces={false}
       >
-        <View style={[styles.container, { flexDirection: isTwoColumn ? 'row' : 'column' }]}>
-          {/* Left card */}
-          <View style={[styles.leftCard, isTwoColumn ? { marginRight: 28 } : { width: '100%' }]}>
-            <Text style={styles.hero}>Hey, There!</Text>
-            <Text style={styles.sub}>Let us know you</Text>
+        <View style={styles.container}>
+          <Text style={styles.title}>Hey, kiddo!</Text>
+          <Text style={styles.subtitle}>Let’s us know you</Text>
 
-            <TouchableOpacity
-              style={[styles.googleButton, authLoading && styles.buttonDisabled]}
-              onPress={signInWithGoogle}
-              disabled={authLoading}
-              activeOpacity={authLoading ? 1 : 0.85}
-            >
-              {authLoading ? (
-                <ActivityIndicator size="small" color="#181f2b" />
-              ) : (
-                <View style={styles.googleContent}>
-                  <Image source={googleIcon} style={styles.googleIcon} />
-                  <Text style={styles.googleText}>Continue with Google</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <Text style={styles.or}>OR</Text>
-
-            <View style={styles.formCard}>
-              <Text style={styles.fieldLabel}>Full Name</Text>
-              <TextInput
-                style={styles.input}
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="Your full name"
-                placeholderTextColor="#5b6470"
-              />
-
-              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Gender</Text>
-              <View style={styles.rowGroup}>
-                {GENDER_OPTIONS.map((g) => (
-                  <TouchableOpacity
-                    key={g}
-                    style={[styles.chip, gender === g && styles.chipSelected]}
-                    onPress={() => setGender(g)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.chipText, gender === g && styles.chipTextSelected]}>{g}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Interests</Text>
-              <View style={styles.rowGroup}>
-                {EXAM_OPTIONS.map((e) => (
-                  <TouchableOpacity
-                    key={e}
-                    style={[styles.chip, exam === e && styles.chipSelected]}
-                    onPress={() => setExam(e)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.chipText, exam === e && styles.chipTextSelected]}>{e}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.continueBtn, (!inputComplete || loading) && styles.continueBtnDisabled]}
-              onPress={handleContinue}
-              disabled={!inputComplete || loading}
-              activeOpacity={(!inputComplete || loading) ? 1 : 0.85}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="#181f2b" />
-              ) : (
-                <Text style={[styles.continueText, (!inputComplete) && styles.continueTextInactive]}>
-                  {isAuthenticated ? 'Complete Profile' : 'Continue'}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.bottomRow}>
-              <View style={styles.avatarStack}>
-                <Image source={require('../../src/assets/images/avatar1.png')} style={styles.smallAvatar} />
-                <Image source={require('../../src/assets/images/avatar2.png')} style={styles.smallAvatar} />
-                <Image source={require('../../src/assets/images/avatar3.png')} style={styles.smallAvatar} />
-                <Image source={require('../../src/assets/images/avatar4.png')} style={styles.smallAvatar} />
-                <View style={styles.plusAvatar}><Text style={styles.plusText}>+129</Text></View>
-              </View>
-              <Text style={styles.stats}>
-                Out of 15,00,000 students{"\n"}
-                234+ Student are already practicing with us
+          <TouchableOpacity
+            style={[styles.continueButton, authLoading && styles.continueButtonInactive]}
+            onPress={signInWithGoogle}
+            disabled={authLoading}
+            activeOpacity={authLoading ? 1 : 0.8}
+          >
+            {authLoading ? (
+              <ActivityIndicator size="small" color="#181f2b" />
+            ) : (
+              <Text style={styles.continueButtonText}>
+                Continue with Google
               </Text>
+            )}
+          </TouchableOpacity>
+
+          <Text style={{
+            color: "#b5b6c9",
+            marginVertical: moderateScale(8),
+            fontFamily: 'Geist',
+            fontSize: moderateScale(13),
+          }}>
+            OR
+          </Text>
+
+          <View style={styles.infoBox}>
+            <Text style={styles.label}>Full Name</Text>
+            <TextInput
+              style={styles.input}
+              value={fullName}
+              onChangeText={setFullName}
+              placeholder="Your full name"
+              placeholderTextColor="#888"
+            />
+            <Text style={styles.label}>Gender</Text>
+            <View style={styles.buttonGroup}>
+              {GENDER_OPTIONS.map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  style={[
+                    styles.selectButton,
+                    gender === g && styles.selectedButton,
+                  ]}
+                  onPress={() => setGender(g)}
+                >
+                  <Text style={[
+                    styles.selectButtonText,
+                    gender === g && styles.selectedButtonText
+                  ]}>{g}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.label}>Preparing for</Text>
+            <View style={styles.buttonGroup}>
+              {EXAM_OPTIONS.map((e) => (
+                <TouchableOpacity
+                  key={e}
+                  style={[
+                    styles.selectButton,
+                    exam === e && styles.selectedButton,
+                  ]}
+                  onPress={() => setExam(e)}
+                >
+                  <Text style={[
+                    styles.selectButtonText,
+                    exam === e && styles.selectedButtonText
+                  ]}>{e}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
-          {/* Right illustration */}
-          <View style={[styles.rightCard, isTwoColumn ? {} : { marginTop: 28 }]}>
-            <View style={styles.illustrationWrap}>
-              <Image
-                source={illustration}
-                style={styles.illustration}
-                resizeMode="contain"
-              />
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              (!inputComplete || loading) && styles.continueButtonInactive,
+            ]}
+            onPress={handleContinue}
+            disabled={!inputComplete || loading}
+            activeOpacity={inputComplete && !loading ? 0.8 : 1}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#181f2b" />
+            ) : (
+              <Text style={[
+                styles.continueButtonText,
+                !inputComplete && styles.continueButtonTextInactive
+              ]}>
+                {isAuthenticated ? 'Complete Profile' : 'Continue'}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.bottomSection}>
+            <View style={styles.avatarRow}>
+              <Image source={require('../../src/assets/images/avatar1.png')} style={styles.avatar} />
+              <Image source={require('../../src/assets/images/avatar2.png')} style={styles.avatar} />
+              <Image source={require('../../src/assets/images/avatar3.png')} style={styles.avatar} />
+              <Image source={require('../../src/assets/images/avatar4.png')} style={styles.avatar} />
+              <View style={styles.avatarPlus}>
+                <Text style={styles.avatarPlusText}>+129</Text>
+              </View>
             </View>
+            <Text style={styles.studentStats}>
+              Out of 15,00,000 students{"\n"}
+              234+ Student are already practicing with us
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -470,244 +491,182 @@ export default function Onboarding() {
   );
 }
 
+// ...styles kept identical to your existing file...
 const styles = StyleSheet.create({
   background: {
     flex: 1,
     width: "100%",
-    minHeight: Dimensions.get('window').height,
-    backgroundColor: '#f3f3f3',
+    height: "100%",
+    backgroundColor: "#000",
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: moderateScale(24),
   },
   container: {
-    width: '100%',
-    maxWidth: 1280,
-    alignSelf: 'center',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    paddingVertical: verticalScale(12),
+    flex: 1,
+    paddingTop: Platform.OS === "android" ? verticalScale(60) : verticalScale(80),
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingHorizontal: 0,
   },
-
-  // LEFT
-  leftCard: {
-    backgroundColor: '#000',
-    borderRadius: 14,
-    padding: moderateScale(22),
-    width: '64%',
-    minWidth: 420,
-    // deep shadow like the image
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    shadowOffset: { width: 6, height: 8 },
-    elevation: 12,
+  title: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontFamily: 'Geist',
+    fontSize: moderateScale(32),
+    marginTop: verticalScale(12),
+    marginBottom: verticalScale(4),
+    alignSelf: "flex-start",
+    marginLeft: scale(25),
   },
-  hero: {
-    color: '#fff',
-    fontSize: moderateScale(36),
-    fontWeight: '900',
-    marginBottom: verticalScale(6),
+  subtitle: {
+    color: "#d2d2e0",
+    fontSize: moderateScale(17),
+    fontFamily: 'Geist',
+    marginBottom: verticalScale(12),
+    alignSelf: "flex-start",
+    marginLeft: scale(25),
   },
-  sub: {
-    color: '#c8cbd0',
-    fontSize: moderateScale(14),
-    marginBottom: verticalScale(14),
-  },
-
-  googleButton: {
-    backgroundColor: '#fff',
-    borderRadius: 999,
-    height: verticalScale(46),
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
+  infoBox: {
+    backgroundColor: "#000000",
+    borderRadius: moderateScale(18),
+    padding: moderateScale(24),
+    width: "90%",
+    marginBottom: verticalScale(18),
+    borderWidth: 1,
+    borderColor: "#1D2939",
+    alignSelf: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-    paddingHorizontal: scale(14),
+    shadowOpacity: 0.15,
+    shadowRadius: moderateScale(6),
+    elevation: 3,
   },
-  googleContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  label: {
+    color: "#fff",
+    fontSize: moderateScale(16),
+    fontFamily: 'Geist',
+    fontWeight: "500",
+    marginBottom: verticalScale(6),
+    marginTop: verticalScale(14),
   },
-  googleIcon: {
-    width: scale(18),
-    height: scale(18),
-    marginRight: scale(10),
-    resizeMode: 'contain',
-  },
-  googleText: {
-    color: '#181f2b',
-    fontWeight: '700',
-    fontSize: moderateScale(15),
-  },
-  buttonDisabled: {
-    opacity: 0.9,
-  },
-
-  or: {
-    textAlign: 'center',
-    color: '#9aa0a9',
-    marginVertical: moderateScale(12),
-    fontSize: moderateScale(12),
-  },
-
-  formCard: {
-    backgroundColor: '#07070a',
-    borderRadius: 12,
-    padding: moderateScale(14),
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.03)',
-  },
-
-  fieldLabel: {
-    color: '#fff',
-    fontSize: moderateScale(14),
-    marginBottom: verticalScale(8),
-    fontWeight: '600',
-  },
-
   input: {
-    backgroundColor: '#0b0d11',
-    borderRadius: 12,
-    color: '#fff',
-    paddingHorizontal: scale(14),
-    paddingVertical: verticalScale(12),
-    fontSize: moderateScale(15),
+    backgroundColor: "#0C111D",
+    borderRadius: moderateScale(10),
+    color: "#fff",
+    fontFamily: 'Geist',
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(10),
+    fontSize: moderateScale(16),
+    marginBottom: verticalScale(8),
     borderWidth: 1,
-    borderColor: '#1e2730',
-    // subtle inner shadow imitation via elevation/shadow on android can be omitted
+    borderColor: "#344054",
   },
-
-  rowGroup: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  buttonGroup: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: scale(10),
+    marginBottom: verticalScale(8),
     marginTop: verticalScale(4),
   },
-
-  chip: {
-    backgroundColor: '#181818ff',
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 10,
-    marginBottom: 10,
+  selectButton: {
+    backgroundColor: "#0C111D",
+    borderRadius: moderateScale(18),
+    paddingHorizontal: scale(18),
+    paddingVertical: verticalScale(8),
+    marginRight: scale(10),
+    marginBottom: verticalScale(8),
     borderWidth: 1,
-    borderColor: '#16191d',
-    minWidth: 90,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#262626",
+    fontFamily: 'Geist',
   },
-  chipSelected: {
-    backgroundColor: '#fff',
-    borderColor: '#fff',
+  selectedButton: {
+    backgroundColor: "#fff",
+    borderColor: "#344054",
   },
-  chipText: {
-    color: '#cfd6dc',
-    fontWeight: '500',
-    fontSize: moderateScale(14),
+  selectButtonText: {
+    color: "#fff",
+    fontSize: moderateScale(15),
+    fontWeight: "500",
+    fontFamily: 'Geist',
   },
-  chipTextSelected: {
-    color: '#081022',
-    fontWeight: '700',
+  selectedButtonText: {
+    color: "#181f2b",
+    fontWeight: "bold",
+    fontFamily: 'Geist',
   },
-
-  continueBtn: {
+  continueButton: {
+    width: "90%",
+    height: verticalScale(48),
+    borderRadius: moderateScale(27),
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
     marginTop: verticalScale(18),
-    backgroundColor: '#eef0f3',
-    borderRadius: 999,
-    height: verticalScale(46),
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+    marginBottom: verticalScale(8),
+    alignSelf: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.10,
+    shadowRadius: moderateScale(8),
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  continueBtnDisabled: {
-    opacity: 0.9,
+  continueButtonInactive: {
+    backgroundColor: "#F2F4F7",
   },
-  continueText: {
-    color: '#596272',
-    fontSize: moderateScale(16),
-    fontWeight: '700',
+  continueButtonText: {
+    color: "#181f2b",
+    fontWeight: "bold",
+    fontSize: moderateScale(19),
+    fontFamily: 'Geist',
   },
-  continueTextInactive: {
-    color: '#7d8591',
+  continueButtonTextInactive: {
+    color: "#667085",
+    fontFamily: 'Geist',
   },
-
-  bottomRow: {
-    marginTop: verticalScale(18),
-    alignItems: 'center',
-    width: '100%',
+  bottomSection: {
+    alignItems: "center",
+    marginTop: verticalScale(16),
   },
-  avatarStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: verticalScale(10),
+  avatarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: verticalScale(8),
   },
-  smallAvatar: {
+  avatar: {
     width: scale(38),
     height: scale(38),
     borderRadius: scale(19),
     marginLeft: -scale(10),
     borderWidth: 2,
-    borderColor: '#111217',
-    backgroundColor: '#22223f',
+    borderColor: "#22223f",
+    backgroundColor: "#22223f",
   },
-  plusAvatar: {
+  avatarPlus: {
     width: scale(38),
     height: scale(38),
     borderRadius: scale(19),
-    backgroundColor: '#651a1a',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#651a1a",
+    justifyContent: "center",
+    alignItems: "center",
     marginLeft: -scale(10),
     borderWidth: 2,
-    borderColor: '#111217',
+    borderColor: "#22223f",
   },
-  plusText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: moderateScale(12),
+  avatarPlusText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: moderateScale(15),
+    fontFamily: 'Geist',
   },
-  stats: {
-    color: '#bfc6cc',
-    fontSize: moderateScale(13),
-    textAlign: 'center',
+  studentStats: {
+    color: "#fff",
+    fontSize: moderateScale(15),
+    textAlign: "center",
+    marginTop: verticalScale(2),
+    marginBottom: verticalScale(40),
     lineHeight: moderateScale(20),
-  },
-
-  // RIGHT
-  rightCard: {
-    width: '52%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 420,
-    paddingLeft: moderateScale(18),
-  },
-  illustrationWrap: {
-    width: '100%',
-    maxWidth: 560,
-    height: 520,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // keep illustration visually on the right side with whitespace as in image
-  },
-  illustration: {
-    width: '100%',
-    height: '100%',
-  },
-
-  // responsive tweaks
-  '@media (max-width: 900px)': {
-
-    rightCard: {
-      width: '100%',
-      paddingLeft: 0,
-    },
+    fontFamily: 'Geist',
   },
 });

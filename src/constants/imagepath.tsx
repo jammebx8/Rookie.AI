@@ -23,12 +23,11 @@ Biology: require("../../src/assets/images/maths.png"),
 DeleteIcon: require("../../src/assets/images/bin.png"),
 LogoutIcon : require("../../src/assets/images/door.png"),
  TickIcon: require("../../src/assets/images/ticck.png"),
- homelogo: require("../../src/assets/images/meetup_logo-removebg-preview.png"),
+ homelogo: require("../../src/assets/images/logo.png"),
  LoadSolGif: require("../../src/assets/images/loadsol.gif"),
 } 
 
 
 
-  
   
   
