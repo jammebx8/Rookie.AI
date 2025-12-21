@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "@react-navigation/native";
 import { makeRedirectUri } from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser'; // If using Expo
+import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,9 +18,9 @@ import {
   View,
 } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
-import { supabase } from "../../src/utils/supabase"; // adjust path as needed
+import { supabase } from "../../src/utils/supabase";
 
-WebBrowser.maybeCompleteAuthSession(); // Needed for Expo Auth flows
+WebBrowser.maybeCompleteAuthSession();
 
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 const EXAM_OPTIONS = ["JEE Mains", "NEET", "JEE Advanced", "Other"];
@@ -33,110 +33,12 @@ export default function Onboarding() {
   const [inputComplete, setInputComplete] = useState(false);
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const googleIcon = require('../../src/assets/images/googlelogo.png');
-  // Helper: when a signed-in user is detected, ensure DB row exists,
-  // then if onboarding fields present, persist to AsyncStorage and navigate.
-  const handleSignedInUser = async (user) => {
-    if (!user) return;
-    try {
-      // Try to read user from users table
-      const { data: existingUser, error: selectErr } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
 
-      if (selectErr) {
-        console.warn('Error selecting user from DB', selectErr);
-      }
-
-      // If user not present in users table, create a minimal record
-      if (!existingUser) {
-        const minimal = {
-          id: user.id,
-          email: user.email,
-          name: user.user_metadata?.full_name || user.user_metadata?.name || '',
-          avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
-          created_at: new Date().toISOString(),
-        };
-        const { error: upsertErr } = await supabase.from('users').upsert([minimal]);
-        if (upsertErr) {
-          console.warn('Error upserting minimal user', upsertErr);
-          // still show onboarding if upsert fails
-          setFullName(minimal.name);
-          setIsAuthenticated(true);
-          setAuthLoading(false);
-          return;
-        }
-
-        // If the Gmail id/email was successfully stored (upsert succeeded), treat the user as onboarded per requirement:
-        const toSave = {
-          id: minimal.id,
-          email: minimal.email,
-          name: minimal.name,
-          avatar_url: minimal.avatar_url || null,
-        };
-        try {
-          await AsyncStorage.setItem('@user', JSON.stringify(toSave));
-          await AsyncStorage.setItem('@user_onboarded', 'true');
-          console.log('Saved @user and @user_onboarded after Google sign-in; navigating to (tabs)');
-          setIsAuthenticated(true);
-          setAuthLoading(false);
-          // Navigate to tabs (reset stack)
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "(tabs)" }],
-          });
-          return;
-        } catch (storageErr) {
-          console.warn('Error saving user onboarded flag locally', storageErr);
-          setAuthLoading(false);
-          return;
-        }
-      }
-
-      // If DB row exists and onboarding fields are present, save locally & navigate
-      if (existingUser.gender && existingUser.exam) {
-        const toSave = {
-          id: existingUser.id,
-          email: existingUser.email,
-          name: existingUser.name,
-          gender: existingUser.gender,
-          exam: existingUser.exam,
-          avatar_url: existingUser.avatar_url || null,
-        };
-        await AsyncStorage.setItem('@user', JSON.stringify(toSave));
-        await AsyncStorage.setItem('@user_onboarded', 'true');
-        console.log('Saved @user and @user_onboarded; navigating to (tabs)');
-        setIsAuthenticated(true);
-        setAuthLoading(false);
-        // Navigate to tabs (reset stack)
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "(tabs)" }],
-        });
-        return;
-      }
-
-      // Otherwise user exists but onboarding not complete: prefill name and show form
-      setFullName(existingUser.name || user.user_metadata?.full_name || '');
-      setIsAuthenticated(true);
-      setAuthLoading(false);
-    } catch (err) {
-      console.error('handleSignedInUser error', err);
-      setAuthLoading(false);
-    }
-  };
-
+  // Check if user is already onboarded on mount
   useEffect(() => {
-    // On mount: check local onboard flag and also check existing Supabase session.
-    // Important: For web we first attempt to process the redirect URL (getSessionFromUrl)
-    // so the Supabase client will have session stored. After that we read session and if
-    // a Google-authenticated session exists we send the user to (tabs).
-    const init = async () => {
+    const checkOnboarding = async () => {
       try {
-        // If already marked onboarded locally, go straight to tabs
         const onboarded = await AsyncStorage.getItem('@user_onboarded');
         if (onboarded === 'true') {
           navigation.reset({
@@ -149,72 +51,50 @@ export default function Onboarding() {
         console.warn('Error reading onboarding flag', e);
       }
 
-      // WEB OAuth redirect handling: if Google redirected back with tokens in URL,
-      // we must parse & store the session with getSessionFromUrl() so the client knows we're signed in.
+      // Handle OAuth redirect on web
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         try {
           const url = window.location.href;
-          // crude detection — adjust if you have a different redirect param pattern
-          if (url.includes('access_token') || url.includes('refresh_token') || url.includes('code') || url.includes('provider_token')) {
-            console.log('Detected OAuth tokens in URL, calling getSessionFromUrl()');
+          if (url.includes('access_token') || url.includes('refresh_token') || url.includes('code')) {
+            console.log('Detected OAuth tokens in URL');
             const { data, error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
+            
             if (error) {
               console.warn('getSessionFromUrl error', error);
             } else if (data?.session?.user) {
-              // handle the just-signed-in user (this will upsert / set AsyncStorage and navigate if ready)
-              await handleSignedInUser(data.session.user);
-              return; // handleSignedInUser will navigate if appropriate
+              await handleGoogleSignIn(data.session.user);
             }
-            // clean the URL so tokens are not re-processed on reload
+            
+            // Clean URL
             try {
-              const cleanUrl = window.location.origin + window.location.pathname + window.location.search;
+              const cleanUrl = window.location.origin + window.location.pathname;
               window.history.replaceState({}, document.title, cleanUrl);
             } catch (e) {
-              // ignore if replaceState fails in some envs
+              console.warn('Error cleaning URL', e);
             }
           }
         } catch (err) {
-          console.warn('Error during getSessionFromUrl flow', err);
+          console.warn('Error during OAuth redirect handling', err);
         }
       }
 
-      // If there's an active session already (user returned after OAuth or cached), send them to (tabs).
-      // NOTE: This implements "if user is authenticated already by Google then send user to (tabs)".
+      // Check for existing session
       try {
-        const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
-        if (sessionErr) {
-          console.warn('getSession error', sessionErr);
-        }
-        const sessionUser = session?.user;
-        if (sessionUser) {
-          // If you want to require profile completion (gender/exam) before allowing to use the app,
-          // replace the navigation.reset below with await handleSignedInUser(sessionUser) instead.
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "(tabs)" }],
-          });
-          return;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await handleGoogleSignIn(session.user);
         }
       } catch (err) {
         console.warn('Error checking existing session', err);
       }
 
-      // Listen for auth state changes (Google OAuth redirect etc.)
+      // Listen for auth state changes
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
-          console.log('Auth state changed:', event, session?.user?.email);
+          console.log('Auth state changed:', event);
           if (event === 'SIGNED_IN' && session?.user) {
-            // If a sign-in event occurs while on this screen, immediately send to tabs
-            navigation.reset({
-              index: 0,
-              routes: [{ name: "(tabs)" }],
-            });
+            await handleGoogleSignIn(session.user);
           } else if (event === 'SIGNED_OUT') {
-            setIsAuthenticated(false);
-            setFullName("");
-            setGender("");
-            setExam("");
-            // Clear local user info on sign out (optional)
             await AsyncStorage.removeItem('@user');
             await AsyncStorage.removeItem('@user_onboarded');
           }
@@ -224,32 +104,76 @@ export default function Onboarding() {
       return () => subscription?.unsubscribe();
     };
 
-    init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    checkOnboarding();
   }, []);
 
+  // Update input completion status
   useEffect(() => {
     setInputComplete(fullName.trim().length > 0 && !!gender && !!exam);
   }, [fullName, gender, exam]);
 
-  // === GOOGLE AUTHENTICATION ===
+  // Handle Google Sign-In: Save Gmail ID to AsyncStorage and navigate
+  const handleGoogleSignIn = async (user: any) => {
+    try {
+      setAuthLoading(true);
+
+      // Save Gmail ID and user info to Supabase users table
+      const userProfile = {
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name || user.user_metadata?.name || user.email,
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+        created_at: new Date().toISOString(),
+      };
+
+      const { error: upsertError } = await supabase
+        .from('users')
+        .upsert([userProfile], { onConflict: 'id' });
+
+      if (upsertError) {
+        console.warn('Error saving to Supabase:', upsertError);
+      }
+
+      // Save Gmail ID to AsyncStorage
+      const localData = {
+        email: user.email,
+        name: userProfile.name,
+        avatar_url: userProfile.avatar_url,
+      };
+
+      await AsyncStorage.setItem('@user', JSON.stringify(localData));
+      await AsyncStorage.setItem('@user_onboarded', 'true');
+
+      console.log('Google sign-in successful, Gmail ID saved locally');
+
+      // Navigate to tabs
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "(tabs)" }],
+      });
+    } catch (err) {
+      console.error('Error handling Google sign-in:', err);
+      Alert.alert("Error", "Failed to complete Google sign-in");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Google Sign-In button handler
   const signInWithGoogle = async () => {
     try {
       setAuthLoading(true);
 
-      // For web we should redirect back to the app origin so Onboarding can call getSessionFromUrl().
       const redirectUrl = Platform.OS === 'web'
         ? (typeof window !== 'undefined' ? `${window.location.origin}` : 'https://rookie-ai.vercel.app')
-        : makeRedirectUri({ scheme: 'com.ttyyy', path: '/(tabs)', useProxy: true }); // useProxy helps with Expo Go/dev client testing
+        : makeRedirectUri({ scheme: 'com.ttyyy', path: '/(tabs)', useProxy: true });
 
       console.log('Redirect URL:', redirectUrl);
 
-      // Start OAuth flow
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          // skipBrowserRedirect: false (default)
         },
       });
 
@@ -264,99 +188,72 @@ export default function Onboarding() {
 
       console.log('OAuth URL:', data.url);
 
-      // For web: navigate to the Supabase OAuth URL.
       if (Platform.OS === 'web') {
         window.location.href = data.url;
       } else {
-        // Mobile/Expo: open auth session
         await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        // authLoading will be cleared in the auth state change handler when SIGNED_IN is received
       }
     } catch (error: any) {
-      console.error('Full error:', error);
+      console.error('Google sign-in error:', error);
       Alert.alert(
         "Authentication Error",
-        error?.message || "Google Auth failed. Make sure redirect URL is configured in Supabase."
+        error?.message || "Google authentication failed"
       );
       setAuthLoading(false);
     }
   };
 
+  // Manual Continue: Save name, gender, exam to Supabase and AsyncStorage
   const handleContinue = async () => {
-    // Save profile (for both Google-authenticated users and manual flows)
     if (!fullName.trim() || !gender || !exam) {
-      Alert.alert('Please fill all fields');
+      Alert.alert('Incomplete', 'Please fill all fields');
       return;
     }
 
     setLoading(true);
     try {
-      // Check if there's an authenticated user (Google)
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      const user = session?.user;
+      // Create user profile with manual data
+      const userProfile = {
+        name: fullName.trim(),
+        gender,
+        exam,
+        created_at: new Date().toISOString(),
+      };
 
-      if (sessionError) {
-        console.warn('Session error', sessionError);
+      // Save to Supabase
+      const { data: insertedData, error: insertError } = await supabase
+        .from('users')
+        .insert([userProfile])
+        .select();
+
+      if (insertError) {
+        console.error('Supabase insert error:', insertError);
+        Alert.alert("Error", "Failed to save profile: " + insertError.message);
+        setLoading(false);
+        return;
       }
 
-      if (user) {
-        const userProfile = {
-          id: user.id,
-          email: user.email,
-          name: fullName.trim(),
-          gender,
-          exam,
-          avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
-          updated_at: new Date().toISOString(),
-        };
+      // Save to AsyncStorage (name, gender, exam only)
+      const localData = {
+        id: insertedData?.[0]?.id || null,
+        name: fullName.trim(),
+        gender,
+        exam,
+      };
 
-        // Upsert into Supabase users table
-        const { error: upsertError } = await supabase.from('users').upsert([userProfile]);
-        if (upsertError) {
-          console.error('Supabase upsert error:', upsertError);
-          Alert.alert("Error", "Failed to save profile to database: " + upsertError.message);
-          setLoading(false);
-          return;
-        }
+      await AsyncStorage.setItem('@user', JSON.stringify(localData));
+      await AsyncStorage.setItem('@user_onboarded', 'true');
 
-        // Save to AsyncStorage
-        await AsyncStorage.setItem('@user', JSON.stringify(userProfile));
-        await AsyncStorage.setItem('@user_onboarded', 'true');
-        setIsAuthenticated(true);
-      } else {
-        // Manual signup (no auth user)
-        const userProfile = {
-          name: fullName.trim(),
-          gender,
-          exam,
-          created_at: new Date().toISOString(),
-        };
+      console.log('Manual sign-up successful, user data saved');
 
-        const { data: insertedData, error: insertError } = await supabase
-          .from('users')
-          .insert([userProfile])
-          .select();
-        if (insertError) {
-          console.error('Supabase insert error:', insertError);
-          Alert.alert("Error", "Failed to save profile to database: " + insertError.message);
-          setLoading(false);
-          return;
-        }
-
-        // Ensure we store an id if returned
-        const saved = insertedData?.[0] ? { ...userProfile, id: insertedData[0].id } : userProfile;
-        await AsyncStorage.setItem('@user', JSON.stringify(saved));
-        await AsyncStorage.setItem('@user_onboarded', 'true');
-      }
-
-      // Navigate to tabs after saving
+      // Navigate to tabs
       navigation.reset({
         index: 0,
         routes: [{ name: "(tabs)" }],
       });
     } catch (err) {
       console.error('Error saving user data:', err);
-      Alert.alert("Error", (err as any)?.message || "Something went wrong saving your data");
+      Alert.alert("Error", (err as any)?.message || "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -376,7 +273,7 @@ export default function Onboarding() {
       >
         <View style={styles.container}>
           <Text style={styles.title}>Hey, kiddo!</Text>
-          <Text style={styles.subtitle}>Let’s us know you</Text>
+          <Text style={styles.subtitle}>Let's us know you</Text>
 
           <TouchableOpacity
             style={[styles.continueButton, authLoading && styles.continueButtonInactive]}
@@ -388,9 +285,9 @@ export default function Onboarding() {
               <ActivityIndicator size="small" color="#181f2b" />
             ) : (
               <View style={styles.googleContent}>
-                  <Image source={googleIcon} style={styles.googleIcon} />
-                  <Text style={styles.googleText}>Continue with Google</Text>
-                </View>
+                <Image source={googleIcon} style={styles.googleIcon} />
+                <Text style={styles.googleText}>Continue with Google</Text>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -466,7 +363,7 @@ export default function Onboarding() {
                 styles.continueButtonText,
                 !inputComplete && styles.continueButtonTextInactive
               ]}>
-                {isAuthenticated ? 'Complete Profile' : 'Continue'}
+                Continue
               </Text>
             )}
           </TouchableOpacity>
@@ -492,7 +389,6 @@ export default function Onboarding() {
   );
 }
 
-// ...styles kept identical to your existing file...
 const styles = StyleSheet.create({
   background: {
     flex: 1,
@@ -670,7 +566,6 @@ const styles = StyleSheet.create({
     lineHeight: moderateScale(20),
     fontFamily: 'Geist',
   },
-
   googleContent: {
     flexDirection: 'row',
     alignItems: 'center',

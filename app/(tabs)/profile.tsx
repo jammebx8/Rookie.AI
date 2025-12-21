@@ -197,6 +197,8 @@ const Profile = () => {
       Alert.alert('Please fill all fields');
       return;
     }
+   
+   
     const userStr = await AsyncStorage.getItem('@user');
     if (userStr) {
       const user = JSON.parse(userStr);
