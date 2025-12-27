@@ -29,18 +29,20 @@ import images from '../src/constants/imagepath';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createClient } from '@supabase/supabase-js';
 
+
+
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// TODO: Replace with your actual Supabase keys (anon key is safe to be client-side).
+// TODO: Replace with your actual Supabase keys
 const SUPABASE_URL = 'https://rzcizwacjexolkjjczbt.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6Y2l6d2FjamV4b2xrampjemJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTA2ODMsImV4cCI6MjA2MDk4NjY4M30.I5TO7lLOuBwe6T5wllcx3FK_is0pammMtVw-oevfTws';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// IMPORTANT: Set this to your deployed Vercel URL or to a local dev URL.
-// Example: 'https://your-project.vercel.app' or 'http://localhost:3000' for local testing.
-const API_BASE_URL = 'https://rookie-ai.vercel.app/';
+const GROQ_API_KEY =  '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';
+const OCR_API_KEY = 'K88346068688957';
+
 
 const REPORT_REASONS = [
   'offensive',
@@ -60,8 +62,6 @@ const getGroqReply = async (
     const userStr = await AsyncStorage.getItem('@user');
     const user = userStr ? JSON.parse(userStr) : {};
     const userContext = `You are chatting with an 18-year-old ${user.gender || 'student'} named ${user.name || ''}, who is preparing for ${user.exam || 'an exam'}. `;
-
-    // Build messages like your previous client did
     const messages = [
       {
         role: 'system',
@@ -74,31 +74,30 @@ const getGroqReply = async (
           content: msg.text,
         })),
     ];
-
     if (imageText) {
       messages.push({
         role: 'user',
         content: `Please solve this question: ${imageText}`,
       });
     }
-
-    // Forward the messages to your serverless endpoint (server holds the secret)
-    const res = await axios.post(`${API_BASE_URL}/api/groq`, {
-      model: 'llama-3.3-70b-versatile',
-      messages,
-      temperature: 0.4,
-      max_tokens: 400,
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
+    const res = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        model: 'llama-3.3-70b-versatile',
+        messages,
+        temperature: 0.4,
+        max_tokens: 400,
       },
-    });
-
-    // The server returns the Groq response (forwarded)
-    const text = res.data?.choices?.[0]?.message?.content;
-    return text || "Sorry, I didn't get that.";
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+        },
+      }
+    );
+    return res.data.choices?.[0]?.message?.content || "Sorry, I didn't get that.";
   } catch (err) {
-    console.error('Groq proxy error:', err.response?.data || err);
+    console.error('Groq error:', err.response?.data || err);
     return 'Error...try again.';
   }
 };
@@ -108,22 +107,23 @@ const getTextFromImage = async (imageUri) => {
     const base64 = await FileSystem.readAsStringAsync(imageUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    // Send base64 to your serverless OCR endpoint which holds the OCR API key
-    const payload = {
-      base64Image: `data:image/jpeg;base64,${base64}`,
-      language: 'eng',
-    };
-    const res = await axios.post(`${API_BASE_URL}/api/ocr`, payload, {
+
+    const formData = new FormData();
+    formData.append('apikey', OCR_API_KEY);
+    formData.append('language', 'eng');
+    formData.append('isOverlayRequired', 'false');
+    formData.append('base64image', `data:image/jpeg;base64,${base64}`);
+
+    const res = await axios.post('https://api.ocr.space/parse/image', formData, {
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'multipart/form-data',
       },
     });
 
-    // The server forwards OCR response
-    const parsedText = res.data?.ParsedResults?.[0]?.ParsedText;
-    return parsedText ? parsedText.trim() : '';
+    const text = res.data?.ParsedResults?.[0]?.ParsedText?.trim();
+    return text || '';
   } catch (err) {
-    console.error('OCR proxy error:', err.response?.data || err);
+    console.error('OCR error:', err.response?.data || err);
     return '';
   }
 };
@@ -326,6 +326,8 @@ export default function MessageScreen() {
       setIsReporting(false);
     }
   };
+
+
 
   // Inline JSX for Modal (not a function)
   const reportModalElement = (
