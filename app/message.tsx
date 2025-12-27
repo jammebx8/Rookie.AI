@@ -40,7 +40,7 @@ const SUPABASE_URL = 'https://rzcizwacjexolkjjczbt.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6Y2l6d2FjamV4b2xrampjemJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTA2ODMsImV4cCI6MjA2MDk4NjY4M30.I5TO7lLOuBwe6T5wllcx3FK_is0pammMtVw-oevfTws';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const GROQ_API_KEY =  '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';
+const GROQ_API_KEY =  'gsk_otHYnvdccDrsyBC4BcnWGdyb3FYL3jZtOTnKDqsdb2PfC2MhBwi';
 const OCR_API_KEY = 'K88346068688957';
 
 
@@ -102,31 +102,12 @@ const getGroqReply = async (
   }
 };
 
-const getTextFromImage = async (imageUri) => {
-  try {
-    const base64 = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
 
-    const formData = new FormData();
-    formData.append('apikey', OCR_API_KEY);
-    formData.append('language', 'eng');
-    formData.append('isOverlayRequired', 'false');
-    formData.append('base64image', `data:image/jpeg;base64,${base64}`);
 
-    const res = await axios.post('https://api.ocr.space/parse/image', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
 
-    const text = res.data?.ParsedResults?.[0]?.ParsedText?.trim();
-    return text || '';
-  } catch (err) {
-    console.error('OCR error:', err.response?.data || err);
-    return '';
-  }
-};
+
+
+
 
 const getRelativeTime = (dateString) => {
   const now = new Date();
@@ -226,49 +207,7 @@ export default function MessageScreen() {
     }
   };
 
-  const pickImageAndSend = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission required', 'Please allow gallery access.');
-      return;
-    }
-    const pickerResult = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      base64: false,
-    });
-    if (!pickerResult.canceled && pickerResult.assets?.[0]?.uri) {
-      const imageUri = pickerResult.assets[0].uri;
-      const nowISOString = new Date().toISOString();
 
-      const imageMessage = { sender: 'user', text: imageUri, timestamp: nowISOString, type: 'image' };
-      const updatedMessages = [...messages, imageMessage];
-
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setMessages(updatedMessages);
-      setIsTyping(true);
-
-      const extractedText = await getTextFromImage(imageUri);
-      if (!extractedText) {
-        const errorMsg = { sender: 'bot', text: 'Could not extract any text from the image.', timestamp: new Date().toISOString(), type: 'text' };
-        setMessages([...updatedMessages, errorMsg]);
-        setIsTyping(false);
-        return;
-      }
-
-      const aiReply = await getGroqReply(prompt, updatedMessages, extractedText);
-      const botMessage = { sender: 'bot', text: aiReply, timestamp: new Date().toISOString(), type: 'text' };
-
-      const finalMessages = [...updatedMessages, botMessage];
-      setMessages(finalMessages);
-      setIsTyping(false);
-
-      try {
-        await AsyncStorage.setItem(`chat_${name}`, JSON.stringify(finalMessages));
-      } catch (e) {
-        console.error('Failed to save chat:', e);
-      }
-    }
-  };
 
   const TypingIndicator = () => {
     const [dots, setDots] = useState('');
@@ -327,7 +266,151 @@ export default function MessageScreen() {
     }
   };
 
+  // Replace your existing pickImageAndSend and getTextFromImage with the following:
 
+  const getTextFromImage = async (imageUriOrDataUrl, base64Override = null) => {
+    try {
+      // If caller already provided base64 (web picker can return it), use it.
+      if (base64Override) {
+        const base64 = base64Override.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+        const formData = new FormData();
+        formData.append('apikey', OCR_API_KEY);
+        formData.append('language', 'eng');
+        formData.append('isOverlayRequired', 'false');
+        formData.append('base64image', `data:image/jpeg;base64,${base64}`);
+  
+        const res = await axios.post('https://api.ocr.space/parse/image', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return res.data?.ParsedResults?.[0]?.ParsedText?.trim() || '';
+      }
+  
+      // If we already have a data URL, extract base64 from it
+      if (typeof imageUriOrDataUrl === 'string' && imageUriOrDataUrl.startsWith('data:')) {
+        const base64Part = imageUriOrDataUrl.split(',')[1];
+        const formData = new FormData();
+        formData.append('apikey', OCR_API_KEY);
+        formData.append('language', 'eng');
+        formData.append('isOverlayRequired', 'false');
+        formData.append('base64image', `data:image/jpeg;base64,${base64Part}`);
+  
+        const res = await axios.post('https://api.ocr.space/parse/image', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return res.data?.ParsedResults?.[0]?.ParsedText?.trim() || '';
+      }
+  
+      // Fallback for native: read file from filesystem as base64
+      const base64 = await FileSystem.readAsStringAsync(imageUriOrDataUrl, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const formData = new FormData();
+      formData.append('apikey', OCR_API_KEY);
+      formData.append('language', 'eng');
+      formData.append('isOverlayRequired', 'false');
+      formData.append('base64image', `data:image/jpeg;base64,${base64}`);
+  
+      const res = await axios.post('https://api.ocr.space/parse/image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data?.ParsedResults?.[0]?.ParsedText?.trim() || '';
+    } catch (err) {
+      console.error('OCR error:', err.response?.data || err);
+      return '';
+    }
+  };
+  
+  const pickImageAndSend = async () => {
+    // On web, use the expo picker but request base64, or fallback to an HTML input
+    if (Platform.OS === 'web') {
+      // Preferred: use expo-image-picker with base64:true so it returns asset.base64
+      const pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        base64: true, // request base64 on web
+      });
+  
+      if (!pickerResult.canceled && pickerResult.assets?.[0]) {
+        const asset = pickerResult.assets[0];
+        const imageUri = asset.uri;
+        const nowISOString = new Date().toISOString();
+        const imageMessage = { sender: 'user', text: imageUri, timestamp: nowISOString, type: 'image' };
+        const updatedMessages = [...messages, imageMessage];
+  
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setMessages(updatedMessages);
+        setIsTyping(true);
+  
+        // Use asset.base64 if present, otherwise fall back to data URL
+        const extractedText = await getTextFromImage(asset.uri, asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : null);
+  
+        if (!extractedText) {
+          const errorMsg = { sender: 'bot', text: 'Could not extract any text from the image.', timestamp: new Date().toISOString(), type: 'text' };
+          setMessages([...updatedMessages, errorMsg]);
+          setIsTyping(false);
+          return;
+        }
+  
+        const aiReply = await getGroqReply(prompt, updatedMessages, extractedText);
+        const botMessage = { sender: 'bot', text: aiReply, timestamp: new Date().toISOString(), type: 'text' };
+  
+        const finalMessages = [...updatedMessages, botMessage];
+        setMessages(finalMessages);
+        setIsTyping(false);
+  
+        try {
+          await AsyncStorage.setItem(`chat_${name}`, JSON.stringify(finalMessages));
+        } catch (e) {
+          console.error('Failed to save chat:', e);
+        }
+      }
+      return;
+    }
+  
+    // Native (iOS/Android) flow: original behavior
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Permission required', 'Please allow gallery access.');
+      return;
+    }
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: false,
+    });
+    if (!pickerResult.canceled && pickerResult.assets?.[0]?.uri) {
+      const imageUri = pickerResult.assets[0].uri;
+      const nowISOString = new Date().toISOString();
+  
+      const imageMessage = { sender: 'user', text: imageUri, timestamp: nowISOString, type: 'image' };
+      const updatedMessages = [...messages, imageMessage];
+  
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setMessages(updatedMessages);
+      setIsTyping(true);
+  
+      const extractedText = await getTextFromImage(imageUri);
+      if (!extractedText) {
+        const errorMsg = { sender: 'bot', text: 'Could not extract any text from the image.', timestamp: new Date().toISOString(), type: 'text' };
+        setMessages([...updatedMessages, errorMsg]);
+        setIsTyping(false);
+        return;
+      }
+  
+      const aiReply = await getGroqReply(prompt, updatedMessages, extractedText);
+      const botMessage = { sender: 'bot', text: aiReply, timestamp: new Date().toISOString(), type: 'text' };
+  
+      const finalMessages = [...updatedMessages, botMessage];
+      setMessages(finalMessages);
+      setIsTyping(false);
+  
+      try {
+        await AsyncStorage.setItem(`chat_${name}`, JSON.stringify(finalMessages));
+      } catch (e) {
+        console.error('Failed to save chat:', e);
+      }
+    }
+  };
+
+  
 
   // Inline JSX for Modal (not a function)
   const reportModalElement = (

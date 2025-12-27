@@ -242,6 +242,20 @@ const Profile = () => {
       await AsyncStorage.removeItem('@user_extra');
       await AsyncStorage.removeItem('@user_onboarded');
       await AsyncStorage.removeItem('selectedBuddy');
+      await AsyncStorage.removeItem('rookieCoins');
+      await AsyncStorage.removeItem('sb-rzcizwacjexolkjjczbt-auth-token');
+      await AsyncStorage.removeItem('chat_Jeetu Bhaiya');
+      await AsyncStorage.removeItem('chat_Ritu');
+      await AsyncStorage.removeItem('chat_Riya');
+      await AsyncStorage.removeItem('chat_Rei');
+      await AsyncStorage.removeItem('chat_Shreya');
+      await AsyncStorage.removeItem('chat_Neha');
+      await AsyncStorage.removeItem('chat_Kaito');
+      await AsyncStorage.removeItem('chat_Elise');
+      await AsyncStorage.removeItem('chat_Sari');
+      await AsyncStorage.removeItem('chat_Aarav');
+      await AsyncStorage.removeItem('bookmarkedQuestions');
+
 
       // Redirect to terms_agree (auth flow)
     router.push('/terms_agree'); 
@@ -317,9 +331,9 @@ const handleSubscribe = () => {
           <Text style={styles.label}>Email</Text>
           <TextInput
             style={[styles.input, !editing && styles.inputReadOnly]}
-            value={name}
+            value={email}
             editable={editing}
-            onChangeText={setName}
+            onChangeText={setEmail}
             placeholder="your email"
             placeholderTextColor="#888"
           />
