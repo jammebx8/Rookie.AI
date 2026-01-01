@@ -6,6 +6,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
      "icon": "./src/assets/appicon.png",
+     "web": {
+      "meta": {
+        "themeColor": "#000000",
+        "backgroundColor": "#000000",
     "splash": {
       "image": "./src/assets/Vector17.png",
       "resizeMode": "contain",
@@ -63,3 +67,4 @@
     }
   }
 }
+  }}
