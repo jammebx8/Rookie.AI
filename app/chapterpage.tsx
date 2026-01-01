@@ -5,11 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import imagepath from '../src/constants/imagepath';
 
-
-
-
 const chaptersData = {
-
   "JEE Main": {
     "Physics": [
       { "title": "Units and Measurements.", "questions": 100 },
@@ -31,23 +27,18 @@ const chaptersData = {
       { "title": "Dual Nature of Matter and Radiation.", "questions": 70 },
       { "title": "Atoms and Nuclei.", "questions": 80 },
       { "title": "Semiconductors", "questions": 70 }
-      
     ],
     "Chemistry": [
       { "title": "Some Basic Concepts of Chemistry.", "questions": 90 },
       { "title": "Structure of Atom.", "questions": 80 },
       { "title": "Classification of Elements and Periodicity in Properties.", "questions": 80 },
       { "title": "Chemical Bonding and Molecular Structure.", "questions": 90 },
-        
       { "title": "Thermodynamics..", "questions": 100 },
       { "title": "Equilibrium.", "questions": 80 },
       { "title": "Redox Reactions.", "questions": 60 },
-     
       { "title": "p-Block Elements.", "questions": 80 },
       { "title": "Organic Chemistry – Some Basic Principles and Techniques.", "questions": 80 },
       { "title": "Hydrocarbons.", "questions": 70 },
-   
-     
       { "title": "Coordination Compounds.", "questions": 80 },
       { "title": "Haloalkanes and Haloarenes.", "questions": 80 },
       { "title": "Aldehydes, Ketones and Carboxylic Acids.", "questions": 80 },
@@ -55,7 +46,7 @@ const chaptersData = {
     ],
     "Maths": [
       { "title": "Sets, Relations, and Functions.", "questions": 80 },
-       { "title": "Quadratic Equations.", "questions": 70 },
+      { "title": "Quadratic Equations.", "questions": 70 },
       { "title": "Complex Numbers.", "questions": 80 },
       { "title": "Matrices and Determinants.", "questions": 80 },
       { "title": "Permutations and Combinations.", "questions": 80 },
@@ -70,10 +61,8 @@ const chaptersData = {
       { "title": "Trigonometry.", "questions": 80 },
       { "title": "Probability.", "questions": 80 },
       { "title": "Statistics.", "questions": 80 },
-     
     ]
   },
-  
   "JEE Adv.": {
     "Physics": [
       { "title": "Units and Measurements", "questions": 80 },
@@ -94,31 +83,27 @@ const chaptersData = {
       { "title": "Optics", "questions": 80 },
       { "title": "Dual Nature of Matter and Radiation", "questions": 80 },
       { "title": "Atoms and Nuclei", "questions": 80 },
-     { "title": "Semiconductors", "questions": 80 }
+      { "title": "Semiconductors", "questions": 80 }
     ],
     "Chemistry": [
-         { "title": "Some Basic Concepts of Chemistry", "questions": 80 },
+      { "title": "Some Basic Concepts of Chemistry", "questions": 80 },
       { "title": "Structure of Atom", "questions": 80 },
       { "title": "Classification of Elements and Periodicity in Properties", "questions": 80 },
       { "title": "Chemical Bonding and Molecular Structure", "questions": 80 },
-       
       { "title": "Thermodynamics", "questions": 80 },
       { "title": "Equilibrium", "questions": 80 },
       { "title": "Redox Reactions", "questions": 80 },
-     
       { "title": "p-Block Elements", "questions": 80 },
       { "title": "Organic Chemistry – Some Basic Principles and Techniques", "questions": 80 },
       { "title": "Hydrocarbons", "questions": 80 },
- 
-     
       { "title": "Coordination Compounds", "questions": 80 },
       { "title": "Haloalkanes and Haloarenes", "questions": 80 },
       { "title": "Aldehydes, Ketones and Carboxylic Acids", "questions": 80 },
       { "title": "Biomolecules", "questions": 80 }
     ],
     "Maths": [
-       { "title": "Sets, Relations, and Functions", "questions": 80 },
-       { "title": "Quadratic Equations", "questions": 80 },
+      { "title": "Sets, Relations, and Functions", "questions": 80 },
+      { "title": "Quadratic Equations", "questions": 80 },
       { "title": "Complex Numbers", "questions": 80 },
       { "title": "Matrices and Determinants", "questions": 80 },
       { "title": "Permutations and Combinations", "questions": 80 },
@@ -134,12 +119,7 @@ const chaptersData = {
       { "title": "Probability", "questions": 80 },
       { "title": "Statistics", "questions": 80 },
     ]
-    },
-
-
-
-
-
+  },
   "NEET": {
     "Physics": [
       { "title": "Units and Measurements", "questions": 100 },
@@ -167,15 +147,12 @@ const chaptersData = {
       { "title": "Structure of Atom", "questions": 80 },
       { "title": "Classification of Elements and Periodicity in Properties", "questions": 210 },
       { "title": "Chemical Bonding and Molecular Structure", "questions": 220 },
-       
       { "title": "Thermodynamics", "questions": 200 },
       { "title": "Equilibrium", "questions": 220 },
       { "title": "Redox Reactions", "questions": 210 },
-     
       { "title": "p-Block Elements", "questions": 210 },
       { "title": "Organic Chemistry – Some Basic Principles and Techniques", "questions": 200 },
       { "title": "Hydrocarbons", "questions": 210 },
- 
       { "title": "p-Block Elements", "questions": 200 },
       { "title": "Coordination Compounds", "questions": 210 },
       { "title": "Haloalkanes and Haloarenes", "questions": 180 },
@@ -195,8 +172,7 @@ const chaptersData = {
       { "title": "Ecology and Environment", "questions": 260 }
     ]
   }
-
-}
+};
 
 export default function ChapterScreen() {
   const router = useRouter();
@@ -206,9 +182,12 @@ export default function ChapterScreen() {
     subjectColor = '#00FFB0',
     badge = '#1', // default to #1 if not provided
     badgeColor = '#00FFB0',
+    imageKey = '', // image key passed from Explore
   } = useLocalSearchParams();
 
+  // Prefer the imageKey passed from Explore (exam-specific); fallback to subject-based defaults
   const subjectImage =
+    (imageKey && imagepath[imageKey]) ? imagepath[imageKey] :
     subjectName === 'Physics'
       ? imagepath.Physics
       : subjectName === 'Chemistry'
@@ -278,7 +257,7 @@ export default function ChapterScreen() {
               onPress={() =>
                 router.push({
                   pathname: '/QuestionViewer',
-                  params: { chapterTitle: chapter.title , subjectName },
+                  params: { chapterTitle: chapter.title , subjectName, imageKey }, // pass imageKey to QuestionViewer
                 })
               }
             >
@@ -440,7 +419,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(10),
     paddingBottom: verticalScale(20),
     paddingTop: 0,
- 
   },
   chapterCard: {
     flexDirection: 'row',
@@ -476,7 +454,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: moderateScale(15),
     fontWeight: '500',
-     fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   chapterCardContent: {
     flex: 1,

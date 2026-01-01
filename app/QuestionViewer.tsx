@@ -16,7 +16,7 @@ import NetInfo from '@react-native-community/netinfo';
 
 const windowWidth = Dimensions.get('window').width;
 const botGradient = ['#47006A', '#0031D0'];
-const GROQ_API_KEY = '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';
+const GROQ_API_KEY = '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';
 const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
 
@@ -44,7 +44,7 @@ const storeWeakConcept = async ({ concept, question }) => {
 };
 
 const QuestionViewer = () => {
-  const { chapterTitle, subjectName = "Physics" } = useLocalSearchParams();
+  const { chapterTitle, subjectName = "Physics", imageKey = '' } = useLocalSearchParams(); // accept imageKey param
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [rookieCoins, setRookieCoins] = useState(0);
@@ -66,10 +66,7 @@ const QuestionViewer = () => {
   const [aiFollowupLoading, setAIFollowupLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const [bookmarked, setBookmarked] = useState(false);
-const [showToast, setShowToast] = useState(false);
-
-
-
+  const [showToast, setShowToast] = useState(false);
 
   // Dig Deeper Adaptive Concept Diagnostic
   const [isDigging, setIsDigging] = useState(false);
@@ -223,7 +220,7 @@ const [showToast, setShowToast] = useState(false);
             image: imagepath.Ritu,
             prompts: {
               onCorrect: "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, cheerful message for getting a question correct.encourage them to solve more questions.",
-              onWrong: "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, supportive message for getting a question wrong. Encourage them casually.encourage them to solve more questions.",
+              onWrong: "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl who is supportive. Give a short not more than 15 words, supportive message for getting a question wrong. Encourage them casually.encourage them to solve more questions.",
               solutionPrefix: "You are Ritu, a fun, teenage girl who replies in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
             },
           };
@@ -750,7 +747,8 @@ User's answer: ${history[history.length-1].userAnswer}
   const minutes = Math.floor(timer / 60);
   const seconds = timer % 60;
   const formattedTime = `${minutes.toString().padStart(1, '0')}:${seconds.toString().padStart(2, '0')}`;
-  const subjectImage = getSubjectImage(subjectName);
+  // prefer imageKey (exam-specific) then fallback to subject default
+  const subjectImage = (imageKey && imagepath[imageKey]) ? imagepath[imageKey] : getSubjectImage(subjectName);
 
   return (
     <View style={styles.outerContainer}>
@@ -1094,8 +1092,6 @@ User's answer: ${history[history.length-1].userAnswer}
         </View>
       </Modal>
 
-
-
       {/* Fixed Footer Navigation */}
 
       {showCorrectGif && (
@@ -1106,11 +1102,9 @@ User's answer: ${history[history.length-1].userAnswer}
             resizeMode="cover"
           />
 
-
         </View>
       )}
 
-      
 
 
       <View style={styles.footerNav}>
@@ -1130,7 +1124,7 @@ User's answer: ${history[history.length-1].userAnswer}
           </View>
         )}
 
-       
+
 
         <TouchableOpacity
           style={styles.footerBtnCircle}
@@ -1150,10 +1144,8 @@ User's answer: ${history[history.length-1].userAnswer}
           onPress={handleBookmark}
         >
           {bookmarked ? (
-            // Filled bookmark icon (use Ionicons or Feather with solid style if available)
             <Ionicons name="bookmark" size={26} color="#fff" />
           ) : (
-            // Outlined bookmark icon
             <Feather name="bookmark" size={26} color="#fff" />
           )}
         </TouchableOpacity>
@@ -1162,6 +1154,7 @@ User's answer: ${history[history.length-1].userAnswer}
   );
 };
 
+// styles remain unchanged (omitted here for brevity in this block - keep your existing styles)
 const styles = StyleSheet.create({
   // ...existing styles...
   outerContainer: {

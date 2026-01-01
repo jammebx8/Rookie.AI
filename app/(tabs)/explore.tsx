@@ -15,51 +15,56 @@ const SUBJECTS = {
   'JEE Main': [
     {
       name: 'Physics',
-    chapters: 19,
-     questions: 1600,
+      chapters: 19,
+      questions: 1600,
       weightage: '34%',
       badge: '#1 Subject',
       badgeColor: '#00FFB0',
-      image: imagepath.Physics,
+      imageKey: 'Physics1',
+      image: imagepath.Physics1,
       color: '#1E90FF',
     },
     {
       name: 'Chemistry',
-     chapters: 14, 
-     questions: 1130,
+      chapters: 14,
+      questions: 1130,
       weightage: '34%',
       badge: '#3 Subject',
       badgeColor: '#FF4D00',
-      image: imagepath.Chemistry,
+      imageKey: 'Chemistry1',
+      image: imagepath.Chemistry1,
       color: '#FFA500',
     },
     {
       name: 'Maths',
-     chapters: 16,
+      chapters: 16,
       questions: 1270,
       weightage: '34%',
       badge: '#2 Subject',
       badgeColor: '#FFD700',
-      image: imagepath.Maths,
+      imageKey: 'Maths1',
+      image: imagepath.Maths1,
       color: '#D32F8D',
     },
   ],
   'JEE Adv.': [
     {
       name: 'Physics',
-     chapters: 19, questions: 1520,
+      chapters: 19, questions: 1520,
       weightage: '34%',
       badge: '#1 Subject',
       badgeColor: '#00FFB0',
+      imageKey: 'Physics',
       image: imagepath.Physics,
       color: '#1E90FF',
     },
     {
       name: 'Chemistry',
-     chapters: 14, questions: 1120,
+      chapters: 14, questions: 1120,
       weightage: '34%',
       badge: '#3 Subject',
       badgeColor: '#FF4D00',
+      imageKey: 'Chemistry',
       image: imagepath.Chemistry,
       color: '#FFA500',
     },
@@ -69,6 +74,7 @@ const SUBJECTS = {
       weightage: '34%',
       badge: '#2 Subject',
       badgeColor: '#FFD700',
+      imageKey: 'Maths',
       image: imagepath.Maths,
       color: '#D32F8D',
     },
@@ -76,20 +82,22 @@ const SUBJECTS = {
   'NEET': [
     {
       name: 'Physics',
-     chapters: 28, questions: 4100,
+      chapters: 28, questions: 4100,
       weightage: '34%',
       badge: '#1 Subject',
       badgeColor: '#00FFB0',
-      image: imagepath.Physics,
+      imageKey: 'Physics3',
+      image: imagepath.Physics3,
       color: '#1E90FF',
     },
     {
       name: 'Chemistry',
-       chapters: 30, questions: 3900,
+      chapters: 30, questions: 3900,
       weightage: '34%',
       badge: '#3 Subject',
       badgeColor: '#FF4D00',
-      image: imagepath.Chemistry,
+      imageKey: 'Chemistry3',
+      image: imagepath.Chemistry3,
       color: '#FFA500',
     },
     {
@@ -98,7 +106,8 @@ const SUBJECTS = {
       weightage: '34%',
       badge: '#2 Subject',
       badgeColor: '#FFD700',
-      image: imagepath.Maths, // Replace with imagepath.Biology if you have it
+      imageKey: 'Biology',
+      image: imagepath.Biology,
       color: '#32CD32',
     },
   ],
@@ -108,21 +117,20 @@ export default function ExploreScreen() {
   const [selectedExam, setSelectedExam] = useState(EXAMS[0].name);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // Redirect directly to chapterpage with subject color
-// ...existing code...
-const handleSubjectPress = (subject) => {
-  router.push({
-    pathname: '/chapterpage',
-    params: {
-      examName: selectedExam,
-      subjectName: subject.name,
-      subjectColor: subject.color,
-      badge: subject.badge.split(' ')[0], // Pass only '#1', '#2', etc.
-      badgeColor: subject.badgeColor,
-    },
-  });
-};
-// ...existing code...
+  // Redirect directly to chapterpage with subject color and imageKey
+  const handleSubjectPress = (subject) => {
+    router.push({
+      pathname: '/chapterpage',
+      params: {
+        examName: selectedExam,
+        subjectName: subject.name,
+        subjectColor: subject.color,
+        badge: subject.badge.split(' ')[0], // Pass only '#1', '#2', etc.
+        badgeColor: subject.badgeColor,
+        imageKey: subject.imageKey, // pass image key so chapter page can pick exam-specific image
+      },
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -180,9 +188,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#0C111D",
-paddingBottom: verticalScale(30),
-  paddingHorizontal: 10,
-
+    paddingBottom: verticalScale(30),
+    paddingHorizontal: 10,
   },
   practiceRow: {
     flexDirection: 'row',
@@ -191,17 +198,16 @@ paddingBottom: verticalScale(30),
     marginTop: verticalScale(15),
     marginHorizontal: scale(12),
     marginBottom: verticalScale(10),
-    position: 'relative', // make this the positioning context for the absolute dropdown
-    overflow: 'visible', // allow dropdown to overflow on top of other views
+    position: 'relative',
+    overflow: 'visible',
     zIndex: 1,
-   
   },
   practiceTitle: {
     color: '#fff',
     fontSize: moderateScale(28),
     fontWeight: 'medium',
     letterSpacing: 0.5,
-      fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   examToggle: {
     flexDirection: 'row',
@@ -217,7 +223,7 @@ paddingBottom: verticalScale(30),
     color: '#fff',
     fontSize: moderateScale(16),
     fontWeight: '500',
-      fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   dropdown: {
     backgroundColor: '#000000',
@@ -228,7 +234,7 @@ paddingBottom: verticalScale(30),
     right: 0,
     top: 44,
     zIndex: 9999,
-    elevation: 9999, // Android: ensure dropdown renders above other views
+    elevation: 9999,
     width: 140,
     borderWidth: 1,
     borderColor: '#22223A',
@@ -240,13 +246,13 @@ paddingBottom: verticalScale(30),
   dropdownText: {
     color: '#fff',
     fontSize: moderateScale(15),
-      fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   cardList: {
     marginTop: verticalScale(8),
     marginHorizontal: scale(8),
     marginBottom: verticalScale(16),
-     paddingBottom: 40,
+    paddingBottom: 40,
   },
   subjectCard: {
     borderRadius: 16,
@@ -263,7 +269,7 @@ paddingBottom: verticalScale(30),
   subjectImage: {
     width: '100%',
     height: verticalScale(80),
-    backgroundColor: '#222', 
+    backgroundColor: '#222',
   },
   subjectImageStyle: {
     resizeMode: 'cover',
@@ -284,7 +290,7 @@ paddingBottom: verticalScale(30),
     fontSize: moderateScale(22),
     fontWeight: 'medium',
     letterSpacing: 0.2,
-      fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   subjectBadge: {
     borderWidth: 1.5,
@@ -297,7 +303,7 @@ paddingBottom: verticalScale(30),
   subjectBadgeText: {
     fontSize: moderateScale(13),
     fontWeight: 'medium',
-      fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
   subjectInfoRow: {
     flexDirection: 'row',
@@ -308,11 +314,6 @@ paddingBottom: verticalScale(30),
     color: '#C0C0C0',
     fontSize: moderateScale(13),
     fontWeight: '500',
-      fontFamily: 'Geist',
+    fontFamily: 'Geist',
   },
 });
-
-  
-
-
-
