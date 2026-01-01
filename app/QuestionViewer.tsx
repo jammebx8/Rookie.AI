@@ -12,14 +12,15 @@ import { moderateScale, scale } from 'react-native-size-matters';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Modal } from 'react-native';
 import LoadSolGif from '../src/assets/images/loadsol.gif';
-import NetInfo from '@react-native-community/netinfo'; 
+import NetInfo from '@react-native-community/netinfo';
 
 const windowWidth = Dimensions.get('window').width;
 const botGradient = ['#47006A', '#0031D0'];
-const GROQ_API_KEY = '';
 const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
 
+// IMPORTANT: base URL of your deployed Vercel app (Next.js API routes)
+const API_BASE = 'https://rookie-ai.vercel.app/api';
 
 const getSubjectImage = (subjectName) => {
   if (subjectName === 'Physics') return imagepath.Physics;
@@ -44,7 +45,7 @@ const storeWeakConcept = async ({ concept, question }) => {
 };
 
 const QuestionViewer = () => {
-  const { chapterTitle, subjectName = "Physics", imageKey = '' } = useLocalSearchParams(); // accept imageKey param
+  const { chapterTitle, subjectName = "Physics", imageKey = '' } = useLocalSearchParams();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [rookieCoins, setRookieCoins] = useState(0);
@@ -68,19 +69,17 @@ const QuestionViewer = () => {
   const [bookmarked, setBookmarked] = useState(false);
   const [showToast, setShowToast] = useState(false);
 
-  // Dig Deeper Adaptive Concept Diagnostic
+  // Dig Deeper states
   const [isDigging, setIsDigging] = useState(false);
-  const [conceptMCQ, setConceptMCQ] = useState<any>(null); // { mcq, numCorrect }
+  const [conceptMCQ, setConceptMCQ] = useState<any>(null);
   const [conceptHistory, setConceptHistory] = useState<any[]>([]);
   const [conceptLoading, setConceptLoading] = useState(false);
   const [conceptFeedback, setConceptFeedback] = useState('');
   const [conceptDone, setConceptDone] = useState(false);
   const [digDeepSelected, setDigDeepSelected] = useState<string | null>(null);
-
-  // Added state for previous dig deeper answer
   const [prevDigResult, setPrevDigResult] = useState<{ status: 'correct' | 'incorrect' | ''; explanation?: string, answer?: string } | null>(null);
 
-  // Check bookmarked state on focus and question change
+  // Check bookmarked state
   useEffect(() => {
     const checkBookmarked = async () => {
       try {
@@ -106,40 +105,38 @@ const QuestionViewer = () => {
     if (questions.length > 0) checkBookmarked();
   }, [currentIndex, questions, chapterTitle, subjectName]);
 
-  // Bookmark handler
- const handleBookmark = async () => {
-  try {
-    const currentQuestion = questions[currentIndex];
-    if (!currentQuestion) return;
-    const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
-    let arr = stored ? JSON.parse(stored) : [];
+  const handleBookmark = async () => {
+    try {
+      const currentQuestion = questions[currentIndex];
+      if (!currentQuestion) return;
+      const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
+      let arr = stored ? JSON.parse(stored) : [];
 
-    if (!bookmarked) {
-      arr.push({
-        ...currentQuestion,
-        chapterTitle,
-        subjectName,
-        index: currentIndex,
-      });
-      await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
-      setBookmarked(true);
-      setShowToast(true); // Show toast
-      setTimeout(() => setShowToast(false), 1800); // Hide after 1.8s
-    } else {
-      arr = arr.filter(
-        (q) =>
-          !(
-            q.question === currentQuestion.question &&
-            q.chapterTitle === chapterTitle &&
-            q.subjectName === subjectName
-          )
-      );
-      await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
-      setBookmarked(false);
-    }
-  } catch (e) {}
-};
-
+      if (!bookmarked) {
+        arr.push({
+          ...currentQuestion,
+          chapterTitle,
+          subjectName,
+          index: currentIndex,
+        });
+        await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
+        setBookmarked(true);
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 1800);
+      } else {
+        arr = arr.filter(
+          (q) =>
+            !(
+              q.question === currentQuestion.question &&
+              q.chapterTitle === chapterTitle &&
+              q.subjectName === subjectName
+            )
+        );
+        await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
+        setBookmarked(false);
+      }
+    } catch (e) {}
+  };
 
   useEffect(() => {
     const chapterQuestions = questionsData[chapterTitle] || [];
@@ -194,12 +191,10 @@ const QuestionViewer = () => {
     return () => animation && animation.stop();
   }, [loading]);
 
-  // Add useEffect to listen for connection change
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
       setIsConnected(!!state.isConnected);
     });
-    // Check once immediately on mount
     NetInfo.fetch().then(state => {
       setIsConnected(!!state.isConnected);
     });
@@ -327,14 +322,15 @@ const QuestionViewer = () => {
       }
       setLoading(true);
 
+      const currentQuestion = questions[currentIndex];
       const correct = selectedOption === currentQuestion.correctAnswer;
       setIsCorrect(correct);
 
       if (correct) {
         const reward = rcRewards[currentQuestion.difficulty] || 0;
         setRookieCoins((prev) => prev + reward);
-        setShowCorrectGif(true); // Show the correct answer GIF
-        setTimeout(() => setShowCorrectGif(false), 4000); // Hide after 2.5 seconds
+        setShowCorrectGif(true);
+        setTimeout(() => setShowCorrectGif(false), 4000);
       }
 
       const msg = await getMotivation(correct);
@@ -347,6 +343,7 @@ const QuestionViewer = () => {
     }
   };
 
+  // Frontend calls backend endpoints. Backend holds the GROQ key.
   const getMotivation = async (isCorrect) => {
     if (!buddy || !buddy.prompts) return '';
     try {
@@ -356,21 +353,13 @@ const QuestionViewer = () => {
       const message = isCorrect
         ? `${userContext}${buddy.prompts.onCorrect}`
         : `${userContext}${buddy.prompts.onWrong}`;
-      const res = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: message }],
-          temperature: 0.7,
-          max_tokens: 50,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${GROQ_API_KEY}`,
-          },
-        }
-      );
+
+      const res = await axios.post(`${API_BASE}/motivation`, {
+        message,
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.7,
+        max_tokens: 50,
+      });
       return res.data.choices?.[0]?.message?.content || '';
     } catch (error) {
       return '';
@@ -401,21 +390,13 @@ Please provide a detailed solution to the question above in not more than 15 lin
         message += '\nNow, explain the same solution in simplest way possible.';
       }
 
-      const res = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: message }],
-          temperature: 0.7,
-          max_tokens: 400,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${GROQ_API_KEY}`,
-          },
-        }
-      );
+      const res = await axios.post(`${API_BASE}/solution`, {
+        message,
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.7,
+        max_tokens: 400,
+      });
+
       return res.data.choices?.[0]?.message?.content || '';
     } catch (error) {
       return '';
@@ -491,14 +472,12 @@ User's answer: ${history[history.length-1].userAnswer}
 `;
   };
 
-  // Improved explanation parsing (multi-line)
   const parseConceptMCQ = (llmText) => {
     let explanation = '';
     let concept = '';
     let level = 1;
     let text = llmText.trim();
 
-    // Match explanation as multiline
     const explMatch = text.match(/^Explanation:\s*([\s\S]*?)\nConcept:/i);
     if (explMatch) {
       explanation = explMatch[1].trim();
@@ -538,21 +517,12 @@ User's answer: ${history[history.length-1].userAnswer}
 
     try {
       const prompt = getConceptDiagnosticPrompt(questions[currentIndex], [], null, 1, false, '');
-      const res = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.5,
-          max_tokens: 500,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${GROQ_API_KEY}`,
-          },
-        }
-      );
+      const res = await axios.post(`${API_BASE}/solution`, {
+        message: prompt,
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.5,
+        max_tokens: 500,
+      });
       const mcq = parseConceptMCQ(res.data.choices?.[0]?.message?.content || '');
       setConceptMCQ({ mcq, numCorrect: 0 });
       setConceptLoading(false);
@@ -567,7 +537,6 @@ User's answer: ${history[history.length-1].userAnswer}
     const mcq = conceptMCQ.mcq;
     let history = [...conceptHistory];
 
-    // Track selected option for highlight
     if (['A','B','C','D'].includes(typeOrKey)) {
       setDigDeepSelected(typeOrKey);
     }
@@ -601,21 +570,12 @@ User's answer: ${history[history.length-1].userAnswer}
           false,
           ''
         );
-        const res = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          {
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.5,
-            max_tokens: 500,
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${GROQ_API_KEY}`,
-            },
-          }
-        );
+        const res = await axios.post(`${API_BASE}/solution`, {
+          message: prompt,
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.5,
+          max_tokens: 500,
+        });
         const newMcq = parseConceptMCQ(res.data.choices?.[0]?.message?.content || '');
         setConceptMCQ({ mcq: newMcq, numCorrect: 0 });
         setConceptLoading(false);
@@ -631,7 +591,6 @@ User's answer: ${history[history.length-1].userAnswer}
       return;
     }
 
-    // MCQ option: treat as correct/incorrect
     const correct = typeOrKey === mcq.answer;
     let numCorrect = conceptMCQ.numCorrect || 0;
     history.push({
@@ -659,21 +618,12 @@ User's answer: ${history[history.length-1].userAnswer}
           true,
           ''
         );
-        const res = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          {
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.5,
-            max_tokens: 500,
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${GROQ_API_KEY}`,
-            },
-          }
-        );
+        const res = await axios.post(`${API_BASE}/solution`, {
+          message: prompt,
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.5,
+          max_tokens: 500,
+        });
         const newMcq = parseConceptMCQ(res.data.choices?.[0]?.message?.content || '');
         setConceptMCQ({ mcq: newMcq, numCorrect });
         setConceptLoading(false);
@@ -694,21 +644,12 @@ User's answer: ${history[history.length-1].userAnswer}
           false,
           ''
         );
-        const res = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          {
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.5,
-            max_tokens: 500,
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${GROQ_API_KEY}`,
-            },
-          }
-        );
+        const res = await axios.post(`${API_BASE}/solution`, {
+          message: prompt,
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.5,
+          max_tokens: 500,
+        });
         const newMcq = parseConceptMCQ(res.data.choices?.[0]?.message?.content || '');
         setConceptMCQ({ mcq: newMcq, numCorrect: 0 });
         setConceptLoading(false);
@@ -747,7 +688,6 @@ User's answer: ${history[history.length-1].userAnswer}
   const minutes = Math.floor(timer / 60);
   const seconds = timer % 60;
   const formattedTime = `${minutes.toString().padStart(1, '0')}:${seconds.toString().padStart(2, '0')}`;
-  // prefer imageKey (exam-specific) then fallback to subject default
   const subjectImage = (imageKey && imagepath[imageKey]) ? imagepath[imageKey] : getSubjectImage(subjectName);
 
   return (
@@ -801,7 +741,6 @@ User's answer: ${history[history.length-1].userAnswer}
         </View>
 
         <View style={styles.qBodyOuter}>
-          {/* Breadcrumbs */}
           <View style={styles.breadcrumbRow}>
             <Text style={styles.breadcrumbSubject}>{subjectName}</Text>
             <Text style={styles.breadcrumbSeparator}>/</Text>
@@ -810,10 +749,8 @@ User's answer: ${history[history.length-1].userAnswer}
             <Text style={styles.breadcrumbQNum}>Q{currentIndex + 1}</Text>
           </View>
 
-          {/* Question */}
           <Text style={styles.qText}>{currentQuestion.question}</Text>
 
-          {/* Options */}
           <View style={styles.optionsWrap}>
             {currentQuestion.options.map((option, index) => {
               const isSelected = selectedOption === option;
@@ -868,7 +805,6 @@ User's answer: ${history[history.length-1].userAnswer}
             })}
           </View>
 
-          {/* Check Button */}
           {isCorrect === null && (
             <TouchableOpacity
               style={[
@@ -883,7 +819,6 @@ User's answer: ${history[history.length-1].userAnswer}
             </TouchableOpacity>
           )}
 
-          {/* Motivation and Solution AI Gradient, with follow-up buttons */}
           {isCorrect !== null && (
             <>
               {loading ? (
@@ -962,7 +897,6 @@ User's answer: ${history[history.length-1].userAnswer}
             </>
           )}
 
-          {/* --- Dig Deeper Concept Adaptive Diagnostic Modal --- */}
           {isDigging && (
             <LinearGradient
               colors={botGradient}
@@ -972,7 +906,6 @@ User's answer: ${history[history.length-1].userAnswer}
             >
               <View style={styles.digDeepInnerBox}>
                 <Text style={styles.digDeepLead}>Let's build your concept clarity...</Text>
-                {/* Show last answer status */}
                 {prevDigResult && prevDigResult.status && (
                   <Text style={{
                     color: prevDigResult.status === 'correct' ? '#1DC97A' : '#B42323',
@@ -985,7 +918,7 @@ User's answer: ${history[history.length-1].userAnswer}
                       : `Previous Answer: Incorrect (${prevDigResult.answer})`}
                   </Text>
                 )}
-                {/* Show explanation if previous was incorrect */}
+
                 {prevDigResult && prevDigResult.status === 'incorrect' && prevDigResult.explanation && (
                   <View style={{ marginBottom: 10 }}>
                     <Text style={{
@@ -1050,7 +983,6 @@ User's answer: ${history[history.length-1].userAnswer}
         </View>
       </ScrollView>
 
-      {/* Popup Modal */}
       <Modal
         visible={showBackModal}
         transparent
@@ -1092,8 +1024,6 @@ User's answer: ${history[history.length-1].userAnswer}
         </View>
       </Modal>
 
-      {/* Fixed Footer Navigation */}
-
       {showCorrectGif && (
         <View style={styles.fullScreenGifOverlay} pointerEvents="none">
           <Image
@@ -1101,20 +1031,15 @@ User's answer: ${history[history.length-1].userAnswer}
             style={styles.fullScreenGifImage}
             resizeMode="cover"
           />
-
         </View>
       )}
 
-
-
       <View style={styles.footerNav}>
-
-
-                     {showToast && (
-  <View style={styles.toastBar}>
-    <Text style={styles.toastText}>Bookmarked!</Text>
-  </View>
-)}
+        {showToast && (
+          <View style={styles.toastBar}>
+            <Text style={styles.toastText}>Bookmarked!</Text>
+          </View>
+        )}
 
         {!isConnected && (
           <View style={styles.noInternetBar}>
@@ -1123,8 +1048,6 @@ User's answer: ${history[history.length-1].userAnswer}
             </Text>
           </View>
         )}
-
-
 
         <TouchableOpacity
           style={styles.footerBtnCircle}
@@ -1153,8 +1076,6 @@ User's answer: ${history[history.length-1].userAnswer}
     </View>
   );
 };
-
-// styles remain unchanged (omitted here for brevity in this block - keep your existing styles)
 const styles = StyleSheet.create({
   // ...existing styles...
   outerContainer: {
@@ -1717,8 +1638,7 @@ const styles = StyleSheet.create({
     zIndex: 9999,
 
  
-  
-    justifyContent: 'center',
+   justifyContent: 'center',
     alignItems: 'center',
   },
   fullScreenGifImage: {
@@ -1841,19 +1761,13 @@ const styles = StyleSheet.create({
     height: 160,
 
     
- 
-
-
   },
 
 
- 
-  bookmarkBtnActive: {
+    bookmarkBtnActive: {
     backgroundColor: '#fff',
     borderColor: '#fff',
   },
-
-
 
     noInternetBar: {
     width: '100%',
@@ -1877,8 +1791,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.1,
   },
-
-
 
     toastBar: {
     position: 'absolute',
@@ -1908,5 +1820,3 @@ const styles = StyleSheet.create({
 });
 
 export default QuestionViewer;
-
-
