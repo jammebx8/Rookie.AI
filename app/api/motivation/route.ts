@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-// API route for motivation message generation
+// API route for motivation generation
 export const runtime = 'edge';
 
 const CORS_HEADERS = {
