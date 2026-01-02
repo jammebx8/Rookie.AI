@@ -20,7 +20,7 @@ const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
 
 // IMPORTANT: base URL of your deployed Vercel app (Next.js API routes)
-const API_BASE = 'https://rookie-ai.vercel.app/api';
+const API_BASE = ' https://rookie-backend.vercel.app/api';
 
 const getSubjectImage = (subjectName) => {
   if (subjectName === 'Physics') return imagepath.Physics;
