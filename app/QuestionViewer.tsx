@@ -366,42 +366,55 @@ const QuestionViewer = () => {
     }
   };
 
-  const getSolution = async (questionObj, followupType?: 'dig' | '5yr') => {
+  const getSolution = async (
+    questionObj,
+    followupType?: 'dig' | '5yr'
+  ) => {
     if (!buddy || !buddy.prompts) return '';
+  
     try {
       const userStr = await AsyncStorage.getItem('@user');
       const user = userStr ? JSON.parse(userStr) : {};
-      const userContext = `You are talking to an 18-year-old ${user.gender || 'student'} named ${user.name || ''}. `;
-
+  
+      const userContext = `You are talking to an 18-year-old ${
+        user.gender || 'student'
+      } named ${user.name || ''}. `;
+  
       const optionsList = questionObj.options
         .map((opt, idx) => `${String.fromCharCode(65 + idx)}. ${opt}`)
         .join('\n');
+  
       let message = `${userContext}${buddy.prompts.solutionPrefix}
-Question: "${questionObj.question}"
-Options:
-${optionsList}
-Correct Answer: ${questionObj.correctAnswer}
-Please provide a detailed solution to the question above in not more than 15 lines`;
-
+  Question: "${questionObj.question}"
+  Options:
+  ${optionsList}
+  Correct Answer: ${questionObj.correctAnswer}
+  Please provide a detailed solution to the question above in not more than 15 lines`;
+  
       if (followupType === 'dig') {
-        message += '\nNow, dig deeper and provide more advanced insights, connections, or extra detailed solution.';
+        message +=
+          '\nNow, dig deeper and provide more advanced insights, connections, or extra detailed solution.';
       }
+  
       if (followupType === '5yr') {
-        message += '\nNow, explain the same solution in simplest way possible.';
+        message +=
+          '\nNow, explain the same solution in simplest way possible.';
       }
-
+  
       const res = await axios.post(`${API_BASE}/solution`, {
         message,
         model: 'llama-3.3-70b-versatile',
         temperature: 0.7,
         max_tokens: 400,
       });
-
-      return res.data.choices?.[0]?.message?.content || '';
+  
+      return res.data?.choices?.[0]?.message?.content || '';
     } catch (error) {
+      console.error('getSolution error:', error);
       return '';
     }
   };
+  
 
   const handleAIFollowup = async (type: 'dig' | '5yr') => {
     setAIFollowupLoading(true);

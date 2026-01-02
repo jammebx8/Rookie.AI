@@ -1,13 +1,10 @@
-import axios from 'axios';
-
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*', // for dev; restrict in prod if needed
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-// 🔹 Preflight handler (VERY IMPORTANT)
-export async function OPTIONS() {
+export async function OPTIONS(request: Request) {
   return new Response(null, {
     status: 204,
     headers: corsHeaders,
@@ -22,7 +19,7 @@ export async function POST(request: Request) {
       message,
       model = 'llama-3.3-70b-versatile',
       temperature = 0.7,
-      max_tokens = 400,
+      max_tokens = 50,
     } = body;
 
     if (!message) {
@@ -32,38 +29,38 @@ export async function POST(request: Request) {
       );
     }
 
-    const groqRes = await axios.post(
+    const groqRes = await fetch(
       'https://api.groq.com/openai/v1/chat/completions',
       {
-        model,
-        messages: [{ role: 'user', content: message }],
-        temperature,
-        max_tokens,
-      },
-      {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: message }],
+          temperature,
+          max_tokens,
+        }),
       }
     );
 
-    return new Response(JSON.stringify(groqRes.data), {
-      status: 200,
+    const data = await groqRes.json();
+
+    return new Response(JSON.stringify(data), {
+      status: groqRes.ok ? 200 : groqRes.status,
       headers: corsHeaders,
     });
   } catch (err: any) {
-    console.error('solution proxy error:', err?.response?.data || err.message);
-
     return new Response(
       JSON.stringify({
-        error: 'Failed to fetch solution from LLM',
-        details: err?.response?.data || err?.message,
+        error: 'Failed to fetch motivation from LLM',
+        details: err.message,
       }),
-      {
-        status: err?.response?.status || 500,
-        headers: corsHeaders,
-      }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
+
+export const runtime = 'edge';
