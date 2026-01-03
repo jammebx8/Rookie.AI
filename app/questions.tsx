@@ -766,7 +766,8 @@ export const questionsData = {
     "[M L^{0} T^{-2} A^{-1}]"
   ],
   correctAnswer: "[M L^{0} T^{-1} A^{-1}]",
-  year: 2024
+  year: 2024,
+  difficulty: "easy"
 },
 {
   question: "The unit of angular momentum can be expressed as:",
@@ -777,7 +778,8 @@ export const questionsData = {
     "kg·m/s²"
   ],
   correctAnswer: "kg·m²/s",
-  year: 2025
+  year: 2025,
+  difficulty: "hard"
 },
 {
   question: "The quantity $$\\frac{Energy}{Frequency}$$ has the dimensions:",
@@ -788,7 +790,8 @@ export const questionsData = {
     "[ML^{2}T^{-4}]"
   ],
   correctAnswer: "[ML^{2}T^{-1}]",
-  year: 2026
+  year: 2026,
+  difficulty: "hard"
 },
 {
   question: "The dimensional formula of the permittivity of free space $$\\varepsilon_0$$ is:",
@@ -799,7 +802,8 @@ export const questionsData = {
     "[M^{-1} L^{-2} T^{2} A^{2}]"
   ],
   correctAnswer: "[M^{-1} L^{-3} T^{4} A^{2}]",
-  year: 2025
+  year: 2025,
+  difficulty: "hard"
 },
 {
   question: "Which of the following is NOT dimensionally consistent?",
@@ -810,7 +814,8 @@ export const questionsData = {
     "Energy = Force × Velocity"
   ],
   correctAnswer: "Energy = Force × Velocity",
-  year: 2023
+  year: 2023,
+  difficulty: "hard"
 },
 {
   question: "The physical quantity with dimension $$[M L^{2} T^{-2}]$$ is:",
@@ -821,7 +826,8 @@ export const questionsData = {
     "Impulse"
   ],
   correctAnswer: "Energy",
-  year: 2022
+  year: 2022,
+  difficulty: "hard"
 },
 {
   question: "The dimensional formula of the quantity $$\\frac{Magnetic Flux}{Time}$$ is:",
@@ -832,7 +838,8 @@ export const questionsData = {
     "[M L^{2} T^{-3} A^{1}]"
   ],
   correctAnswer: "[M L^{2} T^{-3} A^{-1}]",
-  year: 2026
+  year: 2026,
+  difficulty: "easy"
 },
 
 
@@ -845,7 +852,8 @@ export const questionsData = {
     "[M L^2 T^{-3} A^{-1}]"
   ],
   correctAnswer: "[M L^3 T^{-4} A^{-1}]",
-  year: 2026
+  year: 2026,
+  difficulty: "hard"
 }
 
 

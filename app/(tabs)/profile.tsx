@@ -410,27 +410,7 @@ const handleSubscribe = () => {
 
 
 
-      <View style={{ marginTop: 12, marginBottom: 18 }}>
-  <TouchableOpacity
-    style={{
-      backgroundColor: '#1570EF',
-      borderRadius: 22,
-      paddingVertical: 16,
-      alignItems: 'center',
-    }}
-    onPress={handleSubscribe}
-    activeOpacity={0.85}
-  >
-    <Text style={{
-      color: '#fff',
-      fontSize: 18,
-      fontWeight: '600',
-      fontFamily: 'Geist',
-    }}>
-      Subscribe
-    </Text>
-  </TouchableOpacity>
-</View>
+
 
       <Text style={styles.sectionTitle}>Select mentor</Text>
       <Text style={styles.mentorDesc}>

@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import imagepath from '@/src/constants/imagepath';
 import { supabase } from "../../src/utils/supabase"; // adjust the import path as needed
+import { Share, Alert } from 'react-native';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -183,6 +184,19 @@ export default function HomeScreen() {
   const ROWS_TO_SHOW = 3;
   const initialCount = VIDEOS_PER_ROW * ROWS_TO_SHOW;
   const displayStudyChapters = showAllVideos ? studyChapters : studyChapters.slice(0, initialCount);
+  const inviteFriends = async () => {
+    const inviteLink = 'https://rookie-ai.vercel.app'; // 👈 your website / app link
+  
+    try {
+      await Share.share({
+        message: `Hey! 👋 Join me on Rookie to study smarter together 🚀\n\n${inviteLink}`,
+        url: inviteLink, // iOS uses this
+        title: 'Invite to Rookie',
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Unable to share the invite link');
+    }
+  };
   
   
 
@@ -373,7 +387,11 @@ export default function HomeScreen() {
               resizeMode="contain"
             />
             <TouchableOpacity style={styles.inviteBtn}>
-              <Text style={styles.inviteBtnText}>Invite</Text>
+           
+              <Text style={styles.inviteBtnText} 
+              onPress={inviteFriends}>Invite
+              
+              </Text>
             </TouchableOpacity>
           </LinearGradient>
 

@@ -10,14 +10,17 @@ import { ActivityIndicator } from 'react-native';
 import imagepath from '../src/constants/imagepath';
 import { moderateScale, scale } from 'react-native-size-matters';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Modal } from 'react-native';
+
 import LoadSolGif from '../src/assets/images/loadsol.gif';
 import NetInfo from '@react-native-community/netinfo';
+import { supabase } from '../src/utils/supabase';
 
 const windowWidth = Dimensions.get('window').width;
 const botGradient = ['#47006A', '#0031D0'];
 const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
+// Session responses saved locally while user is in the viewer - cleared when pressing Back
+const SESSION_RESPONSES_KEY = 'questionSessionResponses_v1';
 
 // IMPORTANT: base URL of your deployed Vercel app (Next.js API routes)
 const API_BASE = ' https://rookie-backend.vercel.app/api';
@@ -79,7 +82,55 @@ const QuestionViewer = () => {
   const [digDeepSelected, setDigDeepSelected] = useState<string | null>(null);
   const [prevDigResult, setPrevDigResult] = useState<{ status: 'correct' | 'incorrect' | ''; explanation?: string, answer?: string } | null>(null);
 
-  // Check bookmarked state
+  // New state: whether solution has been requested/shown after a correct answer
+  const [solutionRequested, setSolutionRequested] = useState(false);
+
+  // ScrollView ref to scroll to solution when it's available
+  const scrollRef = useRef<ScrollView | null>(null);
+
+  // ---------- Session storage helpers ----------
+  // session structure: { [chapterTitle]: { [index]: { selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup, awarded } } }
+  const saveSessionForCurrent = async (partial = {}) => {
+    try {
+      const stored = await AsyncStorage.getItem(SESSION_RESPONSES_KEY);
+      const obj = stored ? JSON.parse(stored) : {};
+      if (!obj[chapterTitle]) obj[chapterTitle] = {};
+      obj[chapterTitle][String(currentIndex)] = {
+        ...(obj[chapterTitle][String(currentIndex)] || {}),
+        selectedOption,
+        isCorrect,
+        motivation,
+        solutionRequested,
+        solution,
+        aiFollowup,
+        ...partial,
+      };
+      await AsyncStorage.setItem(SESSION_RESPONSES_KEY, JSON.stringify(obj));
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const loadSessionForIndex = async (index) => {
+    try {
+      const stored = await AsyncStorage.getItem(SESSION_RESPONSES_KEY);
+      if (!stored) return null;
+      const obj = JSON.parse(stored);
+      const chapterObj = obj[chapterTitle];
+      if (!chapterObj) return null;
+      return chapterObj[String(index)] || null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const clearSession = async () => {
+    try {
+      await AsyncStorage.removeItem(SESSION_RESPONSES_KEY);
+    } catch (e) {}
+  };
+
+  // ---------- Bookmark handling ----------
   useEffect(() => {
     const checkBookmarked = async () => {
       try {
@@ -138,40 +189,25 @@ const QuestionViewer = () => {
     } catch (e) {}
   };
 
+  // ---------- Load questions (no difficulty sorting) ----------
   useEffect(() => {
     const chapterQuestions = questionsData[chapterTitle] || [];
-    const sortedQuestions = chapterQuestions.slice().sort((a, b) => a.year - b.year);
+    // Do not sort by difficulty - keep original order (or year order if that's desired)
+    // We'll preserve original incoming order. If you want to keep by year leave this commented.
+    // const sortedQuestions = chapterQuestions.slice().sort((a, b) => a.year - b.year);
+    const sortedQuestions = chapterQuestions.slice();
     setQuestions(sortedQuestions);
     setShownIndices(new Set([0]));
     setCurrentIndex(0);
+    setSelectedOption(null);
+    setIsCorrect(null);
+    setMotivation('');
+    setSolution('');
+    setSolutionRequested(false);
     Animated.timing(progressAnim, { toValue: 1, duration: 0, useNativeDriver: false }).start();
   }, [chapterTitle]);
 
-  useEffect(() => {
-    const loadRookieCoins = async () => {
-      try {
-        const savedCoins = await AsyncStorage.getItem('rookieCoins');
-        setRookieCoins(savedCoins ? parseInt(savedCoins, 10) : 0);
-      } catch (error) {}
-    };
-    loadRookieCoins();
-  }, []);
-
-  useEffect(() => {
-    const saveRookieCoins = async () => {
-      try {
-        await AsyncStorage.setItem('rookieCoins', rookieCoins.toString());
-      } catch (error) {}
-    };
-    saveRookieCoins();
-  }, [rookieCoins]);
-
-  useEffect(() => {
-    AsyncStorage.setItem('rookieCoins', rookieCoins.toString());
-  }, [rookieCoins]);
-
-  const rcRewards = { easy: 10, medium: 20, hard: 30 };
-
+  // ---------- Spinner animation ----------
   useEffect(() => {
     let animation;
     if (loading) {
@@ -201,6 +237,7 @@ const QuestionViewer = () => {
     return () => unsubscribe();
   }, []);
 
+  // ---------- Buddy load ----------
   useEffect(() => {
     const loadBuddy = async () => {
       try {
@@ -227,6 +264,7 @@ const QuestionViewer = () => {
     loadBuddy();
   }, []);
 
+  // ---------- Timer ----------
   useEffect(() => {
     setTimer(0);
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -236,81 +274,138 @@ const QuestionViewer = () => {
     return () => clearInterval(intervalRef.current);
   }, [currentIndex]);
 
+  // ---------- Progress bar should follow currentIndex (increase or decrease) ----------
   useEffect(() => {
     if (questions.length > 0) {
-      const progress = shownIndices.size / questions.length;
+      const progress = (currentIndex + 1) / questions.length;
       Animated.timing(progressAnim, {
         toValue: progress,
         duration: 300,
         useNativeDriver: false,
       }).start();
     }
-  }, [shownIndices.size, questions.length]);
+  }, [currentIndex, questions.length]);
 
+  // ---------- Load session / restore previous answer when index changes ----------
+  useEffect(() => {
+    let mounted = true;
+    const restoreState = async () => {
+      const session = await loadSessionForIndex(currentIndex);
+      if (!session || !mounted) {
+        setSelectedOption(null);
+        setIsCorrect(null);
+        setMotivation('');
+        setSolution('');
+        setSolutionRequested(false);
+        setAIFollowup(null);
+        return;
+      }
+      // restore
+      setSelectedOption(session.selectedOption ?? null);
+      setIsCorrect(typeof session.isCorrect === 'boolean' ? session.isCorrect : null);
+      setMotivation(session.motivation ?? '');
+      setSolution(session.solution ?? '');
+      setSolutionRequested(!!session.solutionRequested);
+      setAIFollowup(session.aiFollowup ?? null);
+
+      // mark shown indices
+      setShownIndices(prev => new Set([...prev, currentIndex]));
+    };
+    if (questions.length > 0) restoreState();
+    return () => { mounted = false; };
+  }, [currentIndex, questions.length]);
+
+  // ---------- Save session whenever relevant states change ----------
+  useEffect(() => {
+    // Save current question session snapshot
+    // Debounce / micro-batching is possible but for simplicity we write on change
+    saveSessionForCurrent().catch(() => {});
+  }, [currentIndex, selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup]);
+
+  // ---------- Load user rookie coins on mount ----------
+  useEffect(() => {
+    const loadUserCoins = async () => {
+      try {
+        const userStr = await AsyncStorage.getItem('@user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        if (user) {
+          setRookieCoins(user.rookieCoinsEarned || 0);
+        }
+      } catch (e) {}
+    };
+    loadUserCoins();
+  }, []);
+
+  // ---------- Option selection ----------
   const handleOptionPress = (option) => {
     setSelectedOption(option);
     setIsCorrect(null);
     setMotivation('');
   };
 
-  const difficultyOrder = ['easy', 'medium', 'hard'];
-
-  const getNextIndex = (wasCorrect) => {
-    const currentQuestion = questions[currentIndex];
-    const currentDifficulty = currentQuestion.difficulty;
-
-    const filtered = questions
-      .map((q, i) => ({ ...q, index: i }))
-      .filter(q => !shownIndices.has(q.index));
-    if (filtered.length === 0) return null;
-
-    const next = filtered.reduce((best, q) => {
-      const currentIndex = difficultyOrder.indexOf(currentDifficulty);
-      const nextIndex = difficultyOrder.indexOf(q.difficulty);
-
-      const isValid = wasCorrect
-        ? nextIndex > currentIndex
-        : nextIndex <= currentIndex;
-
-      const isCloser = isValid && (!best || nextIndex < difficultyOrder.indexOf(best.difficulty));
-      return isCloser ? q : best;
-    }, null);
-
-    return next?.index ?? filtered[0].index;
-  };
-
-  const handleNextAdaptive = async () => {
-    setIsDigging(false);
-    setConceptMCQ(null);
-    setConceptHistory([]);
-    setConceptFeedback('');
-    setConceptDone(false);
-    setDigDeepSelected(null);
-    setPrevDigResult(null);
-
-    const nextIndex = getNextIndex(isCorrect);
-    if (nextIndex != null) {
-      setCurrentIndex(nextIndex);
-      setShownIndices(new Set([...shownIndices, nextIndex]));
-      setSelectedOption(null);
-      setIsCorrect(null);
-      setMotivation('');
-      setSolution('');
-      setAIFollowup(null);
+  // ---------- Sequential next / prev (no difficulty logic) ----------
+  const handleNext = () => {
+    if (currentIndex < questions.length - 1) {
+      const next = currentIndex + 1;
+      setCurrentIndex(next);
+      setShownIndices(new Set([...shownIndices, next]));
+      // states for new index will be restored by effect
     }
   };
 
   const handlePrev = () => {
-    const allShown = Array.from(shownIndices);
-    const currentPos = allShown.indexOf(currentIndex);
-    const prevIndex = allShown[currentPos - 1];
-    if (prevIndex !== undefined) {
-      setCurrentIndex(prevIndex);
-      setSelectedOption(null);
-      setIsCorrect(null);
-      setMotivation('');
-      setSolution('');
-      setAIFollowup(null);
+    if (currentIndex > 0) {
+      const prev = currentIndex - 1;
+      setCurrentIndex(prev);
+      // restore happens in effect
+    } else {
+      // If user pressed back (top-left), clear session and navigate back
+      // But top-left Back uses router.back - we'll provide a dedicated handler for that button
+    }
+  };
+
+  // ---------- Reward coins and persist to Supabase and local @user ----------
+  const awardCoinsIfNeeded = async (questionIndex) => {
+    try {
+      // read session to check awarded
+      const stored = await AsyncStorage.getItem(SESSION_RESPONSES_KEY);
+      const obj = stored ? JSON.parse(stored) : {};
+      const chapterObj = obj[chapterTitle] || {};
+      const qSession = chapterObj[String(questionIndex)] || {};
+      if (qSession.awarded) return; // already awarded
+
+      // get user
+      const userStr = await AsyncStorage.getItem('@user');
+      if (!userStr) return;
+      const user = JSON.parse(userStr);
+      const userId = user.id;
+      if (!userId) return;
+
+      const currentCoins = user.rookieCoinsEarned || 0;
+      const newCoins = currentCoins + 10;
+
+      // Update supabase
+      try {
+        await supabase
+          .from('users')
+          .update({ rookieCoinsEarned: newCoins })
+          .eq('id', userId);
+      } catch (err) {
+        // continue even if supabase update fails
+      }
+
+      // Update local @user
+      const newUser = { ...user, rookieCoinsEarned: newCoins };
+      await AsyncStorage.setItem('@user', JSON.stringify(newUser));
+      setRookieCoins(newCoins);
+
+      // Mark awarded in session
+      if (!obj[chapterTitle]) obj[chapterTitle] = {};
+      if (!obj[chapterTitle][String(questionIndex)]) obj[chapterTitle][String(questionIndex)] = {};
+      obj[chapterTitle][String(questionIndex)].awarded = true;
+      await AsyncStorage.setItem(SESSION_RESPONSES_KEY, JSON.stringify(obj));
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -327,30 +422,57 @@ const QuestionViewer = () => {
       setIsCorrect(correct);
 
       if (correct) {
-        const reward = rcRewards[currentQuestion.difficulty] || 0;
-        setRookieCoins((prev) => prev + reward);
+
         setShowCorrectGif(true);
         setTimeout(() => setShowCorrectGif(false), 4000);
+
+        try {
+          const msg = await getMotivation(true);
+          setMotivation(` ${msg.trim()}`);
+          // Save and award coins (only award once per question)
+          await awardCoinsIfNeeded(currentIndex);
+        } catch (e) {
+          setMotivation('');
+        } finally {
+          // Do not fetch solution yet. Wait for user to press "Solution" button.
+          setLoading(false);
+          setSolution('');
+          setSolutionRequested(false);
+        }
+      } else {
+        // Wrong answer: fetch motivation and solution immediately (existing behavior)
+        try {
+          const msg = await getMotivation(false);
+          setMotivation(` ${msg.trim()}`);
+        } catch (e) {
+          setMotivation('');
+        }
+
+        try {
+          const sol = await getSolution(currentQuestion);
+          setSolution(sol.trim());
+          setSolutionRequested(true);
+          // scroll to end so user sees solution
+          setTimeout(() => {
+            scrollRef.current?.scrollToEnd({ animated: true });
+          }, 250);
+        } catch (e) {
+          setSolution('');
+        } finally {
+          setLoading(false);
+        }
       }
-
-      const msg = await getMotivation(correct);
-      setMotivation(` ${msg.trim()}`);
-
-      const sol = await getSolution(currentQuestion);
-      setSolution(sol.trim());
-
-      setLoading(false);
     }
   };
 
   // Frontend calls backend endpoints. Backend holds the GROQ key.
-  const getMotivation = async (isCorrect) => {
+  const getMotivation = async (isCorrectFlag) => {
     if (!buddy || !buddy.prompts) return '';
     try {
       const userStr = await AsyncStorage.getItem('@user');
       const user = userStr ? JSON.parse(userStr) : {};
       const userContext = `You are talking to an 18-year-old ${user.gender || 'student'} named ${user.name || ''}. `;
-      const message = isCorrect
+      const message = isCorrectFlag
         ? `${userContext}${buddy.prompts.onCorrect}`
         : `${userContext}${buddy.prompts.onWrong}`;
 
@@ -360,7 +482,7 @@ const QuestionViewer = () => {
         temperature: 0.7,
         max_tokens: 50,
       });
-     
+
       return res.data.choices?.[0]?.message?.content || '';
     } catch (error) {
       return '';
@@ -372,56 +494,80 @@ const QuestionViewer = () => {
     followupType?: 'dig' | '5yr'
   ) => {
     if (!buddy || !buddy.prompts) return '';
-  
+
     try {
       const userStr = await AsyncStorage.getItem('@user');
       const user = userStr ? JSON.parse(userStr) : {};
-  
+
       const userContext = `You are talking to an 18-year-old ${
         user.gender || 'student'
       } named ${user.name || ''}. `;
-  
+
       const optionsList = questionObj.options
         .map((opt, idx) => `${String.fromCharCode(65 + idx)}. ${opt}`)
         .join('\n');
-  
+
       let message = `${userContext}${buddy.prompts.solutionPrefix}
-  Question: "${questionObj.question}"
-  Options:
-  ${optionsList}
-  Correct Answer: ${questionObj.correctAnswer}
-  Please provide a detailed solution to the question above in not more than 15 lines`;
-  
+Question: "${questionObj.question}"
+Options:
+${optionsList}
+Correct Answer: ${questionObj.correctAnswer}
+Please provide a detailed solution to the question above in not more than 15 lines`;
+
       if (followupType === 'dig') {
         message +=
           '\nNow, dig deeper and provide more advanced insights, connections, or extra detailed solution.';
       }
-  
+
       if (followupType === '5yr') {
         message +=
           '\nNow, explain the same solution in simplest way possible.';
       }
-  
+
       const res = await axios.post(`${API_BASE}/solution`, {
         message,
         model: 'llama-3.3-70b-versatile',
         temperature: 0.7,
         max_tokens: 400,
       });
-  
+
       return res.data?.choices?.[0]?.message?.content || '';
     } catch (error) {
       console.error('getSolution error:', error);
       return '';
     }
   };
-  
+
 
   const handleAIFollowup = async (type: 'dig' | '5yr') => {
     setAIFollowupLoading(true);
     const result = await getSolution(questions[currentIndex], type);
     setAIFollowup(result.trim());
     setAIFollowupLoading(false);
+    // Scroll to show followup response as well
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 200);
+  };
+
+  // Handler when user (after correct answer) presses the Solution button
+  const handleShowSolutionAfterCorrect = async () => {
+    // If already requested, do nothing
+    if (solutionRequested) return;
+    setLoading(true);
+    try {
+      const sol = await getSolution(questions[currentIndex]);
+      setSolution(sol.trim());
+      setSolutionRequested(true);
+      // scroll to end so user sees solution
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 250);
+    } catch (e) {
+      setSolution('');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getConceptDiagnosticPrompt = (questionObj, history, lastConcept, lastLevel, lastWasCorrect, lastExplanation) => {
@@ -689,6 +835,12 @@ User's answer: ${history[history.length-1].userAnswer}
     setPrevDigResult(null);
   };
 
+  // ---------- Back handler that clears session and navigates back ----------
+  const handleBackPress = async () => {
+    await clearSession();
+    router.back();
+  };
+
   // ---------- UI Rendering ----------
   if (questions.length === 0) {
     return (
@@ -708,6 +860,7 @@ User's answer: ${history[history.length-1].userAnswer}
     <View style={styles.outerContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <ScrollView
+        ref={scrollRef}
         style={styles.container}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 260 }]}
         showsVerticalScrollIndicator={false}
@@ -720,7 +873,7 @@ User's answer: ${history[history.length-1].userAnswer}
         >
           <View style={styles.qHeaderRow}>
             <TouchableOpacity
-              onPress={() => setShowBackModal(true)}
+              onPress={() =>  handleBackPress()}
               style={styles.backButton}
               hitSlop={{ top: 30, bottom: 30, left: 30, right: 12 }}
             >
@@ -735,7 +888,7 @@ User's answer: ${history[history.length-1].userAnswer}
               <Text style={styles.qHeaderTimerText}>{formattedTime}</Text>
             </View>
             <Text style={styles.qHeaderCounterText}>
-              Q{shownIndices.size}/{questions.length}
+              Q{currentIndex + 1}/{questions.length}
             </Text>
           </View>
         </ImageBackground>
@@ -865,7 +1018,20 @@ User's answer: ${history[history.length-1].userAnswer}
                     </LinearGradient>
                   ) : null}
 
-                  {solution ? (
+                  {/* If the user answered correctly but hasn't requested solution yet, show a Solution button */}
+                  {isCorrect === true && !solutionRequested && (
+                    <View style={{ marginTop: 16, alignItems: 'center' }}>
+                      <TouchableOpacity
+                        style={[styles.checkBtn, { minWidth: 140 }]}
+                        onPress={handleShowSolutionAfterCorrect}
+                      >
+                        <Text style={styles.checkBtnText}>Solution</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Show solution block when solutionRequested (either wrong-case or user pressed Solution) */}
+                  {solutionRequested && solution ? (
                     <LinearGradient
                       colors={botGradient}
                       start={{ x: 0, y: 0 }}
@@ -997,46 +1163,6 @@ User's answer: ${history[history.length-1].userAnswer}
         </View>
       </ScrollView>
 
-      <Modal
-        visible={showBackModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowBackModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalIconBox}>
-              <Feather name="alert-triangle" size={34} color="#FFFFFF" />
-            </View>
-            <Text style={styles.modalTitle}>This will discard your input</Text>
-            <Text style={styles.modalSubtitle}>
-              Keep the morale high, only few minutes are left
-            </Text>
-            <View style={styles.modalStatsRow}>
-              <Text style={styles.modalStat}>Est. time left: 23m</Text>
-              <Text style={styles.modalStatDot}>•</Text>
-              <Text style={styles.modalStat}>JEE weightage: 12%</Text>
-            </View>
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity
-                style={styles.modalBtnOutline}
-                onPress={() => setShowBackModal(false)}
-              >
-                <Text style={styles.modalBtnOutlineText}>Go Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalBtnSolid}
-                onPress={() => {
-                  setShowBackModal(false);
-                  setTimeout(() => router.back(), 100);
-                }}
-              >
-                <Text style={styles.modalBtnSolidText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {showCorrectGif && (
         <View style={styles.fullScreenGifOverlay} pointerEvents="none">
@@ -1071,9 +1197,9 @@ User's answer: ${history[history.length-1].userAnswer}
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.footerBtnMain}
-          onPress={handleNextAdaptive}
+          onPress={handleNext}
         >
-          <Text style={styles.footerBtnMainText}>Skip to next</Text>
+          <Text style={styles.footerBtnMainText}>Next</Text>
           <Feather name="arrow-right" size={26} color="#fff" style={{ marginLeft: 10 }} />
         </TouchableOpacity>
         <TouchableOpacity
@@ -1348,8 +1474,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
     marginBottom: 10,
-
-    
   },
   aiFollowupBtn: {
     flexDirection: 'row',
@@ -1364,7 +1488,6 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 8,
-   
     shadowOffset: { width: 0, height: 2 },
   },
   aiFollowupBtnText: {
@@ -1406,7 +1529,6 @@ const styles = StyleSheet.create({
   characterMessage: {
     color: '#fff',
     fontSize: 15,
-   
     lineHeight: 22,
     fontFamily: 'Geist',
   },
@@ -1650,16 +1772,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '60%',
     zIndex: 9999,
-
- 
    justifyContent: 'center',
     alignItems: 'center',
   },
   fullScreenGifImage: {
     width: '100%',
     height: '60%',
-    
-   
   },
    digDeepGradientBox: {
     borderRadius: 20,
@@ -1745,7 +1863,6 @@ const styles = StyleSheet.create({
   digDeepNotSureBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-   
     backgroundColor: '#fff',
     borderRadius: 24,
     justifyContent: 'center',
@@ -1769,14 +1886,10 @@ const styles = StyleSheet.create({
 
   shine:{
  position: 'absolute',
- 
  bottom:200,
-  width: 400,
+ width: 400,
     height: 160,
-
-    
   },
-
 
     bookmarkBtnActive: {
     backgroundColor: '#fff',
@@ -1790,10 +1903,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 5,
     position: 'absolute',
-    
     bottom:90,
     left: 0,
-  
     zIndex: 9999,
     minHeight: 28,
   },
@@ -1808,7 +1919,6 @@ const styles = StyleSheet.create({
 
     toastBar: {
     position: 'absolute',
-   
     bottom: 120,
     left: '50%',
     transform: [{ translateX: -100 }],

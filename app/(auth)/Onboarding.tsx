@@ -136,6 +136,7 @@ export default function Onboarding() {
 
       // Save Gmail ID to AsyncStorage
       const localData = {
+        id: user.id,
         email: user.email,
         name: userProfile.name,
         avatar_url: userProfile.avatar_url,
@@ -235,7 +236,7 @@ export default function Onboarding() {
 
       // Save to AsyncStorage (name, gender, exam only)
       const localData = {
-        id: insertedData?.[0]?.id || null,
+        id: user.id,  
         name: fullName.trim(),
         gender,
         exam,
