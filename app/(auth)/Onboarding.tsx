@@ -22,7 +22,7 @@ import { supabase } from "../../src/utils/supabase";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const GENDER_OPTIONS = ["Male", "Female", "Other"];
+const Class_OPTIONS = ["12th", "11th", "Dropper","Other"];
 const EXAM_OPTIONS = ["JEE Mains", "NEET", "JEE Advanced", "Other"];
 
 export default function Onboarding() {
@@ -33,6 +33,10 @@ export default function Onboarding() {
   const [inputComplete, setInputComplete] = useState(false);
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
+  const [profileNeedsCompletion, setProfileNeedsCompletion] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
+  const [currentAvatar, setCurrentAvatar] = useState<string | null>(null);
   const googleIcon = require('../../src/assets/images/googlelogo.png');
 
   // Check if user is already onboarded on mount
@@ -107,51 +111,91 @@ export default function Onboarding() {
     checkOnboarding();
   }, []);
 
-  // Update input completion status
+  // Update input completion status (used only if you keep the manual fields visible)
   useEffect(() => {
     setInputComplete(fullName.trim().length > 0 && !!gender && !!exam);
   }, [fullName, gender, exam]);
 
-  // Handle Google Sign-In: Save Gmail ID to AsyncStorage and navigate
+  // Save the final user object to AsyncStorage and navigate
+  const finalizeOnboarding = async (finalProfile: any) => {
+    try {
+      await AsyncStorage.setItem('@user', JSON.stringify(finalProfile));
+      await AsyncStorage.setItem('@user_onboarded', 'true');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "(tabs)" }],
+      });
+    } catch (err) {
+      console.warn('Error saving final profile locally', err);
+    }
+  };
+
+  // Handle Google Sign-In: upsert to users table, then check if extra fields needed
   const handleGoogleSignIn = async (user: any) => {
     try {
       setAuthLoading(true);
 
-      // Save Gmail ID and user info to Supabase users table
       const userProfile = {
         id: user.id,
         email: user.email,
         name: user.user_metadata?.full_name || user.user_metadata?.name || user.email,
         avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+        // We won't override gender/exam here; those come from existing DB row or user input
         created_at: new Date().toISOString(),
       };
 
-      const { error: upsertError } = await supabase
+      // Upsert basic profile (without overwriting gender/exam) by using upsert with returning the row.
+      const { data: upserted, error: upsertError } = await supabase
         .from('users')
-        .upsert([userProfile], { onConflict: 'id' });
+        .upsert([userProfile], { onConflict: 'id' })
+        .select()
+        .single();
 
       if (upsertError) {
         console.warn('Error saving to Supabase:', upsertError);
       }
 
-      // Save Gmail ID to AsyncStorage
-      const localData = {
-        id: user.id,
-        email: user.email,
-        name: userProfile.name,
-        avatar_url: userProfile.avatar_url,
-      };
+      // Retrieve user row to see if gender/exam are present
+      const { data: dbUser, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-      await AsyncStorage.setItem('@user', JSON.stringify(localData));
-      await AsyncStorage.setItem('@user_onboarded', 'true');
+      if (fetchError) {
+        console.warn('Error fetching user row after upsert:', fetchError);
+      }
 
-      console.log('Google sign-in successful, Gmail ID saved locally');
+      const finalRow = dbUser || upserted || userProfile;
 
-      // Navigate to tabs
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "(tabs)" }],
-      });
+      const rookieCoinsEarned = finalRow?.rookieCoinsEarned ?? 0;
+      
+
+      // Save basic values in state for potential profile completion
+      setCurrentUserId(user.id);
+      setCurrentEmail(user.email);
+      setCurrentAvatar(userProfile.avatar_url || null);
+
+      // If gender and exam are present in DB -> finalize onboarding
+      if (finalRow?.gender && finalRow?.exam) {
+        const localData = {
+          id: user.id,
+          email: user.email,
+          name: userProfile.name,
+          avatar_url: userProfile.avatar_url,
+          gender: finalRow.gender,
+          exam: finalRow.exam,
+          rookieCoinsEarned,
+        };
+        await finalizeOnboarding(localData);
+      } else {
+        // Ask user to complete profile (gender/exam and optionally update name)
+        // Pre-fill name if available
+        setFullName(userProfile.name || "");
+        setGender(finalRow?.gender || "");
+        setExam(finalRow?.exam || "");
+        setProfileNeedsCompletion(true);
+      }
     } catch (err) {
       console.error('Error handling Google sign-in:', err);
       Alert.alert("Error", "Failed to complete Google sign-in");
@@ -160,7 +204,7 @@ export default function Onboarding() {
     }
   };
 
-  // Google Sign-In button handler
+  // Google Sign-In button handler (start OAuth)
   const signInWithGoogle = async () => {
     try {
       setAuthLoading(true);
@@ -204,8 +248,8 @@ export default function Onboarding() {
     }
   };
 
-  // Manual Continue: Save name, gender, exam to Supabase and AsyncStorage
-  const handleContinue = async () => {
+  // Save profile completion (called when profileNeedsCompletion is true)
+  const saveProfileCompletion = async () => {
     if (!fullName.trim() || !gender || !exam) {
       Alert.alert('Incomplete', 'Please fill all fields');
       return;
@@ -213,50 +257,42 @@ export default function Onboarding() {
 
     setLoading(true);
     try {
-      // Create user profile with manual data
-      const userProfile = {
+      const profileToSave: any = {
+        id: currentUserId,
         name: fullName.trim(),
         gender,
         exam,
-        created_at: new Date().toISOString(),
       };
 
-      // Save to Supabase
-      const { data: insertedData, error: insertError } = await supabase
+      // Upsert the completion fields (must include id)
+      const { error: upsertError } = await supabase
         .from('users')
-        .insert([userProfile])
-        .select();
+        .upsert([profileToSave], { onConflict: 'id' });
 
-      if (insertError) {
-        console.error('Supabase insert error:', insertError);
-        Alert.alert("Error", "Failed to save profile: " + insertError.message);
+      if (upsertError) {
+        console.error('Supabase upsert error (completion):', upsertError);
+        Alert.alert("Error", "Failed to save profile: " + upsertError.message);
         setLoading(false);
         return;
       }
 
-      // Save to AsyncStorage (name, gender, exam only)
-      const localData = {
-      
+      const finalLocal = {
+        id: currentUserId,
+        email: currentEmail,
         name: fullName.trim(),
+        avatar_url: currentAvatar,
         gender,
         exam,
+        rookieCoinsEarned: finalRow?.rookieCoinsEarned ?? 0,
       };
 
-      await AsyncStorage.setItem('@user', JSON.stringify(localData));
-      await AsyncStorage.setItem('@user_onboarded', 'true');
-
-      console.log('Manual sign-up successful, user data saved');
-
-      // Navigate to tabs
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "(tabs)" }],
-      });
+      await finalizeOnboarding(finalLocal);
     } catch (err) {
       console.error('Error saving user data:', err);
       Alert.alert("Error", (err as any)?.message || "Something went wrong");
     } finally {
       setLoading(false);
+      setProfileNeedsCompletion(false);
     }
   };
 
@@ -276,98 +312,134 @@ export default function Onboarding() {
           <Text style={styles.title}>Hey, kiddo!</Text>
           <Text style={styles.subtitle}>Let's us know you</Text>
 
-          <TouchableOpacity
-            style={[styles.continueButton, authLoading && styles.continueButtonInactive]}
-            onPress={signInWithGoogle}
-            disabled={authLoading}
-            activeOpacity={authLoading ? 1 : 0.8}
-          >
-            {authLoading ? (
-              <ActivityIndicator size="small" color="#181f2b" />
-            ) : (
-              <View style={styles.googleContent}>
-                <Image source={googleIcon} style={styles.googleIcon} />
-                <Text style={styles.googleText}>Continue with Google</Text>
+          {/* If profileNeedsCompletion is true we show the completion inputs inline */}
+          {profileNeedsCompletion ? (
+            <View style={styles.infoBox}>
+              <Text style={styles.label}>Full Name</Text>
+              <TextInput
+                style={styles.input}
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="Your full name"
+                placeholderTextColor="#888"
+              />
+              <Text style={styles.label}>Gender</Text>
+              <View style={styles.buttonGroup}>
+                {Class_OPTIONS.map((g) => (
+                  <TouchableOpacity
+                    key={g}
+                    style={[
+                      styles.selectButton,
+                      gender === g && styles.selectedButton,
+                    ]}
+                    onPress={() => setGender(g)}
+                  >
+                    <Text style={[
+                      styles.selectButtonText,
+                      gender === g && styles.selectedButtonText
+                    ]}>{g}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            )}
-          </TouchableOpacity>
+              <Text style={styles.label}>Preparing for</Text>
+              <View style={styles.buttonGroup}>
+                {EXAM_OPTIONS.map((e) => (
+                  <TouchableOpacity
+                    key={e}
+                    style={[
+                      styles.selectButton,
+                      exam === e && styles.selectedButton,
+                    ]}
+                    onPress={() => setExam(e)}
+                  >
+                    <Text style={[
+                      styles.selectButtonText,
+                      exam === e && styles.selectedButtonText
+                    ]}>{e}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-          <Text style={{
-            color: "#b5b6c9",
-            marginVertical: moderateScale(8),
-            fontFamily: 'Geist',
-            fontSize: moderateScale(13),
-          }}>
-            OR
-          </Text>
-
-          <View style={styles.infoBox}>
-            <Text style={styles.label}>Full Name</Text>
-            <TextInput
-              style={styles.input}
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Your full name"
-              placeholderTextColor="#888"
-            />
-            <Text style={styles.label}>Gender</Text>
-            <View style={styles.buttonGroup}>
-              {GENDER_OPTIONS.map((g) => (
-                <TouchableOpacity
-                  key={g}
-                  style={[
-                    styles.selectButton,
-                    gender === g && styles.selectedButton,
-                  ]}
-                  onPress={() => setGender(g)}
-                >
-                  <Text style={[
-                    styles.selectButtonText,
-                    gender === g && styles.selectedButtonText
-                  ]}>{g}</Text>
-                </TouchableOpacity>
-              ))}
+              <TouchableOpacity
+                style={[styles.continueButton, (!fullName.trim() || !gender || !exam) && styles.continueButtonInactive]}
+                onPress={saveProfileCompletion}
+                disabled={loading}
+                activeOpacity={loading ? 1 : 0.8}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#181f2b" />
+                ) : (
+                  <Text style={styles.continueButtonText}>Save & Continue</Text>
+                )}
+              </TouchableOpacity>
             </View>
-            <Text style={styles.label}>Preparing for</Text>
-            <View style={styles.buttonGroup}>
-              {EXAM_OPTIONS.map((e) => (
-                <TouchableOpacity
-                  key={e}
-                  style={[
-                    styles.selectButton,
-                    exam === e && styles.selectedButton,
-                  ]}
-                  onPress={() => setExam(e)}
-                >
-                  <Text style={[
-                    styles.selectButtonText,
-                    exam === e && styles.selectedButtonText
-                  ]}>{e}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+          ) : (
+            // If profile completion not required, show the Google sign-in CTA (optionally keep the manual fields visible if you want)
+            <>
+              <View style={styles.infoBox}>
+                <Text style={styles.label}>Full Name (optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={fullName}
+                  onChangeText={setFullName}
+                  placeholder="Your full name"
+                  placeholderTextColor="#888"
+                />
+                <Text style={styles.label}>Gender (optional)</Text>
+                <View style={styles.buttonGroup}>
+                  {Class_OPTIONS.map((g) => (
+                    <TouchableOpacity
+                      key={g}
+                      style={[
+                        styles.selectButton,
+                        gender === g && styles.selectedButton,
+                      ]}
+                      onPress={() => setGender(g)}
+                    >
+                      <Text style={[
+                        styles.selectButtonText,
+                        gender === g && styles.selectedButtonText
+                      ]}>{g}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.label}>Preparing for (optional)</Text>
+                <View style={styles.buttonGroup}>
+                  {EXAM_OPTIONS.map((e) => (
+                    <TouchableOpacity
+                      key={e}
+                      style={[
+                        styles.selectButton,
+                        exam === e && styles.selectedButton,
+                      ]}
+                      onPress={() => setExam(e)}
+                    >
+                      <Text style={[
+                        styles.selectButtonText,
+                        exam === e && styles.selectedButtonText
+                      ]}>{e}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
 
-          <TouchableOpacity
-            style={[
-              styles.continueButton,
-              (!inputComplete || loading) && styles.continueButtonInactive,
-            ]}
-            onPress={handleContinue}
-            disabled={!inputComplete || loading}
-            activeOpacity={inputComplete && !loading ? 0.8 : 1}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#181f2b" />
-            ) : (
-              <Text style={[
-                styles.continueButtonText,
-                !inputComplete && styles.continueButtonTextInactive
-              ]}>
-                Continue
-              </Text>
-            )}
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.continueButton, authLoading && styles.continueButtonInactive]}
+                onPress={signInWithGoogle}
+                disabled={authLoading}
+                activeOpacity={authLoading ? 1 : 0.8}
+              >
+                {authLoading ? (
+                  <ActivityIndicator size="small" color="#181f2b" />
+                ) : (
+                  <View style={styles.googleContent}>
+                    <Image source={googleIcon} style={styles.googleIcon} />
+                    <Text style={styles.googleText}>Continue with Google</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
 
           <View style={styles.bottomSection}>
             <View style={styles.avatarRow}>

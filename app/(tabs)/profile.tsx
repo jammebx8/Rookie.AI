@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import RazorpayCheckout from 'react-native-razorpay';
+
 import imagepath from '../../src/constants/imagepath';
 
 // Import your PNG icons
@@ -21,7 +21,7 @@ import DeleteIcon from '../../src/assets/images/bin.png';
 import TickIcon from '../../src/assets/images/ticck.png';
 import { router } from 'expo-router';
 
-const GENDER_OPTIONS = ['Male', 'Female', 'Other'];
+const Class_OPTIONS = ["12th", "11th", "Dropper","Other"];
 const EXAM_OPTIONS = ['JEE Main', 'JEE Advanced', 'NEET', 'CUET', 'Other'];
 
 const aiBuddies =  [
@@ -223,7 +223,7 @@ const Profile = () => {
   // Logout: clear user and redirect to onboarding
   const handleLogout = async () => {
     await AsyncStorage.removeItem('@user');
-    await AsyncStorage.removeItem('@user_extra');
+    await AsyncStorage.removeItem('@user_onboarded');
     await AsyncStorage.removeItem('selectedBuddy');
     navigation.reset({
       index: 0,
@@ -266,34 +266,7 @@ const Profile = () => {
   };
 
 
-  // Place this after editing/save/cancel logic, inside the Profile component
-const handleSubscribe = () => {
-  const options = {
-    description: 'Subscription for Premium Features',
-    image: 'https://your-app-url.com/logo.png', // optional; your app logo
-    currency: 'INR',
-    key: 'YOUR_RAZORPAY_KEY_HERE', // Replace with your Razorpay Key ID
-    amount: '29900', // Amount in paisa (i.e. ₹299.00)
-    name: name || 'User',
-    prefill: {
-      email: email,
-      contact: '', // Optionally add user's phone number
-      name: name
-    },
-    theme: { color: '#181f2b' }
-  };
 
-  RazorpayCheckout.open(options)
-    .then((data) => {
-      // handle success
-      Alert.alert('Success', `Payment successful! Payment ID: ${data.razorpay_payment_id}`);
-      // You can send this payment ID to your backend for verification etc.
-    })
-    .catch((error) => {
-      // handle failure
-      Alert.alert('Payment Failed', error.description || 'Payment was not completed');
-    });
-};
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
@@ -367,9 +340,9 @@ const handleSubscribe = () => {
           </View>
         </View>
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Gender</Text>
+          <Text style={styles.label}>Class</Text>
           <View style={styles.genderRow}>
-            {GENDER_OPTIONS.map((g) => (
+            {Class_OPTIONS.map((g) => (
               <TouchableOpacity
                 key={g}
                 style={[

@@ -307,7 +307,7 @@ export default function Leaderboard() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView  showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {renderTopThree()}
 
         <View style={styles.filterRow}>
