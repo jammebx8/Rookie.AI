@@ -184,19 +184,46 @@ export default function HomeScreen() {
   const ROWS_TO_SHOW = 3;
   const initialCount = VIDEOS_PER_ROW * ROWS_TO_SHOW;
   const displayStudyChapters = showAllVideos ? studyChapters : studyChapters.slice(0, initialCount);
+
+
+
+
   const inviteFriends = async () => {
-    const inviteLink = 'https://rookie-ai.vercel.app'; // 👈 your website / app link
+    const inviteLink = 'https://rookie-ai.vercel.app';
+    const message = `Hey! 👋 Join me on Rookie to study smarter together 🚀\n\n${inviteLink}`;
   
+    // 🌐 WEB (Mobile + Desktop Browser)
+    if (Platform.OS === 'web') {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: 'Invite to Rookie',
+            text: message,
+            url: inviteLink,
+          });
+        } catch (err) {
+          console.log('Share cancelled');
+        }
+      } else {
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(inviteLink);
+        alert('Invite link copied to clipboard');
+      }
+      return;
+    }
+  
+    // 📱 NATIVE (Android / iOS App)
     try {
       await Share.share({
-        message: `Hey! 👋 Join me on Rookie to study smarter together 🚀\n\n${inviteLink}`,
-        url: inviteLink, // iOS uses this
+        message,
+        url: inviteLink,
         title: 'Invite to Rookie',
       });
     } catch (error) {
-      Alert.alert('Error', 'Unable to share the invite link');
+      Alert.alert('Error', 'Unable to share invite link');
     }
   };
+  
   
   
 
