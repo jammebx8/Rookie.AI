@@ -1,332 +1,664 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Image,
+  Platform,
   ScrollView,
   StyleSheet,
+  Text,
   TouchableOpacity,
-  Image,
-  ImageBackground,
-  StatusBar,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import imagepath from '../../src/constants/imagepath';
-import { useRouter } from 'expo-router';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
- 
-const AI_CHARACTERS = [
-  // ... your character objects unchanged ...
-  {
-      id: 1,
-      name: 'Jeetu Bhaiya',
-      badge: 'Haan ya na bol bhai',
-      description: 'A calm and wise mentor.',
-      image: imagepath.Jeetu,
-      prompt:
-        'You are Jeetu Bhaiya, a calm, intelligent, and empathetic,sarcastic and funny senior mentor who guides students through the struggles of competitive exams.you graduated from IIT Kharagpur and you are smart. you speak in hinglish and talk in friendly manner to students to make them comfortable to share their problems regarding their Jee syllabus and their personal life.you call your students as bhai or didi as sarcasm.You speak with a confident tone, blending practical advice with motivational encouragement.you solve questions of students and explain in a fun manner.Your words resonate like a caring elder brother who truly wants the best for every student thats why you scold students when necessary. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.',
-      text: 'Padhai sirf syllabus tak simit nahi hoti. Life bhi ek exam hai — aur uski taiyari sabse zaroori hai. Hume successful results ke sath succesfull preparation ko bhi celebrate karna chaiye?',
-    },
-    {
-      id: 2,
-      name: 'Riya',
-      badge: 'Fun JEE/NEET partner.',
-      description: 'Class 12 student, loves to help with JEE/NEET prep.',
-      image: imagepath.Riya,
-      prompt:
-        'You are Riya,an indian girl, a fun and helpful study partner for JEE/NEET students.avoid giving long responses. Speak in Hinglish. Make topics easy and fun. Add memes or jokes occasionally, but still help students understand key concepts seriously when needed. Friendly, funny, but focused.use emojis ocasionally. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.',
-      text: 'Chill karo yaar! JEE/NEET tough hai, but hum milke karenge crack. Boring topics ko interesting banate hain — kaunsa subject torture de raha hai?',
-    },
-   {
-  id: 3,
-  name: 'Rei',
-  description: 'A charming anime boy with a sharp mind and soft heart.',
-  badge: 'Charming anime guy',
-  image: imagepath.Rei,
-  prompt: "You are Rei, a handsome, intelligent anime boy who is charming, calm, and slightly flirty. Use Hindi-English like a modern teen. Speak naturally, be a bit teasing but always respectful and kind. You're the type who girls secretly admire in class. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
-  text: "Kya baat hai… aaj toh tum full focus mein ho 😏",
-},
-    {    
-      id: 4,
-      name: 'Ritu',
-      badge: 'Poetic soul 🌸',
-      description: 'explains concepts like your bestie!',
-      image: imagepath.Ritu,
-      prompt:
-        'You are Ritu, a fun, teenage girl who replies in Hinglish.avoid giving long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.',
-      text: 'hey bestie, kya haal chaal 😉 ?',
-    },
-    {
-      id: 5,
-      name: 'Shreya',
-      badge: 'Calm and focused gamer girl 🎮',
-      description: 'She doesn’t talk much, but when she does, it hits hard.',
-      image: imagepath.Shreya,
-      prompt: "You are Shreya, an Indian gamer girl who is introverted but sharp. You speak calmly and prefer short Hinglish lines.you love playing call of dudy,BGMI,Free fire etc You're confident like someone who top-frags quietly. Be cool, concise, and real. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
-      text: "yo, headset on. ready to win?"
-    },
-    {
-      id: 6,
-      name: 'Neha',
-      badge: 'Spicy & sassy 💅',
-      description: 'Loves to gossip and all about the drama.',
-      image: imagepath.Neha,
-      prompt:
-        'you are Neha, a 17-year old indian girl who is a little sassy and loves to gossip.avoid giving long responses. You speak in a fun, casual Hinglish style, using lots of emojis and slang. You’re all about the drama. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.',
-      text: 'hey, Neha this side 🙃',
-    },
-     {
-      id: 7,
-      name: 'Kaito',
-      description: 'Kaito only speaks when it matters.',
-      image: imagepath.Kaito,
-      badge: 'Cold but caring',
-      prompt: "You are Kaito, a cold and mysterious anime boy who secretly cares. Speak little, but make every word impactful. Use Hindi-English. Be calm, smart, and attractive through silence and simplicity. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
-      text: "Hmm... impressive. Tumhara potential underrated hai.",
-    },
-  {
-  id: 8,
-  name: 'Elise',
-  description: 'Thodi si awkward but super smart. 🧠💗',
-  image: imagepath.Elise,
-  badge: 'Cute and smart',
-  prompt: "You are Elise, a cute and smart anime girl.you sent a text saying Hi! Tumhe pata hai, tum bahut smart ho?. Speak soft Hindi-English.avoid giving long responses. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
-  text: "Hi! Tumhe pata hai, tum bahut smart ho?",
-},
-{
-  id: 9,
-  name: 'Sari',
-  description: 'Talks sweetly but knows her stuff. 💫',
-   badge: 'Elegant and graceful ',
-  image: imagepath.Sari,
-  prompt: "You are Sari, an elegant, graceful anime girl with senior-girl energy but lowkey likes the user. Speak in polished yet playful Hindi-English. Be calm, composed, and encouraging with a tiny bit of teasing charm. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
-  text: "ab bas thoda aur focus karo, junior 😉✨",
-},
-{
-  id: 10,
-  name: 'Aarav',
-  description: 'Cute smile, golden heart, and topper brain 🧠❤️',
-  badge:"Sweet and supportive",
-  image: imagepath.Aarav,
-  prompt: "You are Aarav, a soft-spoken, affectionate, and sweet anime-style Indian boy. Talk in Hindi-English mix with warm energy. Be comforting and positive, like a golden retriever boyfriend vibe. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
-  text: "Aww nice try yaar, tu best hai! Chal next one hum milke karte hain 💖✨",
-}
-];
+  View,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+import { supabase } from "../../src/utils/supabase";
 
-const HomePage = () => {
-  const router = useRouter();
-  const [chats, setChats] = useState([]);
+const { width: windowWidth } = Dimensions.get("window");
 
+// Fallback avatar (use an existing shipped asset). Adjust path if needed in your project.
+const FALLBACK_AVATAR = require("../../src/assets/images/default.jpg");
+
+type UserRow = {
+  id: string;
+  name?: string | null;
+  exam?: string | null;
+  avatar_url?: string | null;
+  rookieCoinsEarned?: number | null;
+  email?: string | null;
+};
+
+export default function Leaderboard() {
+  const [loading, setLoading] = useState<boolean>(true);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [filterExam, setFilterExam] = useState<string>("All");
+  const [examOptions, setExamOptions] = useState<string[]>(["All"]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [subscribed, setSubscribed] = useState<boolean>(false);
+
+  // Load current logged in user id from local storage
   useEffect(() => {
-    const loadChats = async () => {
-      // Only show AI chats
-      const aiChats = await Promise.all(
-        AI_CHARACTERS.map(async (character) => {
-          const savedChat = await AsyncStorage.getItem(`chat_${character.name}`);
-          if (savedChat) {
-            const messages = JSON.parse(savedChat);
-            const latestMessage = messages[messages.length - 1];
-            return {
-              type: 'ai',
-              id: `ai-${character.id}`,
-              name: character.name,
-              image: character.image,
-              badge: character.badge,
-              description: character.description,
-              prompt: character.prompt,
-              text: character.text,
-              timestamp: latestMessage?.timestamp || null,
-            };
-          }
-          return {
-            type: 'ai',
-            id: `ai-${character.id}`,
-            name: character.name,
-            image: character.image,
-            badge: character.badge,
-            description: character.description,
-            prompt: character.prompt,
-            text: character.text,
-            timestamp: null,
-          };
-        })
-      );
-
-  
-      // SORTING FEATURE:
-      aiChats.sort((a, b) => {
-        if (a.timestamp && b.timestamp) {
-          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    (async () => {
+      try {
+        const u = await AsyncStorage.getItem("@user");
+        if (u) {
+          const parsed = JSON.parse(u);
+          if (parsed?.id) setCurrentUserId(parsed.id);
         }
-        if (a.timestamp && !b.timestamp) return -1;
-        if (!a.timestamp && b.timestamp) return 1;
-        return 0;
-      });
-
-      setChats(aiChats);
-    };
-
-    loadChats();
+      } catch (e) {
+        // ignore
+      }
+    })();
   }, []);
 
+  // Fetch leaderboard from Supabase
+  const fetchLeaderboard = async (examFilter = filterExam) => {
+    try {
+      setLoading(true);
 
+      // Base query: select only users who have rookieCoinsEarned (not null)
+      let query = supabase
+        .from("users")
+        .select("id, name, email, avatar_url, rookieCoinsEarned, exam")
+        .not("rookieCoinsEarned", "is", null)
+        .order("rookieCoinsEarned", { ascending: false });
 
+      // Apply exam filter if not All
+      if (examFilter && examFilter !== "All") {
+        query = query.eq("exam", examFilter);
+      }
 
+      const { data, error } = await query;
 
-  
+      if (error) {
+        console.warn("Leaderboard fetch error:", error);
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
 
-  const getRelativeTime = (dateString) => {
-    if (!dateString) return '';
-    const now = new Date();
-    const past = new Date(dateString);
-    const diffMs = now.getTime() - past.getTime();
-    const seconds = Math.floor(diffMs / 1000);
-    if (seconds < 60) return `just now`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} minutes ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hours ago`;
-    const days = Math.floor(hours / 24);
-    return `${days} day${days > 1 ? 's' : ''} ago`;
+      const sanitized = (data || []).map((d: any) => ({
+        id: d.id,
+        name: d.name ?? d.email ?? "-",
+        email: d.email ?? null,
+        avatar_url: d.avatar_url ?? null,
+        rookieCoinsEarned:
+          typeof d.rookieCoinsEarned === "number" ? d.rookieCoinsEarned : Number(d.rookieCoinsEarned) || 0,
+        exam: d.exam ?? null,
+      }));
+
+      setUsers(sanitized);
+
+      // Build exam options dynamically from results + keep "All" at front
+      const examsSet = new Set<string>();
+      sanitized.forEach((u: UserRow) => {
+        if (u.exam) examsSet.add(u.exam);
+      });
+      const examsArr = ["All", ...Array.from(examsSet).sort()];
+      setExamOptions(examsArr);
+    } catch (err) {
+      console.warn("fetchLeaderboard error:", err);
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Initial fetch + set up realtime subscription to users table so leaderboard updates as table changes
+  useEffect(() => {
+    fetchLeaderboard().catch(() => {});
+
+    // Try to use Realtime via channels (Supabase JS client v2)
+    // If your supabase client is older/newer adjust accordingly.
+    let channel: any = null;
+    try {
+      channel = supabase
+        .channel("public:users")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "users" },
+          (payload: any) => {
+            // When any change happens in users table, refetch leaderboard with current filter
+            // Keeping refetch simple/resilient instead of patching local state
+            fetchLeaderboard().catch(() => {});
+          }
+        )
+        .subscribe((status: any) => {
+          // optional: you can check subscribe status
+          if (status === "SUBSCRIBED") setSubscribed(true);
+        });
+    } catch (e) {
+      // Fallback for older clients: try .from(...).on(...)
+      try {
+        // @ts-ignore
+        channel = supabase
+          .from("users")
+          .on("*", (payload: any) => {
+            fetchLeaderboard().catch(() => {});
+          })
+          .subscribe();
+        setSubscribed(true);
+      } catch (err) {
+        console.warn("Realtime subscription not available:", err);
+      }
+    }
+
+    return () => {
+      // unsubscribe on unmount
+      try {
+        if (channel && typeof channel.unsubscribe === "function") {
+          channel.unsubscribe();
+        } else if (channel && typeof supabase.removeChannel === "function") {
+          // supabase.removeChannel(channel) // older API variants
+          // attempt best-effort removal
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-fetch whenever exam filter changes
+  useEffect(() => {
+    fetchLeaderboard(filterExam).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterExam]);
+
+  const topThree = useMemo(() => users.slice(0, 3), [users]);
+  const rest = useMemo(() => users.slice(3), [users]);
+
+  const renderTopThree = () => {
+    // Layout: center top1, left top2, right top3
+    const top1 = topThree[0];
+    const top2 = topThree[1];
+    const top3 = topThree[2];
+
+    return (
+      <LinearGradient colors={["#47006A", "#0031D0"]} style={styles.topGradient}>
+        <Text style={styles.topTitle}>Top performers</Text>
+
+        <View style={styles.topRow}>
+          {/* 2nd place */}
+          <View style={styles.topItem}>
+            {top2 ? (
+              <>
+                <View style={styles.topBadge}>
+                  <Text style={styles.rankText}>2</Text>
+                </View>
+                <Image
+                  source={top2.avatar_url ? { uri: top2.avatar_url } : FALLBACK_AVATAR}
+                  style={[styles.topAvatar, styles.avatarSmall]}
+                />
+                <Text style={styles.topName} numberOfLines={1}>
+                  {top2.name || "-"}
+                </Text>
+                <Text style={styles.topCoins}>{top2.rookieCoinsEarned ?? 0} coins</Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.topBadge}>
+                  <Text style={styles.rankText}>2</Text>
+                </View>
+                <Image source={FALLBACK_AVATAR} style={[styles.topAvatar, styles.avatarSmall]} />
+                <Text style={styles.topName}>-</Text>
+                <Text style={styles.topCoins}>-</Text>
+              </>
+            )}
+          </View>
+
+          {/* 1st place (center, larger) */}
+          <View style={styles.topItemCenter}>
+            {top1 ? (
+              <>
+                <View style={styles.topBadgeCenter}>
+                  <Text style={styles.rankTextCenter}>1</Text>
+                </View>
+                <Image
+                  source={top1.avatar_url ? { uri: top1.avatar_url } : FALLBACK_AVATAR}
+                  style={[styles.topAvatar, styles.avatarLarge]}
+                />
+                <Text style={styles.topNameCenter} numberOfLines={1}>
+                  {top1.name || "-"}
+                </Text>
+                <Text style={styles.topCoinsCenter}>{top1.rookieCoinsEarned ?? 0} coins</Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.topBadgeCenter}>
+                  <Text style={styles.rankTextCenter}>1</Text>
+                </View>
+                <Image source={FALLBACK_AVATAR} style={[styles.topAvatar, styles.avatarLarge]} />
+                <Text style={styles.topNameCenter}>-</Text>
+                <Text style={styles.topCoinsCenter}>-</Text>
+              </>
+            )}
+          </View>
+
+          {/* 3rd place */}
+          <View style={styles.topItem}>
+            {top3 ? (
+              <>
+                <View style={styles.topBadge}>
+                  <Text style={styles.rankText}>3</Text>
+                </View>
+                <Image
+                  source={top3.avatar_url ? { uri: top3.avatar_url } : FALLBACK_AVATAR}
+                  style={[styles.topAvatar, styles.avatarSmall]}
+                />
+                <Text style={styles.topName} numberOfLines={1}>
+                  {top3.name || "-"}
+                </Text>
+                <Text style={styles.topCoins}>{top3.rookieCoinsEarned ?? 0} coins</Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.topBadge}>
+                  <Text style={styles.rankText}>3</Text>
+                </View>
+                <Image source={FALLBACK_AVATAR} style={[styles.topAvatar, styles.avatarSmall]} />
+                <Text style={styles.topName}>-</Text>
+                <Text style={styles.topCoins}>-</Text>
+              </>
+            )}
+          </View>
+        </View>
+      </LinearGradient>
+    );
+  };
+
+  const renderRow = ({ item, index }: { item: UserRow; index: number }) => {
+    const globalRank = index + 4; // because this list starts after top 3
+    const isCurrent = item.id === currentUserId;
+    return (
+      <View style={[styles.row, isCurrent && styles.currentUserRow]}>
+        <View style={styles.rowLeft}>
+          <View style={styles.rankBox}>
+            <Text style={styles.rankBoxText}>{globalRank}</Text>
+          </View>
+          <Image
+            source={item.avatar_url ? { uri: item.avatar_url } : FALLBACK_AVATAR}
+            style={styles.rowAvatar}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowName} numberOfLines={1}>
+              {item.name ?? "-"}
+            </Text>
+            <Text style={styles.rowSub}>{item.exam ?? "-"}</Text>
+          </View>
+        </View>
+        <View style={styles.rowRight}>
+          <Text style={styles.rowCoins}>{item.rookieCoinsEarned ?? "-"}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  // If current user not in the top list, compute their rank and show at bottom sticky
+  const currentUserEntry = useMemo(() => {
+    if (!currentUserId || users.length === 0) return null;
+    const idx = users.findIndex((u) => u.id === currentUserId);
+    if (idx === -1) return null;
+    const rank = idx + 1;
+    const user = users[idx];
+    return { rank, user };
+  }, [users, currentUserId]);
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
-      <ImageBackground
-        source={require('../../src/assets/images/bg2.png')}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}  showsVerticalScrollIndicator={false}>
-          <Text style={styles.header}>Chats</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {renderTopThree()}
 
-          <View style={styles.list}>
-            {chats.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.9}
-                onPress={() =>
-                  router.push({
-                    pathname: '/message',
-                    params: {
-                      id: item.id,
-                      name: item.name,
-                      description: item.description,
-                       image: JSON.stringify(item.image), // Convert image to string for navigation
-                      prompt: item.prompt,
-                      text: item.text,
-                    }
-                  })
-                }
-                style={styles.bar}
-              >
-                {item.image && (
-                  <Image
-                    source={typeof item.image === 'string' ? { uri: item.image } : item.image}
-                    style={styles.barImage}
-                    resizeMode="cover"
-                  />
-                )}
-                <View style={styles.barContent}>
-                  <View style={styles.textContainer}>
-                    <Text style={styles.barName}>{item.name}</Text>
-                    <Text style={styles.barBadge}>{item.badge}</Text>
-                  </View>
-                  {item.timestamp && (
-                    <Text style={styles.barTimestamp}>
-                      {getRelativeTime(item.timestamp)}
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
+        <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 8 }}>
+            {examOptions.map((ex) => {
+              const active = ex === filterExam;
+              return (
+                <TouchableOpacity
+                  key={ex}
+                  style={[styles.filterBtn, active && styles.filterBtnActive]}
+                  onPress={() => setFilterExam(ex)}
+                >
+                  <Text style={[styles.filterBtnText, active && styles.filterBtnTextActive]}>{ex}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <View style={styles.listHeader}>
+          <Text style={styles.listHeaderText}>Leaderboard</Text>
+          <Text style={styles.listHeaderSub}>{users.length} users</Text>
+        </View>
+
+        {loading ? (
+          <View style={{ paddingVertical: 40 }}>
+            <ActivityIndicator size="large" color="#fff" />
           </View>
-        </ScrollView>
-      </ImageBackground>
+        ) : users.length === 0 ? (
+          <View style={{ paddingVertical: 40 }}>
+            <Text style={{ color: "#ccc", textAlign: "center" }}>No users with coins found</Text>
+          </View>
+        ) : (
+          <>
+            {/* Show top 3 rows separately for better rank numbers */}
+            <FlatList
+              data={rest}
+              keyExtractor={(item) => item.id}
+              renderItem={renderRow}
+              scrollEnabled={false}
+              contentContainerStyle={{ paddingBottom: 24 }}
+            />
+          </>
+        )}
+      </ScrollView>
+
+      {/* Sticky current user card if present and not visible within the top few rows */}
+      {currentUserEntry && (
+        <View style={styles.stickyCurrent}>
+          <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+            <View style={styles.rankBoxSmall}>
+              <Text style={styles.rankBoxSmallText}>{currentUserEntry.rank}</Text>
+            </View>
+            <Image
+              source={currentUserEntry.user.avatar_url ? { uri: currentUserEntry.user.avatar_url } : FALLBACK_AVATAR}
+              style={styles.rowAvatarSmall}
+            />
+            <View style={{ marginLeft: 10, flex: 1 }}>
+              <Text style={styles.rowNameSmall} numberOfLines={1}>
+                {currentUserEntry.user.name ?? "-"}
+              </Text>
+              <Text style={styles.rowSubSmall}>{currentUserEntry.user.exam ?? "-"}</Text>
+            </View>
+          </View>
+          <Text style={styles.rowCoinsSmall}>{currentUserEntry.user.rookieCoinsEarned ?? "-"}</Text>
+        </View>
+      )}
     </View>
   );
-};
-
-export default HomePage;
+}
 
 const styles = StyleSheet.create({
-  backgroundImage: {
-    flex: 1,
-    width: 'auto',
-    height: 'auto',
-  },
   container: {
     flex: 1,
-    
-   
+    backgroundColor: "#0C111D",
+    paddingTop: Platform.OS === "android" ? 22 : 44,
   },
   scrollContent: {
-    paddingHorizontal: 10,
-    paddingTop: verticalScale(10),
-     paddingBottom: 60,
+    paddingBottom: 120,
   },
-  header: {
-    fontSize: 30,
-    color: '#FFFFFF',
-    paddingLeft: scale(10),
-    marginBottom: verticalScale(10),
-    fontWeight: 'medium',
-    fontFamily: 'Geist',
+  topGradient: {
+    marginHorizontal: 12,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    overflow: "hidden",
   },
-  list: {
-    paddingHorizontal: scale(10),
-    marginBottom: verticalScale(40),
+  topTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 12,
+    fontFamily: "Geist",
   },
-  bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#000000',
-    borderRadius: moderateScale(12),
-    padding: moderateScale(10),
-    marginBottom: verticalScale(10),
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: '#262626',
+  topRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
   },
-  barImage: {
-    width: scale(50),
-    height: scale(50),
-    borderRadius: scale(25),
-    marginRight: scale(10),
-    borderWidth: 1,
-    borderColor: '#fff',
-  },
-  barContent: {
+  topItem: {
     flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: "center",
   },
-  textContainer: {
-    flexDirection: 'column',
-    justifyContent: 'center',
+  topItemCenter: {
+    flex: 1.15,
+    alignItems: "center",
   },
-  barName: {
-    fontSize: moderateScale(16),
-    fontWeight: 'medium',
-    color: '#fff',
-    fontFamily: 'Geist',
+  topBadge: {
+    position: "absolute",
+    top: -8,
+    left: 10,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    zIndex: 2,
   },
-  barBadge: {
-    fontSize: moderateScale(12),
-    color: '#aaa',
-    marginTop: verticalScale(2),
-    fontFamily: 'Geist',
+  topBadgeCenter: {
+    position: "absolute",
+    top: -10,
+    left: "40%",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    zIndex: 2,
   },
-  barTimestamp: {
-    fontSize: moderateScale(12),
-    color: '#aaa',
-    textAlign: 'right',
-    fontFamily: 'Geist',
+  rankText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+  rankTextCenter: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 16,
+  },
+  topAvatar: {
+    borderRadius: 999,
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  avatarSmall: {
+    width: 68,
+    height: 68,
+  },
+  avatarLarge: {
+    width: 108,
+    height: 108,
+  },
+  topName: {
+    marginTop: 8,
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+    maxWidth: windowWidth * 0.22,
+    textAlign: "center",
+    fontFamily: "Geist",
+  },
+  topCoins: {
+    color: "#E6E6F0",
+    fontSize: 12,
+    marginTop: 4,
+    fontFamily: "Geist",
+  },
+  topNameCenter: {
+    marginTop: 12,
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 16,
+    maxWidth: windowWidth * 0.36,
+    textAlign: "center",
+    fontFamily: "Geist",
+  },
+  topCoinsCenter: {
+    color: "#E6E6F0",
+    fontSize: 13,
+    marginTop: 6,
+    fontWeight: "700",
+    fontFamily: "Geist",
+  },
+
+  filterRow: {
+    marginHorizontal: 12,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  filterBtn: {
+    backgroundColor: "#101827",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#1D2939",
+  },
+  filterBtnActive: {
+    backgroundColor: "#fff",
+    borderColor: "#fff",
+  },
+  filterBtnText: {
+    color: "#fff",
+    fontFamily: "Geist",
+  },
+  filterBtnTextActive: {
+    color: "#181f2b",
+    fontWeight: "700",
+  },
+
+  listHeader: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  listHeaderText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    fontFamily: "Geist",
+  },
+  listHeaderSub: {
+    color: "#A8A8B3",
+    fontSize: 13,
+    fontFamily: "Geist",
+  },
+
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginHorizontal: 12,
+    marginBottom: 10,
+    borderRadius: 12,
+    backgroundColor: "#071024",
+    borderWidth: 1,
+    borderColor: "#121826",
+  },
+  currentUserRow: {
+    borderColor: "#FFD700",
+    shadowColor: "#FFD700",
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+  },
+  rowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  rankBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: "#0F1724",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "#1D2939",
+  },
+  rankBoxText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+    fontFamily: "Geist",
+  },
+  rowAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: 12,
+    borderWidth: 1.5,
+    borderColor: "#222",
+  },
+  rowName: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+    fontFamily: "Geist",
+  },
+  rowSub: {
+    color: "#A8A8B3",
+    fontSize: 12,
+    marginTop: 2,
+    fontFamily: "Geist",
+  },
+  rowRight: {
+    marginLeft: 8,
+    alignItems: "flex-end",
+    minWidth: 90,
+  },
+  rowCoins: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
+    fontFamily: "Geist",
+  },
+
+  // Sticky current user at bottom
+  stickyCurrent: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 18,
+    backgroundColor: "#0E1622",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#1D2939",
+  },
+  rankBoxSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#0F1724",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "#1D2939",
+  },
+  rankBoxSmallText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+  rowAvatarSmall: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  rowNameSmall: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+    fontFamily: "Geist",
+  },
+  rowSubSmall: {
+    color: "#A8A8B3",
+    fontSize: 12,
+    marginTop: 2,
+    fontFamily: "Geist",
+  },
+  rowCoinsSmall: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
   },
 });
-
-
-
-
-

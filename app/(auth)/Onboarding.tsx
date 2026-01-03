@@ -236,7 +236,7 @@ export default function Onboarding() {
 
       // Save to AsyncStorage (name, gender, exam only)
       const localData = {
-        id: user.id,  
+      
         name: fullName.trim(),
         gender,
         exam,
