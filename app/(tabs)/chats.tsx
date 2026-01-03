@@ -176,6 +176,7 @@ export default function Leaderboard() {
     const top3 = topThree[2];
 
     return (
+     
       <LinearGradient colors={["#47006A", "#0031D0"]} style={styles.topGradient}>
         <Text style={styles.topTitle}>Top performers</Text>
 
@@ -265,6 +266,7 @@ export default function Leaderboard() {
           </View>
         </View>
       </LinearGradient>
+    
     );
   };
 
@@ -306,6 +308,7 @@ export default function Leaderboard() {
   }, [users, currentUserId]);
 
   return (
+    
     <View style={styles.container}>
       <ScrollView  showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {renderTopThree()}
@@ -347,7 +350,7 @@ export default function Leaderboard() {
               data={rest}
               keyExtractor={(item) => item.id}
               renderItem={renderRow}
-              scrollEnabled={false}
+              scrollEnabled={true}
               contentContainerStyle={{ paddingBottom: 24 }}
             />
           </>
@@ -380,6 +383,10 @@ export default function Leaderboard() {
 }
 
 const styles = StyleSheet.create({
+
+ 
+
+  
   container: {
     flex: 1,
     backgroundColor: "#0C111D",
