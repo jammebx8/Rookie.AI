@@ -188,40 +188,21 @@ export default function HomeScreen() {
 
 
 
-  const inviteFriends = async () => {
-    const inviteLink = 'https://rookie-ai.vercel.app';
-    const message = `Hey! 👋 Join me on Rookie to study smarter together 🚀\n\n${inviteLink}`;
+  const inviteFriends = () => {
+    const link = 'https://rookie-ai.vercel.app';
+    const text = encodeURIComponent(
+      `Hey! 👋 Join me on Rookie to study smarter together 🚀\n${link}`
+    );
   
-    // 🌐 WEB (Mobile + Desktop Browser)
+    // 📱 Mobile browsers → WhatsApp first (most reliable)
     if (Platform.OS === 'web') {
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: 'Invite to Rookie',
-            text: message,
-            url: inviteLink,
-          });
-        } catch (err) {
-          console.log('Share cancelled');
-        }
-      } else {
-        // Fallback: copy to clipboard
-        await navigator.clipboard.writeText(inviteLink);
-        alert('Invite link copied to clipboard');
-      }
+      const whatsappUrl = `https://wa.me/?text=${text}`;
+      window.open(whatsappUrl, '_blank');
       return;
     }
   
-    // 📱 NATIVE (Android / iOS App)
-    try {
-      await Share.share({
-        message,
-        url: inviteLink,
-        title: 'Invite to Rookie',
-      });
-    } catch (error) {
-      Alert.alert('Error', 'Unable to share invite link');
-    }
+    // 📲 Native apps
+    Linking.openURL(`whatsapp://send?text=${text}`);
   };
   
   
