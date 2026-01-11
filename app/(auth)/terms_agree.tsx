@@ -15,35 +15,49 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "@react-navigation/native";
 import { scale, verticalScale, moderateScale } from "react-native-size-matters";
 
+/**
+ * ✅ PAYMENT-GATEWAY COMPLIANT TERMS & POLICIES
+ * Razorpay / PhonePe safe
+ */
 const simpleTermsContent = `
 Terms and Conditions
 
 1. Introduction
-Welcome to OurApp! By using our services, you agree to comply with and be bound by the following terms.
+Welcome to OurApp, an educational platform designed to help students practice questions, receive AI-powered guidance, motivation, and track their progress through leaderboards.
+By accessing or using our services, you agree to be bound by these Terms and Conditions.
 
-2. Privacy Policy
-We value your privacy. Your personal data is used only for providing and improving our services and will never be sold to third parties. See below for our privacy policy.
+2. Service Description
+OurApp provides:
+- Practice questions for students
+- AI-generated explanations, solutions, and motivational feedback
+- Performance tracking and leaderboards for comparison
 
-Privacy Policy
+All services provided are skill-based and intended strictly for educational purposes.
 
-- We collect basic usage data to enhance your experience.
-- We do not share your personal data with external parties except as required by law or for payment processing.
+3. Privacy Policy
+We respect your privacy and are committed to protecting your personal data.
 
-Shipping Policy
+- We collect basic information such as name, email, and usage data to improve the learning experience.
+- Payment information is securely processed by trusted third-party payment gateways (such as Razorpay or PhonePe).
+- We do not store or have access to your card, UPI, or banking details.
+- We do not sell, rent, or trade user data to third parties.
+- Data may be shared only when required by law or for payment processing purposes.
 
-- All products and services are delivered digitally to the provided email or in-app. No physical shipments are made. For any issues, contact our support team.
+4. Digital Delivery Policy
+- All services are delivered digitally through the app or to the registered email address.
+- No physical goods are shipped.
 
-Contact Us
+5. Cancellation and Refund Policy
+- Users may request cancellation within 24 hours of purchase, provided premium features or services have not been substantially used.
+- Approved refunds will be processed to the original payment method within 5–7 business days.
+- Refund requests must be submitted via email with valid transaction details.
 
-For questions or support, please contact us at:
+6. Contact Us
+For questions, support, or refund requests, please contact us at:
 Email: dhruvgdscp@gmail.com
 
-Cancellation and Refunds Policy
-
-- You may cancel your order within 24 hours for a full refund, provided the digital service has not been fulfilled.
-- Refunds will be processed to your original payment method within 7 business days.
-
-By continuing, you accept these conditions.
+7. Acceptance of Terms
+By continuing to use OurApp or completing a payment, you confirm that you have read, understood, and agreed to these Terms and Policies.
 `;
 
 export default function TermsAgree() {
@@ -80,6 +94,7 @@ export default function TermsAgree() {
             resizeMode="contain"
           />
           <Text style={styles.heading}>Your Prep{"\n"}Made Easy</Text>
+
           <View style={styles.handContainer}>
             <Image
               source={require("../../src/assets/images/Hand.png")}
@@ -92,27 +107,25 @@ export default function TermsAgree() {
               disabled={loading}
               activeOpacity={0.8}
             >
-              <Text style={styles.continueButtonText}>
-                Continue
-              </Text>
+              <Text style={styles.continueButtonText}>Continue</Text>
             </TouchableOpacity>
           </View>
+
           <View style={{ flex: 1 }} />
+
           <Text style={styles.termsText}>
             By continuing you'll agree to all of our{"\n"}
-            <Text
-              style={styles.link}
-              onPress={() => setModalVisible(true)}
-            >
-              Terms & Conditions 
+            <Text style={styles.link} onPress={() => setModalVisible(true)}>
+              Terms & Conditions
             </Text>
             .
           </Text>
         </View>
       </ScrollView>
+
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
       >
@@ -136,12 +149,6 @@ export default function TermsAgree() {
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#000",
-  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
@@ -151,8 +158,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: Platform.OS === "android" ? verticalScale(60) : verticalScale(80),
     alignItems: "center",
-    justifyContent: "flex-start",
-    paddingHorizontal: 0,
   },
   logo: {
     width: scale(100),
@@ -180,16 +185,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: moderateScale(32),
     width: "90%",
-    alignSelf: "center",
-    marginBottom: verticalScale(12),
-    paddingVertical: 0,
-    paddingHorizontal: 0,
     height: verticalScale(48),
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: moderateScale(8),
-    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   buttonDisabled: {
@@ -198,16 +195,15 @@ const styles = StyleSheet.create({
   continueButtonText: {
     color: "#222",
     fontWeight: "bold",
-    fontFamily: 'Geist',
     fontSize: moderateScale(20),
     textAlign: "center",
+    fontFamily: 'Geist',
   },
   termsText: {
     color: "#aaa",
     fontSize: moderateScale(13),
     textAlign: "center",
     marginBottom: verticalScale(100),
-    marginTop: verticalScale(2),
     lineHeight: moderateScale(18),
     fontFamily: 'Geist',
   },
@@ -219,29 +215,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.65)",
     justifyContent: "center",
-    alignItems: "center",
     padding: 16,
   },
   modalView: {
-    width: "100%",
-    maxHeight: "80%",
     backgroundColor: "#fff",
     borderRadius: 16,
     padding: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  modalScrollContent: {
-    paddingBottom: 30,
+    maxHeight: "80%",
   },
   modalTitle: {
     fontWeight: "bold",
     fontSize: moderateScale(20),
     marginBottom: 12,
-    color: "#111",
     textAlign: "center",
   },
   modalText: {
@@ -250,8 +235,6 @@ const styles = StyleSheet.create({
     lineHeight: moderateScale(18),
     marginBottom: 28,
     fontFamily: 'Geist',
-    textAlign: "left",
-    whiteSpace: "pre-line", // for web only, ignored on native
   },
   closeButton: {
     backgroundColor: "#3B82F6",
