@@ -2,70 +2,69 @@
   "expo": {
     "name": "Rookie",
     "slug": "rookie",
-   
     "version": "1.0.0",
     "orientation": "portrait",
-     "icon": "./src/assets/appicon.png",
-     "web": {
+    "icon": "./src/assets/appicon.png",
+    "web": {
       "meta": {
         "themeColor": "#000000",
         "backgroundColor": "#000000",
         "icon": "./src/assets/appicon.png",
-    "splash": {
-      "image": "./src/assets/Vector17.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
-  
-    "userInterfaceStyle": "light",
-   
-    "assetBundlePatterns": [
-      "**/*"
-    ],
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.ttyyy",
-      "infoPlist": {
-        "CFBundleURLTypes": [
-          {
-            "CFBundleURLName": "com.ttyyy",
-            "CFBundleURLSchemes": [
-              "com.ttyyy"
+        "splash": {
+          "image": "./src/assets/Vector17.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        },
+        "userInterfaceStyle": "light",
+        "assetBundlePatterns": [
+          "**/*"
+        ],
+        "ios": {
+          "supportsTablet": true,
+          "bundleIdentifier": "com.ttyyy",
+          "infoPlist": {
+            "CFBundleURLTypes": [
+              {
+                "CFBundleURLName": "com.ttyyy",
+                "CFBundleURLSchemes": [
+                  "com.ttyyy"
+                ]
+              }
             ]
           }
-        ]
+        },
+        "android": {
+          "package": "com.ttyyy",
+          "versionCode": 2,
+          "intentFilters": [
+            {
+              "action": "VIEW",
+              "autoVerify": true,
+              "data": [
+                {
+                  "scheme": "com.ttyyy",
+                  "host": "*"
+                }
+              ],
+              "category": [
+                "BROWSABLE",
+                "DEFAULT"
+              ]
+            }
+          ]
+        },
+        "scheme": "com.ttyyy",
+        "extra": {
+          "eas": {
+            "projectId": "f98d5859-cbde-4427-b776-21b7e03e0d6e"
+          }
+        }
       }
     },
-    "android": {
-
-    
-      "package": "com.ttyyy",
-      "versionCode": 2,
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "com.ttyyy",
-              "host": "*"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        }
-      ]
-    },
-   
-    "scheme": "com.ttyyy",
     "extra": {
-      
       "eas": {
         "projectId": "f98d5859-cbde-4427-b776-21b7e03e0d6e"
       }
     }
   }
 }
-  }}
