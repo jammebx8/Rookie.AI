@@ -10,6 +10,7 @@
       "meta": {
         "themeColor": "#000000",
         "backgroundColor": "#000000",
+        "icon": "./src/assets/appicon.png",
     "splash": {
       "image": "./src/assets/Vector17.png",
       "resizeMode": "contain",
