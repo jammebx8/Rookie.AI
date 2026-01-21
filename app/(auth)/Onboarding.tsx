@@ -385,7 +385,7 @@ export default function Onboarding() {
                   placeholder="Your full name"
                   placeholderTextColor="#888"
                 />
-                <Text style={styles.label}>Gender (optional)</Text>
+                <Text style={styles.label}>Class (optional)</Text>
                 <View style={styles.buttonGroup}>
                   {Class_OPTIONS.map((g) => (
                     <TouchableOpacity
