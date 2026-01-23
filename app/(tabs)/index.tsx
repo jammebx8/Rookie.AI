@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import imagepath from '@/src/constants/imagepath';
 import { supabase } from "../../src/utils/supabase"; // adjust the import path as needed
 import { Share, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-
+const EXAM_OPTIONS = ['JEE Mains', 'NEET', 'JEE Advanced', 'Other'];
+const GENDER_OPTIONS = ['11th', '12th', "Dropper",'Other'];
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const socialMediaLinks = [
@@ -170,6 +172,11 @@ export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalChapter, setModalChapter] = useState(null);
   const [showAllVideos, setShowAllVideos] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [gender, setGender] = useState('');
+  const [exam, setExam] = useState('');
+  const [saving, setSaving] = useState(false);
 
   // Fade effect for horizontal scroll
   const formulaCardsScrollView = useRef(null);
@@ -206,11 +213,130 @@ export default function HomeScreen() {
   };
   
   
-  
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const cached = await AsyncStorage.getItem('@user');
+        if (!cached) return;
+
+        const parsed = JSON.parse(cached);
+        setUser(parsed);
+
+        if (!parsed.gender || !parsed.exam) {
+          setShowModal(true);
+        }
+      } catch (err) {
+        console.warn('Failed to load cached user', err);
+      }
+    };
+
+    loadUser();
+  }, []);
+
+  /* ----------------------------------------------------
+     2. SAVE PROFILE COMPLETION
+  ---------------------------------------------------- */
+  const saveProfile = async () => {
+    if (!gender || !exam) {
+      Alert.alert('Incomplete', 'Please select your class and exam');
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      // 1️⃣ Update Supabase (source of truth)
+      const { error } = await supabase
+        .from('users')
+        .update({ gender, exam })
+        .eq('id', user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // 2️⃣ Update local cache
+      const updatedUser = {
+        ...user,
+        gender,
+        exam,
+      };
+
+      await AsyncStorage.setItem('@user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+
+      setShowModal(false);
+    } catch (err: any) {
+      console.error('Profile update error:', err);
+      Alert.alert('Error', err.message || 'Failed to save profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+
+
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <View style={styles.modalcontainer}>
+   
+
+      {/* PROFILE COMPLETION MODAL */}
+      <Modal visible={showModal} transparent animationType="fade">
+        <View style={styles.overlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>
+              Complete your profile
+            </Text>
+
+            <Text style={styles.label}>Class</Text>
+            <View style={styles.row}>
+              {GENDER_OPTIONS.map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  style={[
+                    styles.option,
+                    gender === g && styles.optionActive,
+                  ]}
+                  onPress={() => setGender(g)}
+                >
+                  <Text>{g}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Select Exam</Text>
+            <View style={styles.row}>
+              {EXAM_OPTIONS.map((e) => (
+                <TouchableOpacity
+                  key={e}
+                  style={[
+                    styles.option,
+                    exam === e && styles.optionActive,
+                  ]}
+                  onPress={() => setExam(e)}
+                >
+                  <Text>{e}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.saveBtn}
+              onPress={saveProfile}
+              disabled={saving}
+            >
+              <Text style={styles.saveText}>
+                {saving ? 'Saving...' : 'Continue'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+    
         {/* All content except footer gets horizontal padding */}
         <View style={styles.paddedContent}>
           {/* Quick Formula Cards */}
@@ -437,8 +563,10 @@ export default function HomeScreen() {
             style={styles.footerImage}
             resizeMode="cover"
           />
+        
         </View>
-      </ScrollView>
+     
+        </ScrollView>
     </View>
   );
 }
@@ -939,5 +1067,58 @@ const styles = StyleSheet.create({
     // New style for content wrapper
   paddedContent: {
     paddingHorizontal: 10,
+  },
+
+  modalcontainer: {
+    flex: 1,
+   
+  },
+
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modal: {
+    width: '90%',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  label: {
+    marginTop: 12,
+    fontWeight: '600',
+  },
+  row: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  option: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#E5E7EB',
+  },
+  optionActive: {
+    backgroundColor: '#00d0ff',
+  },
+  saveBtn: {
+    marginTop: 20,
+    backgroundColor: '#2563EB',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  saveText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });

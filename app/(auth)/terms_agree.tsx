@@ -203,6 +203,7 @@ const styles = StyleSheet.create({
     color: "#aaa",
     fontSize: moderateScale(13),
     textAlign: "center",
+    marginTop:moderateScale(10),
     marginBottom: verticalScale(100),
     lineHeight: moderateScale(18),
     fontFamily: 'Geist',

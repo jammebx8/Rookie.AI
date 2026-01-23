@@ -39,262 +39,261 @@ export default function Onboarding() {
   const [currentAvatar, setCurrentAvatar] = useState<string | null>(null);
   const googleIcon = require('../../src/assets/images/googlelogo.png');
 
-  // Check if user is already onboarded on mount
-  useEffect(() => {
-    const checkOnboarding = async () => {
-      try {
-        const onboarded = await AsyncStorage.getItem('@user_onboarded');
-        if (onboarded === 'true') {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "(tabs)" }],
-          });
-          return;
-        }
-      } catch (e) {
-        console.warn('Error reading onboarding flag', e);
-      }
+  /* ----------------------------------------------------
+  1. CHECK SESSION ON APP LOAD
+---------------------------------------------------- */
+useEffect(() => {
+ const initAuth = async () => {
+   try {
+     // 1️⃣ Fast path → local cache
+     const cachedUser = await AsyncStorage.getItem('@user');
+     if (cachedUser) {
+       const parsed = JSON.parse(cachedUser);
+       // If cached user already has gender & exam, we can skip onboarding
+       if (parsed?.gender && parsed?.exam) {
+         navigation.reset({
+           index: 0,
+           routes: [{ name: "(tabs)" }],
+         });
+       } else {
+         // If cached user is missing required fields, set the "needs completion" flag
+         // so Home (index.tsx) shows the modal and we still navigate to tabs.
+         const needsPayload = {
+           id: parsed?.id,
+           email: parsed?.email,
+           name: parsed?.name,
+           avatar_url: parsed?.avatar_url,
+           gender: parsed?.gender || null,
+           exam: parsed?.exam || null,
+         };
+         await AsyncStorage.setItem('@needs_profile_completion', JSON.stringify(needsPayload));
+         navigation.reset({
+           index: 0,
+           routes: [{ name: "(tabs)" }],
+         });
+       }
+     }
 
-      // Handle OAuth redirect on web
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        try {
-          const url = window.location.href;
-          if (url.includes('access_token') || url.includes('refresh_token') || url.includes('code')) {
-            console.log('Detected OAuth tokens in URL');
-            const { data, error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
-            
-            if (error) {
-              console.warn('getSessionFromUrl error', error);
-            } else if (data?.session?.user) {
-              await handleGoogleSignIn(data.session.user);
-            }
-            
-            // Clean URL
-            try {
-              const cleanUrl = window.location.origin + window.location.pathname;
-              window.history.replaceState({}, document.title, cleanUrl);
-            } catch (e) {
-              console.warn('Error cleaning URL', e);
-            }
-          }
-        } catch (err) {
-          console.warn('Error during OAuth redirect handling', err);
-        }
-      }
+     // 2️⃣ Source of truth → Supabase
+     const { data: { session } } = await supabase.auth.getSession();
 
-      // Check for existing session
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await handleGoogleSignIn(session.user);
-        }
-      } catch (err) {
-        console.warn('Error checking existing session', err);
-      }
+     if (session?.user) {
+       await upsertAndRedirect(session.user);
+     }
+   } catch (err) {
+     console.warn("Auth init error:", err);
+   }
+ };
 
-      // Listen for auth state changes
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          console.log('Auth state changed:', event);
-          if (event === 'SIGNED_IN' && session?.user) {
-            await handleGoogleSignIn(session.user);
-          } else if (event === 'SIGNED_OUT') {
-            await AsyncStorage.removeItem('@user');
-            await AsyncStorage.removeItem('@user_onboarded');
-          }
-        }
-      );
+ initAuth();
 
-      return () => subscription?.unsubscribe();
-    };
+ const { data: { subscription } } =
+   supabase.auth.onAuthStateChange(async (event, session) => {
+     if (event === "SIGNED_IN" && session?.user) {
+       await upsertAndRedirect(session.user);
+     }
 
-    checkOnboarding();
-  }, []);
+     if (event === "SIGNED_OUT") {
+       await AsyncStorage.removeItem('@user');
+     }
+   });
 
-  // Update input completion status (used only if you keep the manual fields visible)
-  useEffect(() => {
-    setInputComplete(fullName.trim().length > 0 && !!gender && !!exam);
-  }, [fullName, gender, exam]);
+ return () => subscription?.unsubscribe();
+}, []);
 
-  // Save the final user object to AsyncStorage and navigate
-  const finalizeOnboarding = async (finalProfile: any) => {
-    try {
-      await AsyncStorage.setItem('@user', JSON.stringify(finalProfile));
-      await AsyncStorage.setItem('@user_onboarded', 'true');
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "(tabs)" }],
-      });
-    } catch (err) {
-      console.warn('Error saving final profile locally', err);
-    }
-  };
+/* ----------------------------------------------------
+  2. UPSERT USER & REDIRECT
+---------------------------------------------------- */
+const upsertAndRedirect = async (user: any) => {
+ try {
+   setAuthLoading(true);
 
-  // Handle Google Sign-In: upsert to users table, then check if extra fields needed
-  const handleGoogleSignIn = async (user: any) => {
-    try {
-      setAuthLoading(true);
+   const profile = {
+     id: user.id,
+     email: user.email,
+     name:
+       user.user_metadata?.full_name ||
+       user.user_metadata?.name ||
+       user.email,
+     avatar_url:
+       user.user_metadata?.avatar_url ||
+       user.user_metadata?.picture ||
+       null,
+     created_at: new Date().toISOString(),
+     
+   };
 
-      const userProfile = {
-        id: user.id,
-        email: user.email,
-        name: user.user_metadata?.full_name || user.user_metadata?.name || user.email,
-        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
-        // We won't override gender/exam here; those come from existing DB row or user input
-        created_at: new Date().toISOString(),
-      };
+   // ✅ Upsert user (no blocking fields)
+   const { data, error } = await supabase
+     .from("users")
+     .upsert(profile, { onConflict: "id" })
+     .select()
+     .single();
 
-      // Upsert basic profile (without overwriting gender/exam) by using upsert with returning the row.
-      const { data: upserted, error: upsertError } = await supabase
-        .from('users')
-        .upsert([userProfile], { onConflict: 'id' })
-        .select()
-        .single();
+   if (error) {
+     console.error("Upsert error:", error);
+     return;
+   }
 
-      if (upsertError) {
-        console.warn('Error saving to Supabase:', upsertError);
-      }
+   // ✅ Cache locally (NOT source of truth)
+   await AsyncStorage.setItem("@user", JSON.stringify(data));
 
-      // Retrieve user row to see if gender/exam are present
-      const { data: dbUser, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+   // If the DB row is missing gender or exam, mark that we need profile completion.
+   if (!data?.gender || !data?.exam) {
+     const needsPayload = {
+       id: data.id,
+       email: data.email,
+       name: data.name,
+       avatar_url: data.avatar_url,
+       gender: data.gender || null,
+       exam: data.exam || null,
+     };
+     await AsyncStorage.setItem('@needs_profile_completion', JSON.stringify(needsPayload));
+     // Redirect to main app — index.tsx will show the completion modal.
+     navigation.reset({
+       index: 0,
+       routes: [{ name: "(tabs)" }],
+     });
+     return;
+   }
 
-      if (fetchError) {
-        console.warn('Error fetching user row after upsert:', fetchError);
-      }
+   // ✅ Redirect (profile is complete)
+   navigation.reset({
+     index: 0,
+     routes: [{ name: "(tabs)" }],
+   });
+ } catch (err) {
+   console.error("Auth flow error:", err);
+   Alert.alert("Error", "Login failed");
+ } finally {
+   setAuthLoading(false);
+ }
+};
 
-      const finalRow = dbUser || upserted || userProfile;
+/* ----------------------------------------------------
+  3. GOOGLE SIGN-IN
+---------------------------------------------------- */
+const signInWithGoogle = async () => {
+ try {
+   setAuthLoading(true);
 
-      const rookieCoinsEarned = finalRow?.rookieCoinsEarned ?? 0;
-      
+   const redirectUrl =
+     Platform.OS === "web"
+       ? window.location.origin
+       : makeRedirectUri({
+           scheme: "com.ttyyy",
+           useProxy: true,
+         });
 
-      // Save basic values in state for potential profile completion
-      setCurrentUserId(user.id);
-      setCurrentEmail(user.email);
-      setCurrentAvatar(userProfile.avatar_url || null);
+   const { data, error } = await supabase.auth.signInWithOAuth({
+     provider: "google",
+     options: { redirectTo: redirectUrl },
+   });
 
-      // If gender and exam are present in DB -> finalize onboarding
-      if (finalRow?.gender && finalRow?.exam) {
-        const localData = {
-          id: user.id,
-          email: user.email,
-          name: userProfile.name,
-          avatar_url: userProfile.avatar_url,
-          gender: finalRow.gender,
-          exam: finalRow.exam,
-          rookieCoinsEarned,
-        };
-        await finalizeOnboarding(localData);
-      } else {
-        // Ask user to complete profile (gender/exam and optionally update name)
-        // Pre-fill name if available
-        setFullName(userProfile.name || "");
-        setGender(finalRow?.gender || "");
-        setExam(finalRow?.exam || "");
-        setProfileNeedsCompletion(true);
-      }
-    } catch (err) {
-      console.error('Error handling Google sign-in:', err);
-      Alert.alert("Error", "Failed to complete Google sign-in");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
+   if (error) throw error;
 
-  // Google Sign-In button handler (start OAuth)
-  const signInWithGoogle = async () => {
-    try {
-      setAuthLoading(true);
+   if (Platform.OS !== "web") {
+     await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+   }
+ } catch (err: any) {
+   console.error("Google sign-in error:", err);
+   Alert.alert("Authentication Error", err.message);
+   setAuthLoading(false);
+ }
+};
 
-      const redirectUrl = Platform.OS === 'web'
-        ? (typeof window !== 'undefined' ? `${window.location.origin}` : 'https://rookie-ai.vercel.app')
-        : makeRedirectUri({ scheme: 'com.ttyyy', path: '/(tabs)', useProxy: true });
-
-      console.log('Redirect URL:', redirectUrl);
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-        },
-      });
-
-      if (error) {
-        console.error('OAuth error:', error);
-        throw error;
-      }
-
-      if (!data?.url) {
-        throw new Error('No OAuth URL received from Supabase');
-      }
-
-      console.log('OAuth URL:', data.url);
-
-      if (Platform.OS === 'web') {
-        window.location.href = data.url;
-      } else {
-        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-      }
-    } catch (error: any) {
-      console.error('Google sign-in error:', error);
-      Alert.alert(
-        "Authentication Error",
-        error?.message || "Google authentication failed"
-      );
-      setAuthLoading(false);
-    }
-  };
-
-  // Save profile completion (called when profileNeedsCompletion is true)
-  const saveProfileCompletion = async () => {
-    if (!fullName.trim() || !gender || !exam) {
-      Alert.alert('Incomplete', 'Please fill all fields');
+/* ----------------------------------------------------
+  4. SAVE PROFILE COMPLETION (INLINE OPTION)
+  This supports the inline completion UI in this screen.
+  It will also update Supabase and local storage and clear the needs flag.
+---------------------------------------------------- */
+const saveProfileCompletion = async () => {
+  try {
+    if (!fullName.trim() && !gender && !exam) {
+      Alert.alert('Incomplete', 'Please provide required fields');
       return;
     }
 
     setLoading(true);
-    try {
-      const profileToSave: any = {
-        id: currentUserId,
-        name: fullName.trim(),
-        gender,
-        exam,
-      };
 
-      // Upsert the completion fields (must include id)
-      const { error: upsertError } = await supabase
-        .from('users')
-        .upsert([profileToSave], { onConflict: 'id' });
-
-      if (upsertError) {
-        console.error('Supabase upsert error (completion):', upsertError);
-        Alert.alert("Error", "Failed to save profile: " + upsertError.message);
-        setLoading(false);
-        return;
+    // Ensure we have a user id: try session if currentUserId not set
+    let userId = currentUserId;
+    if (!userId) {
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr) {
+        console.warn('Failed to get session user:', userErr);
       }
-
-      const finalLocal = {
-        id: currentUserId,
-        email: currentEmail,
-        name: fullName.trim(),
-        avatar_url: currentAvatar,
-        gender,
-        exam,
-        rookieCoinsEarned: finalRow?.rookieCoinsEarned ?? 0,
-      };
-
-      await finalizeOnboarding(finalLocal);
-    } catch (err) {
-      console.error('Error saving user data:', err);
-      Alert.alert("Error", (err as any)?.message || "Something went wrong");
-    } finally {
-      setLoading(false);
-      setProfileNeedsCompletion(false);
+      userId = user?.id ?? null;
+      if (!userId) {
+        // Fallback: try reading @needs_profile_completion
+        const rawNeeds = await AsyncStorage.getItem('@needs_profile_completion');
+        if (rawNeeds) {
+          const needs = JSON.parse(rawNeeds);
+          userId = needs?.id || null;
+        }
+      }
     }
-  };
+
+    if (!userId) {
+      Alert.alert('Error', 'Unable to determine user id. Please sign in again.');
+      setLoading(false);
+      return;
+    }
+
+    const payload: any = {
+      id: userId,
+      gender,
+      exam,
+    };
+
+    if (fullName && fullName.trim().length > 0) payload.name = fullName.trim();
+    if (currentAvatar) payload.avatar_url = currentAvatar;
+
+    const { error: upsertError } = await supabase
+      .from('users')
+      .upsert([payload], { onConflict: 'id' });
+
+    if (upsertError) {
+      console.error('Supabase upsert error (inline completion):', upsertError);
+      Alert.alert('Error', 'Failed to save profile: ' + upsertError.message);
+      setLoading(false);
+      return;
+    }
+
+    // Fetch final user row
+    const { data: finalRow, error: fetchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    const finalLocal = {
+      id: userId,
+      email: finalRow?.email || currentEmail,
+      name: fullName?.trim() || finalRow?.name || '',
+      avatar_url: currentAvatar || finalRow?.avatar_url || null,
+      gender: gender,
+      exam: exam,
+      rookieCoinsEarned: finalRow?.rookieCoinsEarned ?? 0,
+    };
+
+    // Save locally and clear the needs flag
+    await AsyncStorage.setItem('@user', JSON.stringify(finalLocal));
+    await AsyncStorage.setItem('@user_onboarded', 'true');
+    await AsyncStorage.removeItem('@needs_profile_completion');
+
+    // Navigate into app
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "(tabs)" }],
+    });
+  } catch (err) {
+    console.error('Error saving profile completion (inline):', err);
+    Alert.alert('Error', (err as any)?.message || 'Something went wrong');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <ImageBackground
