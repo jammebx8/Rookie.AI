@@ -254,7 +254,7 @@ export default function Page() {
   };
 
   const cardEnter = { opacity: 0, y: 8 };
-  const cardAnimate = { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 200, damping: 20 } };
+  const cardAnimate = { opacity: 1, y: 0, transition: {  stiffness: 200, damping: 20 } };
 
   return (
     <main className="min-h-screen bg-[#0F1724] text-white">
