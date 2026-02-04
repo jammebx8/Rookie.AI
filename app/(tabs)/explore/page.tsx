@@ -140,7 +140,7 @@ const cardVariants = {
   tap: { scale: 0.995 },
 };
 
-export default function ExplorePage(): JSX.Element {
+export default function ExplorePage() {
   const [selectedExam, setSelectedExam] = useState<string>(EXAMS[0].name);
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
   const router = useRouter();
