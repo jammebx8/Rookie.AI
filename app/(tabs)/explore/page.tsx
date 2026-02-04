@@ -122,7 +122,7 @@ const SUBJECTS: Record<string, Subject[]> = {
 
 const containerVariants = {
   hidden: { opacity: 0, y: 6 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4,  ease: [0.4, 0, 0.2, 1] } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4,  } },
 };
 
 const dropdownVariants = {
@@ -135,7 +135,7 @@ const cardVariants = {
   enter: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.06, duration: 0.36,  ease: [0.4, 0, 0.2, 1] },
+    transition: { delay: i * 0.06, duration: 0.36,   },
   }),
   hover: { scale: 1.02, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' },
   tap: { scale: 0.995 },
