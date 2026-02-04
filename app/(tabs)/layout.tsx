@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { color, motion } from 'framer-motion';
-import { storage } from '../../public/src/lib/storage';
+
 
 type Tab = {
   name: string;
@@ -32,20 +32,20 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [coins, setCoins] = useState<number>(0);
 
-  useEffect(() => {
-    const loadCoins = async () => {
-      try {
-        const coinAmount = await storage.getCoins();
-        setCoins(coinAmount);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to load coins', err);
-        setCoins(0);
-      }
-    };
+  // useEffect(() => {
+  //   const loadCoins = async () => {
+  //     try {
+  //      const coinAmount = await storage.getCoins();
+  //       setCoins(coinAmount);
+  //     } catch (err) {
+  //       // eslint-disable-next-line no-console
+  //       console.error('Failed to load coins', err);
+  //       setCoins(0);
+  //     }
+  //   };
 
-    loadCoins();
-  }, []);
+  //   loadCoins();
+  // }, []);
 
   const tabs: Tab[] = [
     {
