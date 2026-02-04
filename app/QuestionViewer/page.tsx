@@ -31,7 +31,7 @@ const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
 const SESSION_RESPONSES_KEY = 'questionSessionResponses_v1';
 
-export default function QuestionViewerPage(): JSX.Element {
+export default function QuestionViewerPage()  {
   const router = useRouter();
   const searchParams = useSearchParams();
   const chapterTitle = (searchParams.get('chapterTitle') || '') as string;

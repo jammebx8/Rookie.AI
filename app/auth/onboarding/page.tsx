@@ -257,7 +257,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-[url('/bg2.png')] bg-cover text-white">
-      <style jsx>{`
+      <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
