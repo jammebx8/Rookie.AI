@@ -16,7 +16,7 @@ type UserRow = {
 
 const FALLBACK_AVATAR = "/default.jpg"; // put image in public/assets/images/default.jpg
 
-export default function LeaderboardPage(): JSX.Element {
+export default function LeaderboardPage()  {
   const [loading, setLoading] = useState<boolean>(true);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [filterExam, setFilterExam] = useState<string>("All");
