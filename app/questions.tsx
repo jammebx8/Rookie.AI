@@ -59684,7 +59684,7 @@ export const questionsData = {
     difficulty: "medium"
   }
 ],
- "Thermodynamics" : [
+ ".Thermodynamics" : [
   {
     question: "For a reversible isothermal expansion of an ideal gas, the change in internal energy is:",
     options: ["Zero", "Positive", "Negative", "Cannot be determined"],

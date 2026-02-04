@@ -32,27 +32,27 @@ export default function OnboardingPage() {
         console.warn('Error reading onboarding flag', e);
       }
 
-      if (typeof window !== 'undefined') {
-        try {
-          const url = window.location.href;
-          if (url.includes('access_token') || url.includes('refresh_token') || url.includes('code')) {
-            const { data, error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
-            if (error) {
-              console.warn('getSessionFromUrl error', error);
-            } else if (data?.session?.user) {
-              await handleGoogleSignIn(data.session.user);
-            }
-            try {
-              const cleanUrl = window.location.origin + window.location.pathname;
-              window.history.replaceState({}, document.title, cleanUrl);
-            } catch (e) {
-              console.warn('Error cleaning URL', e);
-            }
+      useEffect(() => {
+        const handleSession = async () => {
+          const {
+            data: { session },
+            error,
+          } = await supabase.auth.getSession();
+      
+          if (error) {
+            console.warn("getSession error", error);
+            return;
           }
-        } catch (err) {
-          console.warn('Error during OAuth redirect handling', err);
-        }
-      }
+      
+          if (session?.user) {
+            // user is logged in
+            // redirect / continue onboarding
+          }
+        };
+      
+        handleSession();
+      }, []);
+      
 
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -226,13 +226,16 @@ export default function OnboardingPage() {
         setLoadingSave(false);
         return;
       }
-
-      const { data: finalRow } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', currentUserId)
-        .single()
-        .catch(() => ({ data: null }));
+      const { data: finalRow, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", currentUserId)
+      .single();
+    
+    if (error) {
+      console.warn("Failed to fetch user row", error);
+    }
+    
 
       const finalLocal = {
         id: currentUserId,
