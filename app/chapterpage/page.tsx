@@ -206,7 +206,7 @@ const headerVariants = {
     y: 0,
     transition: {
       duration: 0.5,
-      ease: [0.22, 1, 0.36, 1],
+      
     },
   },
 };
@@ -219,7 +219,7 @@ const chapterCardVariants = {
     transition: {
       delay: i * 0.05,
       duration: 0.4,
-      ease: [0.22, 1, 0.36, 1],
+      
     },
   }),
   hover: {
@@ -227,7 +227,7 @@ const chapterCardVariants = {
     x: 4,
     transition: {
       duration: 0.2,
-      ease: 'easeOut',
+     
     },
   },
   tap: { scale: 0.98 },
@@ -239,7 +239,7 @@ const buttonVariants = {
     scale: 1.05,
     transition: {
       duration: 0.2,
-      ease: 'easeInOut',
+      
     },
   },
   tap: { scale: 0.95 },
@@ -454,7 +454,7 @@ export default function ChapterPage() {
         <div className="min-h-screen bg-[#181C29] flex items-center justify-center">
           <motion.div
             animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            transition={{ duration: 1, repeat: Infinity, }}
             className="w-8 h-8 border-4 border-white border-t-transparent rounded-full"
           />
         </div>
