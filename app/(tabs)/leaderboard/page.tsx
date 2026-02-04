@@ -88,57 +88,7 @@ export default function LeaderboardPage()  {
     }
   };
 
-  // Initial fetch + realtime subscription
-  useEffect(() => {
-    fetchLeaderboard().catch(() => {});
-
-    // Best-effort: try supabase v2 channel API, fallback to v1 .from(...).on(...)
-    let channel: any = null;
-    try {
-      // v2 channel API
-      channel = (supabase as any)
-        .channel("public:users")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "users" },
-          (_payload: any) => {
-            fetchLeaderboard().catch(() => {});
-          }
-        )
-        .subscribe((status: any) => {
-          if (status === "SUBSCRIBED") setSubscribed(true);
-        });
-    } catch (e) {
-      try {
-        // v1 realtime fallback
-        // @ts-ignore
-        channel = supabase
-          .from("users")
-          .on("*", (_payload: any) => {
-            fetchLeaderboard().catch(() => {});
-          })
-          .subscribe();
-        setSubscribed(true);
-      } catch (err) {
-        console.warn("Realtime subscription not available:", err);
-      }
-    }
-
-    return () => {
-      try {
-        if (channel && typeof channel.unsubscribe === "function") {
-          channel.unsubscribe();
-        } else if (channel && typeof (supabase as any).removeChannel === "function") {
-          // best-effort removal for v2
-          // @ts-ignore
-          (supabase as any).removeChannel(channel);
-        }
-      } catch (e) {
-        // ignore
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  
 
   // Re-fetch when exam filter changes
   useEffect(() => {
