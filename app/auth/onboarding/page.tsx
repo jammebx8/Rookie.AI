@@ -141,17 +141,20 @@ export default function OnboardingPage() {
   async function signInWithGoogle() {
     try {
       setAuthLoading(true);
-      const redirectUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
+      // redirect to /home after OAuth completes
+      const redirectUrl =
+        typeof window !== 'undefined' ? `${window.location.origin}/home` : undefined;
+  
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: redirectUrl },
       });
-
+  
       if (error) {
         console.error('OAuth error:', error);
         throw error;
       }
-
+  
       if (!data?.url) throw new Error('No OAuth URL received from Supabase');
       window.location.href = data.url;
     } catch (error: any) {
