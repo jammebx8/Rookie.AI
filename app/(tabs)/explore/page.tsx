@@ -7,6 +7,7 @@ import { FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import imagepath from '../../../public/src/constants/imagepath';
 
+
 type Subject = {
   name: string;
   chapters: number;
@@ -121,7 +122,7 @@ const SUBJECTS: Record<string, Subject[]> = {
 
 const containerVariants = {
   hidden: { opacity: 0, y: 6 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4,  ease: [0.4, 0, 0.2, 1] } },
 };
 
 const dropdownVariants = {
@@ -134,7 +135,7 @@ const cardVariants = {
   enter: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.06, duration: 0.36, ease: 'easeOut' },
+    transition: { delay: i * 0.06, duration: 0.36,  ease: [0.4, 0, 0.2, 1] },
   }),
   hover: { scale: 1.02, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' },
   tap: { scale: 0.995 },
