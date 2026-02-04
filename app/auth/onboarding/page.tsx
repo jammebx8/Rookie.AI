@@ -20,70 +20,36 @@ export default function OnboardingPage() {
   const [currentAvatar, setCurrentAvatar] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-    const checkOnboarding = async () => {
-      try {
-        const onboarded = typeof window !== 'undefined' ? window.localStorage.getItem('@user_onboarded') : null;
-        if (onboarded === 'true') {
-          router.replace('/home');
-          return;
-        }
-      } catch (e) {
-        console.warn('Error reading onboarding flag', e);
+    // 1. Already onboarded → go home
+    try {
+      const onboarded = localStorage.getItem('@user_onboarded');
+      if (onboarded === 'true') {
+        router.replace('/home');
+        return;
       }
-
-      useEffect(() => {
-        const handleSession = async () => {
-          const {
-            data: { session },
-            error,
-          } = await supabase.auth.getSession();
-      
-          if (error) {
-            console.warn("getSession error", error);
-            return;
-          }
-      
-          if (session?.user) {
-            // user is logged in
-            // redirect / continue onboarding
-          }
-        };
-      
-        handleSession();
-      }, []);
-      
-
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await handleGoogleSignIn(session.user);
-        }
-      } catch (err) {
-        console.warn('Error checking existing session', err);
-      }
-
-      const { data: { subscription } = {} as any } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log('Auth state changed:', event);
+    } catch (_) {}
+  
+    // 2. Listen to Supabase auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event);
+  
         if (event === 'SIGNED_IN' && session?.user) {
           await handleGoogleSignIn(session.user);
-        } else if (event === 'SIGNED_OUT') {
-          try {
-            window.localStorage.removeItem('@user');
-            window.localStorage.removeItem('@user_onboarded');
-          } catch (_) {}
         }
-      });
-
-      return () => {
-        mounted = false;
-        subscription?.unsubscribe?.();
-      };
+  
+        if (event === 'SIGNED_OUT') {
+          localStorage.removeItem('@user');
+          localStorage.removeItem('@user_onboarded');
+        }
+      }
+    );
+  
+    return () => {
+      subscription.unsubscribe();
     };
-
-    checkOnboarding();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  
 
   async function finalizeOnboarding(finalProfile: any) {
     try {
