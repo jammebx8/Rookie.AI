@@ -14,7 +14,7 @@ const imagepath = {
     Sari: "/i44.jpeg",
     Elise: "/download (14).jpeg",
     Aarav: "/download (19).jpeg",
-  
+  RC: "/coin.png",
     Physics: "/phhh.png",
     Chemistry: "/chhh.png",
     Maths: "/mahhh.png",
