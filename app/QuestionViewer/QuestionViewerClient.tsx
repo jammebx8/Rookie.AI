@@ -309,7 +309,7 @@ export default function QuestionViewerPage() {
     try {
       setDeterminingAnswer(true);
       
-      const response = await axios.post(`${API_BASE}/api/solution`, {
+      const response = await axios.post(`${API_BASE}/solution`, {
         action: 'determine_answer',
         question_text: question.question_text,
         option_A: question.option_A,
@@ -380,7 +380,7 @@ export default function QuestionViewerPage() {
 
     // Fetch motivation
     try {
-      const motivationRes = await axios.post(`${API_BASE}/api/motivation`, {
+      const motivationRes = await axios.post(`${API_BASE}/motivation`, {
         isCorrect: correct,
         subjectName,
         chapterTitle,
@@ -459,7 +459,7 @@ export default function QuestionViewerPage() {
     setAIFollowupLoading(true);
     try {
       if (mode === '5yr') {
-        const response = await axios.post('/api/solution', {
+        const response = await axios.post(`${API_BASE}/solution`, {
           action: 'explain_5yr',
           question_text: currentQuestion.question_text,
           solution: currentQuestion.solution,
@@ -490,7 +490,7 @@ export default function QuestionViewerPage() {
     if (!currentQuestion) return;
 
     try {
-      const response = await axios.post('/api/solution', {
+      const response = await axios.post(`${API_BASE}/solution`, {
         action: 'dig_deeper',
         question_text: currentQuestion.question_text,
         solution: currentQuestion.solution,
