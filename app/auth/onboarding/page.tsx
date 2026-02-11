@@ -51,6 +51,9 @@ export default function OnboardingPage() {
   }, []);
   
 
+  /**
+   * Save user data to localStorage and finalize onboarding
+   */
   async function finalizeOnboarding(finalProfile: any) {
     try {
       window.localStorage.setItem('@user', JSON.stringify(finalProfile));
@@ -59,6 +62,43 @@ export default function OnboardingPage() {
     } catch (err) {
       console.warn('Error saving final profile locally', err);
     }
+  }
+
+  /**
+   * Fetch user from Supabase and save locally
+   */
+  async function fetchAndSaveUserLocally(userId: string) {
+    try {
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.warn('Failed to fetch user after operation:', error);
+        return null;
+      }
+
+      if (user) {
+        const localData = {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          avatar_url: user.avatar_url,
+          class: user.class,
+          exam: user.exam,
+          rookieCoinsEarned: user.rookieCoinsEarned ?? 0,
+          created_at: user.created_at,
+        };
+        
+        localStorage.setItem('@user', JSON.stringify(localData));
+        return localData;
+      }
+    } catch (err) {
+      console.error('Error fetching and saving user locally:', err);
+    }
+    return null;
   }
 
   async function handleGoogleSignIn(user: any) {
@@ -73,24 +113,26 @@ export default function OnboardingPage() {
         .single();
 
       if (existingUser && !fetchError) {
-        // User exists - check if profile is complete
+        // User exists - fetch from Supabase and save locally
+        const localData = {
+          id: existingUser.id,
+          email: existingUser.email,
+          name: existingUser.name,
+          avatar_url: existingUser.avatar_url,
+          class: existingUser.class,
+          exam: existingUser.exam,
+          rookieCoinsEarned: existingUser.rookieCoinsEarned ?? 0,
+          created_at: existingUser.created_at,
+        };
+
+        // Check if profile is complete
         if (existingUser.class && existingUser.exam) {
-          // Profile complete - redirect to home
-          const localData = {
-            id: existingUser.id,
-            email: existingUser.email,
-            name: existingUser.name,
-            avatar_url: existingUser.avatar_url,
-            class: existingUser.class,
-            exam: existingUser.exam,
-            rookieCoinsEarned: existingUser.rookieCoinsEarned ?? 0,
-            created_at: existingUser.created_at,
-          };
+          // Profile complete - save and redirect to home
           await finalizeOnboarding(localData);
         } else {
           // User exists but profile incomplete - show completion form
           setCurrentUserId(user.id);
-          setCurrentEmail(user.email);
+          setCurrentEmail(existingUser.email);
           setCurrentAvatar(existingUser.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null);
           setFullName(existingUser.name || user.user_metadata?.full_name || user.user_metadata?.name || user.email);
           setstudentclass(existingUser.class || '');
@@ -98,7 +140,7 @@ export default function OnboardingPage() {
           setProfileNeedsCompletion(true);
         }
       } else {
-        // User doesn't exist - create new user
+        // User doesn't exist - create new user with initial data
         const newUserProfile = {
           id: user.id,
           email: user.email,
@@ -110,10 +152,7 @@ export default function OnboardingPage() {
           rookieCoinsEarned: 0,
         };
 
-        // Save locally
-localStorage.setItem('@user', JSON.stringify(newUserProfile));
-
-
+        // Insert new user into Supabase
         const { data: insertedUser, error: insertError } = await supabase
           .from('users')
           .insert([newUserProfile])
@@ -121,17 +160,28 @@ localStorage.setItem('@user', JSON.stringify(newUserProfile));
           .single();
 
         if (insertError) {
-          console.warn('Error creating new user:', insertError);
-          // Even if insert fails, continue with local profile completion
+          console.warn('Error creating new user in Supabase:', insertError);
+          alert('Failed to create user account');
+          setAuthLoading(false);
+          return;
+        }
+
+        // Fetch the inserted user and save locally
+        const savedUser = await fetchAndSaveUserLocally(user.id);
+        
+        if (!savedUser) {
+          alert('Failed to fetch user profile');
+          setAuthLoading(false);
+          return;
         }
 
         // Show profile completion form for new user
         setCurrentUserId(user.id);
-        setCurrentEmail(user.email);
-        setCurrentAvatar(newUserProfile.avatar_url);
-        setFullName(newUserProfile.name || '');
-        setstudentclass('');
-        setExam('');
+        setCurrentEmail(savedUser.email);
+        setCurrentAvatar(savedUser.avatar_url);
+        setFullName(savedUser.name || '');
+        setstudentclass(savedUser.class || '');
+        setExam(savedUser.exam || '');
         setProfileNeedsCompletion(true);
       }
     } catch (err) {
@@ -145,7 +195,7 @@ localStorage.setItem('@user', JSON.stringify(newUserProfile));
   async function signInWithGoogle() {
     try {
       setAuthLoading(true);
-      // redirect to /home after OAuth completes
+      // Redirect to /home after OAuth completes
       const redirectUrl =
         typeof window !== 'undefined' ? `${window.location.origin}/home` : undefined;
   
@@ -173,18 +223,11 @@ localStorage.setItem('@user', JSON.stringify(newUserProfile));
       alert('Please fill all fields');
       return;
     }
+
     setLoadingSave(true);
     try {
-      const profileToSave: any = { 
-        id: currentUserId, 
-        name: fullName.trim(), 
-        class: studentclass, 
-        exam: exam,
-        email: currentEmail,
-        avatar_url: currentAvatar,
-      };
-      
-      const { error: upsertError } = await supabase
+      // Update user profile in Supabase
+      const { error: updateError } = await supabase
         .from('users')
         .update({ 
           name: fullName.trim(), 
@@ -193,46 +236,28 @@ localStorage.setItem('@user', JSON.stringify(newUserProfile));
         })
         .eq('id', currentUserId);
 
-      if (upsertError) {
-        console.error('Supabase update error (completion):', upsertError);
-        alert('Failed to save profile: ' + upsertError.message);
+      if (updateError) {
+        console.error('Supabase update error:', updateError);
+        alert('Failed to save profile: ' + updateError.message);
         setLoadingSave(false);
         return;
       }
-      const { data: finalRow, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", currentUserId)
-      .single();
-    
-    if (error) {
-      console.warn("Failed to fetch user row", error);
-    }
-    
 
-      const finalLocal = {
-        id: currentUserId,
-        email: currentEmail,
-        name: fullName.trim(),
-        avatar_url: currentAvatar,
-        class: studentclass,
-        exam: exam,
-        rookieCoinsEarned: finalRow?.rookieCoinsEarned ?? 0,
-        created_at: finalRow?.created_at || new Date().toISOString(),
-      };
-      
+      // Fetch the updated user from Supabase and save locally
+      const savedUser = await fetchAndSaveUserLocally(currentUserId!);
 
+      if (!savedUser) {
+        alert('Failed to fetch updated profile');
+        setLoadingSave(false);
+        return;
+      }
 
-      await finalizeOnboarding(finalLocal);
+      // Finalize onboarding and redirect
+      await finalizeOnboarding(savedUser);
     } catch (err) {
       console.error('Error saving user data:', err);
       alert((err as any)?.message || 'Something went wrong');
-    } finally {
       setLoadingSave(false);
-      setProfileNeedsCompletion(false);
-      localStorage.setItem('@user_onboarded', 'true');
-
-      
     }
   }
   
