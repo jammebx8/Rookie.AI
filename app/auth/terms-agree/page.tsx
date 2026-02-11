@@ -47,11 +47,12 @@ By continuing to use OurApp or completing a payment, you confirm that you have r
 export default function TermsAgreePage() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
+  const onagree = '@user_agreed';
 
   useEffect(() => {
     try {
-      const onboarded = typeof window !== 'undefined' ? window.localStorage.getItem('@user_onboarded') : null;
-      if (onboarded === 'true') {
+      const onagree = typeof window !== 'undefined' ? window.localStorage.getItem('@user_agreed') : null;
+      if (onagree === 'true') {
         router.replace('/auth/onboarding');
       }
     } catch (_) {}
@@ -59,6 +60,7 @@ export default function TermsAgreePage() {
   }, []);
 
   const handleContinue = () => {
+    localStorage.setItem(onagree,'true');
     router.push('/auth/onboarding');
   };
 

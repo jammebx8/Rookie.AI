@@ -110,6 +110,10 @@ export default function OnboardingPage() {
           rookieCoinsEarned: 0,
         };
 
+        // Save locally
+localStorage.setItem('@user', JSON.stringify(newUserProfile));
+
+
         const { data: insertedUser, error: insertError } = await supabase
           .from('users')
           .insert([newUserProfile])
@@ -216,6 +220,8 @@ export default function OnboardingPage() {
         rookieCoinsEarned: finalRow?.rookieCoinsEarned ?? 0,
         created_at: finalRow?.created_at || new Date().toISOString(),
       };
+      
+
 
       await finalizeOnboarding(finalLocal);
     } catch (err) {
@@ -224,8 +230,12 @@ export default function OnboardingPage() {
     } finally {
       setLoadingSave(false);
       setProfileNeedsCompletion(false);
+      localStorage.setItem('@user_onboarded', 'true');
+
+      
     }
   }
+  
 
   return (
     <div className="min-h-screen bg-[url('/bg2.png')] bg-cover text-white">

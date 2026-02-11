@@ -233,19 +233,38 @@ export default function QuestionViewerPage() {
     };
   }, [selectedOption]);
 
-  // ---------- Buddy data ----------
+  
+
+  // ---------- Buddy load ----------
   useEffect(() => {
-    const fetchBuddyData = async () => {
+    const loadBuddy = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/auth/get-profile-data`);
-        if (res.data && res.data.buddy) {
-          setBuddy(res.data.buddy);
+        const stored = localStorage.getItem('selectedBuddy');
+        if (stored) {
+          setBuddy(JSON.parse(stored));
+        } else {
+          const defaultBuddy = {
+            id: 4,
+            name: 'Ritu',
+            description: 'A fun, Hinglish-speaking teenage girl who explains concepts like your bestie!',
+            image: imagepath.Ritu,
+            prompts: {
+              onCorrect:
+                "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, cheerful message for getting a question correct.encourage them to solve more questions.",
+              onWrong:
+                "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl who is supportive. Give a short not more than 15 words, supportive message for getting a question wrong. Encourage them casually.encourage them to solve more questions.",
+              solutionPrefix:
+                "You are Ritu, a fun, teenage girl who replies in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+            },
+          };
+          setBuddy(defaultBuddy);
+          localStorage.setItem('selectedBuddy', JSON.stringify(defaultBuddy));
         }
-      } catch (err) {
-        console.error('Error fetching buddy data:', err);
+      } catch (e) {
+        // ignore
       }
     };
-    fetchBuddyData();
+    loadBuddy();
   }, []);
 
   // ---------- Load session when index changes ----------
@@ -294,6 +313,7 @@ export default function QuestionViewerPage() {
   };
 
   const handleGoBack = () => {
+    clearSession();
     router.back();
   };
 
@@ -607,7 +627,7 @@ export default function QuestionViewerPage() {
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-white animate-spin mx-auto mb-4" />
-          <div>Loading questions from Supabase...</div>
+          <div>Loading questions...</div>
         </div>
       </div>
     );
@@ -662,7 +682,7 @@ export default function QuestionViewerPage() {
           </div>
           <div className="mt-2 h-1 bg-[#151B27] rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-[#47006A] to-[#0031D0]"
+              className="h-full bg-[#fff]"
               initial={{ width: 0 }}
               animate={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
               transition={{ duration: 0.3 }}
@@ -683,8 +703,8 @@ export default function QuestionViewerPage() {
             {/* Question */}
             <div className="mb-6">
               <div className="text-sm text-gray-400 mb-2">
-                {currentQuestion.exam_shift && `${currentQuestion.exam_shift} • `}
-                Question ID: {currentQuestion.question_id}
+                {currentQuestion.exam_shift && `${currentQuestion.exam_shift}`}
+            
               </div>
               <div className="text-xl font-medium leading-relaxed">
                 {renderTextWithLatex(currentQuestion.question_text)}
@@ -713,7 +733,7 @@ export default function QuestionViewerPage() {
                       key={letter}
                       whileTap={{ scale: 0.995 }}
                       onClick={() => handleSelectOption(letter)}
-                      className="w-full text-left rounded-xl p-4 bg-[#0B0F19] border border-[#262F4C] hover:border-[#1DC97A] transition-colors flex items-center gap-4"
+                      className="w-full text-left rounded-xl p-4 bg-[#0B0F19] border border-[#262F4C] hover:border-[#60A5FA] transition-colors flex items-center gap-4"
                     >
                       <div className="w-10 h-10 rounded-lg bg-[#181C28] border border-[#262F4C] flex items-center justify-center font-semibold">
                         {letter}
@@ -737,6 +757,13 @@ export default function QuestionViewerPage() {
                     let borderColor = 'border-[#262F4C]';
                     let iconBg = 'bg-[#181C28]';
                     
+                    if (isCorrect === null && isSelected) {
+                      // 🔵 Selected but not yet checked
+                      bgColor = 'bg-[#0A1F44]';        // dark blue background
+                      borderColor = 'border-[#2979FF]'; 
+                      iconBg = 'bg-[#2979FF]';         // blue icon background
+                    }
+                    
                     if (isCorrect !== null) {
                       if (isCorrectOption) {
                         bgColor = 'bg-[#04271C]';
@@ -749,6 +776,7 @@ export default function QuestionViewerPage() {
                       }
                     }
 
+                    
                     return (
                       <div
                         key={letter}
@@ -774,7 +802,7 @@ export default function QuestionViewerPage() {
                       whileTap={{ scale: 0.98 }}
                       onClick={handleCheckAnswer}
                       disabled={determiningAnswer}
-                      className="w-full py-4 rounded-full bg-gradient-to-r from-[#47006A] to-[#0031D0] font-semibold text-lg disabled:opacity-50"
+                      className="w-full py-4 rounded-full bg-[#fff] text-slate-900 font-semibold text-lg disabled:opacity-50"
                     >
                       {determiningAnswer ? 'Checking...' : 'Check Answer'}
                     </motion.button>
@@ -984,7 +1012,7 @@ export default function QuestionViewerPage() {
       </AnimatePresence>
 
       {/* Footer navigation */}
-      <div className="fixed left-0 right-0 bottom-0 h-24 bg-black border-t border-[#232B3B] flex items-center justify-between px-6 py-4 z-40">
+      <div className="fixed left-0 right-0 bottom-0 h-20 bg-black border-t border-[#232B3B] flex items-center justify-between px-6 py-4 z-40">
         <div className="flex-1 flex items-center gap-4">
           {showToast && (
             <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-[#0B7A44] rounded-md px-4 py-2 text-white">
