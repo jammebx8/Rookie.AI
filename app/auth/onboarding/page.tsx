@@ -36,8 +36,11 @@ export default function OnboardingPage() {
   
         if (event === 'SIGNED_IN' && session?.user) {
           await handleGoogleSignIn(session.user);
+          
         }
   
+    
+
         if (event === 'SIGNED_OUT') {
           localStorage.removeItem('@user');
           localStorage.removeItem('@user_onboarded');
@@ -195,9 +198,9 @@ export default function OnboardingPage() {
   async function signInWithGoogle() {
     try {
       setAuthLoading(true);
-      // Redirect to /home after OAuth completes
+      // Redirect BACK to onboarding page to process the auth
       const redirectUrl =
-        typeof window !== 'undefined' ? `${window.location.origin}/home` : undefined;
+        typeof window !== 'undefined' ? `${window.location.origin}/onboarding` : undefined;
   
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
