@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '../../../public/src/utils/supabase';
 
 // Types
 type ClassType = '12th' | '11th' | 'Dropper' | 'Other';
@@ -239,9 +240,9 @@ export default function ProfilePage() {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
 
-  // User data state
+  // User data state (loaded from @user localStorage set during onboarding)
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(''); // Email is read-only, cannot be edited
   const [selectedClass, setSelectedClass] = useState<ClassType>('12th');
   const [targetExam, setTargetExam] = useState<ExamType>('JEE Mains');
   const [selectedBuddy, setSelectedBuddy] = useState(1);
@@ -260,11 +261,18 @@ export default function ProfilePage() {
 
   const loadUserData = async () => {
     try {
-      // Load from localStorage
-      const storedName = localStorage.getItem('@user_name') || '';
-      const storedEmail = localStorage.getItem('@user_email') || '';
-      const storedClass = (localStorage.getItem('selectedClass') as ClassType) || '12th';
-      const storedExam = (localStorage.getItem('targetExam') as ExamType) || 'JEE Mains';
+      // Load from @user localStorage (set during onboarding)
+      const storedUser = localStorage.getItem('@user');
+      
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        setName(userData.name || '');
+        setEmail(userData.email || '');
+        setSelectedClass(userData.class || '12th');
+        setTargetExam(userData.exam || 'JEE Mains');
+      }
+
+      // Load other settings from individual localStorage keys
       const storedBuddy = parseInt(localStorage.getItem('selectedBuddy') || '1');
       const storedGoal = localStorage.getItem('goal') || '';
 
@@ -275,10 +283,6 @@ export default function ProfilePage() {
       const storedCurrentStreak = parseInt(localStorage.getItem('currentStreak') || '0');
       const storedLongestStreak = parseInt(localStorage.getItem('longestStreak') || '0');
 
-      setName(storedName);
-      setEmail(storedEmail);
-      setSelectedClass(storedClass);
-      setTargetExam(storedExam);
       setSelectedBuddy(storedBuddy);
       setGoal(storedGoal);
 
@@ -297,8 +301,20 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     try {
-      localStorage.setItem('@user_name', name);
-      localStorage.setItem('@user_email', email);
+      // Update @user localStorage with new values
+      const storedUser = localStorage.getItem('@user');
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        const updatedUser = {
+          ...userData,
+          name: name,
+          class: selectedClass,
+          exam: targetExam,
+        };
+        localStorage.setItem('@user', JSON.stringify(updatedUser));
+      }
+
+      // Also save to individual keys for other settings
       localStorage.setItem('selectedClass', selectedClass);
       localStorage.setItem('targetExam', targetExam);
       localStorage.setItem('selectedBuddy', selectedBuddy.toString());
@@ -396,10 +412,8 @@ export default function ProfilePage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              disabled={!editing}
-              className={`w-full bg-transparent border border-[#344054] text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base ${
-                !editing && 'opacity-70 cursor-not-allowed'
-              }`}
+              disabled={true}
+              className="w-full bg-transparent border border-[#344054] text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base opacity-70 cursor-not-allowed"
             />
           </div>
 
