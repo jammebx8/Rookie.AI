@@ -20,26 +20,25 @@ export default function OnboardingPage() {
   const [currentAvatar, setCurrentAvatar] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1. Already onboarded → go home
+    // 1. Check if user is already onboarded → redirect to home
     try {
       const onboarded = localStorage.getItem('@user_onboarded');
       if (onboarded === 'true') {
-        router.replace('/home');
+        router.replace('https://rookieai.vercel.app/home');
         return;
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error('Error checking onboarding status:', err);
+    }
   
-    // 2. Listen to Supabase auth changes
+    // 2. Listen to Supabase auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth event:', event);
   
         if (event === 'SIGNED_IN' && session?.user) {
           await handleGoogleSignIn(session.user);
-          
         }
-  
-    
 
         if (event === 'SIGNED_OUT') {
           localStorage.removeItem('@user');
@@ -51,64 +50,16 @@ export default function OnboardingPage() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
-  
+  }, [router]);
 
   /**
-   * Save user data to localStorage and finalize onboarding
+   * Handle Google Sign-In: Check if user exists, fetch or create user data
    */
-  async function finalizeOnboarding(finalProfile: any) {
-    try {
-      window.localStorage.setItem('@user', JSON.stringify(finalProfile));
-      window.localStorage.setItem('@user_onboarded', 'true');
-      router.replace('/home');
-    } catch (err) {
-      console.warn('Error saving final profile locally', err);
-    }
-  }
-
-  /**
-   * Fetch user from Supabase and save locally
-   */
-  async function fetchAndSaveUserLocally(userId: string) {
-    try {
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        console.warn('Failed to fetch user after operation:', error);
-        return null;
-      }
-
-      if (user) {
-        const localData = {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          avatar_url: user.avatar_url,
-          class: user.class,
-          exam: user.exam,
-          rookieCoinsEarned: user.rookieCoinsEarned ?? 0,
-          created_at: user.created_at,
-        };
-        
-        localStorage.setItem('@user', JSON.stringify(localData));
-        return localData;
-      }
-    } catch (err) {
-      console.error('Error fetching and saving user locally:', err);
-    }
-    return null;
-  }
-
   async function handleGoogleSignIn(user: any) {
     try {
       setAuthLoading(true);
       
-      // Check if user already exists in database
+      // Check if user exists in Supabase users table by ID
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select('*')
@@ -116,91 +67,91 @@ export default function OnboardingPage() {
         .single();
 
       if (existingUser && !fetchError) {
-        // User exists - fetch from Supabase and save locally
-        const localData = {
+        // User exists - fetch all data and save locally
+        const userData = {
           id: existingUser.id,
           email: existingUser.email,
           name: existingUser.name,
-          avatar_url: existingUser.avatar_url,
           class: existingUser.class,
           exam: existingUser.exam,
-          rookieCoinsEarned: existingUser.rookieCoinsEarned ?? 0,
           created_at: existingUser.created_at,
+          avatar_url: existingUser.avatar_url,
+          rookieCoinsEarned: existingUser.rookieCoinsEarned ?? 0,
         };
 
-        // Check if profile is complete
-        if (existingUser.class && existingUser.exam) {
-          // Profile complete - save and redirect to home
-          await finalizeOnboarding(localData);
-        } else {
-          // User exists but profile incomplete - show completion form
-          setCurrentUserId(user.id);
-          setCurrentEmail(existingUser.email);
-          setCurrentAvatar(existingUser.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null);
-          setFullName(existingUser.name || user.user_metadata?.full_name || user.user_metadata?.name || user.email);
-          setstudentclass(existingUser.class || '');
-          setExam(existingUser.exam || '');
-          setProfileNeedsCompletion(true);
-        }
+        // Save to localStorage
+        localStorage.setItem('@user', JSON.stringify(userData));
+        localStorage.setItem('@user_onboarded', 'true');
+
+        // Redirect to home
+        router.replace('https://rookieai.vercel.app/home');
       } else {
-        // User doesn't exist - create new user with initial data
-        const newUserProfile = {
+        // User doesn't exist - create new user in Supabase
+        const newUserData = {
           id: user.id,
           email: user.email,
-          name: user.user_metadata?.full_name || user.user_metadata?.name || user.email,
-          avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
-          created_at: new Date().toISOString(),
+          name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || '',
           class: null,
           exam: null,
+          created_at: new Date().toISOString(),
+          avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
           rookieCoinsEarned: 0,
         };
 
         // Insert new user into Supabase
         const { data: insertedUser, error: insertError } = await supabase
           .from('users')
-          .insert([newUserProfile])
+          .insert([newUserData])
           .select()
           .single();
 
         if (insertError) {
-          console.warn('Error creating new user in Supabase:', insertError);
-          alert('Failed to create user account');
+          console.error('Error creating new user in Supabase:', insertError);
+          alert('Failed to create user account. Please try again.');
           setAuthLoading(false);
           return;
         }
 
-        // Fetch the inserted user and save locally
-        const savedUser = await fetchAndSaveUserLocally(user.id);
-        
-        if (!savedUser) {
-          alert('Failed to fetch user profile');
-          setAuthLoading(false);
-          return;
-        }
+        // Save to localStorage
+        const userData = {
+          id: insertedUser.id,
+          email: insertedUser.email,
+          name: insertedUser.name,
+          class: insertedUser.class,
+          exam: insertedUser.exam,
+          created_at: insertedUser.created_at,
+          avatar_url: insertedUser.avatar_url,
+          rookieCoinsEarned: insertedUser.rookieCoinsEarned ?? 0,
+        };
+
+        localStorage.setItem('@user', JSON.stringify(userData));
 
         // Show profile completion form for new user
-        setCurrentUserId(user.id);
-        setCurrentEmail(savedUser.email);
-        setCurrentAvatar(savedUser.avatar_url);
-        setFullName(savedUser.name || '');
-        setstudentclass(savedUser.class || '');
-        setExam(savedUser.exam || '');
+        setCurrentUserId(insertedUser.id);
+        setCurrentEmail(insertedUser.email);
+        setCurrentAvatar(insertedUser.avatar_url);
+        setFullName(insertedUser.name || '');
+        setstudentclass('');
+        setExam('');
         setProfileNeedsCompletion(true);
       }
     } catch (err) {
       console.error('Error handling Google sign-in:', err);
-      alert('Failed to complete Google sign-in');
+      alert('Failed to complete sign-in. Please try again.');
     } finally {
       setAuthLoading(false);
     }
   }
 
+  /**
+   * Sign in with Google - redirect to /auth/onboarding after OAuth
+   */
   async function signInWithGoogle() {
     try {
       setAuthLoading(true);
-      // Redirect BACK to onboarding page to process the auth
-      const redirectUrl =
-        typeof window !== 'undefined' ? `${window.location.origin}/onboarding` : undefined;
+      
+      // Redirect back to onboarding page to process the auth
+      const redirectUrl = 'https://rookieai.vercel.app/auth/onboarding';
   
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -212,15 +163,22 @@ export default function OnboardingPage() {
         throw error;
       }
   
-      if (!data?.url) throw new Error('No OAuth URL received from Supabase');
+      if (!data?.url) {
+        throw new Error('No OAuth URL received from Supabase');
+      }
+      
+      // Redirect to Google OAuth
       window.location.href = data.url;
     } catch (error: any) {
       console.error('Google sign-in error:', error);
-      alert(error?.message || 'Google authentication failed');
+      alert(error?.message || 'Google authentication failed. Please try again.');
       setAuthLoading(false);
     }
   }
 
+  /**
+   * Save profile completion (class and exam) for new users
+   */
   async function saveProfileCompletion() {
     if (!fullName.trim() || !studentclass || !exam) {
       alert('Please fill all fields');
@@ -246,24 +204,43 @@ export default function OnboardingPage() {
         return;
       }
 
-      // Fetch the updated user from Supabase and save locally
-      const savedUser = await fetchAndSaveUserLocally(currentUserId!);
+      // Fetch updated user data from Supabase
+      const { data: updatedUser, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', currentUserId)
+        .single();
 
-      if (!savedUser) {
-        alert('Failed to fetch updated profile');
+      if (fetchError || !updatedUser) {
+        console.error('Error fetching updated user:', fetchError);
+        alert('Failed to fetch updated profile. Please try again.');
         setLoadingSave(false);
         return;
       }
 
-      // Finalize onboarding and redirect
-      await finalizeOnboarding(savedUser);
+      // Save to localStorage
+      const userData = {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        class: updatedUser.class,
+        exam: updatedUser.exam,
+        created_at: updatedUser.created_at,
+        avatar_url: updatedUser.avatar_url,
+        rookieCoinsEarned: updatedUser.rookieCoinsEarned ?? 0,
+      };
+
+      localStorage.setItem('@user', JSON.stringify(userData));
+      localStorage.setItem('@user_onboarded', 'true');
+
+      // Redirect to home
+      router.replace('https://rookieai.vercel.app/home');
     } catch (err) {
       console.error('Error saving user data:', err);
-      alert((err as any)?.message || 'Something went wrong');
+      alert((err as any)?.message || 'Something went wrong. Please try again.');
       setLoadingSave(false);
     }
   }
-  
 
   return (
     <div className="min-h-screen bg-[url('/bg2.png')] bg-cover text-white">

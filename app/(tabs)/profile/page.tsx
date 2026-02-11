@@ -261,8 +261,8 @@ export default function ProfilePage() {
   const loadUserData = async () => {
     try {
       // Load from localStorage
-      const storedName = localStorage.getItem('userName') || '';
-      const storedEmail = localStorage.getItem('userEmail') || '';
+      const storedName = localStorage.getItem('@user_name') || '';
+      const storedEmail = localStorage.getItem('@user_email') || '';
       const storedClass = (localStorage.getItem('selectedClass') as ClassType) || '12th';
       const storedExam = (localStorage.getItem('targetExam') as ExamType) || 'JEE Mains';
       const storedBuddy = parseInt(localStorage.getItem('selectedBuddy') || '1');
@@ -297,8 +297,8 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     try {
-      localStorage.setItem('userName', name);
-      localStorage.setItem('userEmail', email);
+      localStorage.setItem('@user_name', name);
+      localStorage.setItem('@user_email', email);
       localStorage.setItem('selectedClass', selectedClass);
       localStorage.setItem('targetExam', targetExam);
       localStorage.setItem('selectedBuddy', selectedBuddy.toString());
