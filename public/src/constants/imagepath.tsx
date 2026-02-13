@@ -21,11 +21,11 @@ const imagepath = {
     Maths1: "/mahhh1.jpg",
     Biology: "/bio.jpg",
   
-    Chemistry1: "/chemistry1.jpg",
+    Chemistry1: "/An_image_of_a_chemical_structure_with_glowing_lines_and_scientific_icons__in_a_banner_size__maintain.png",
     Chemistry2: "/bio.jpg",
     Chemistry3: "/chemm3.jpg",
   
-    Physics1: "/phy1.jpg",
+    Physics1: "/An_image_of_a_black_hole_with_a_bright_accretion_disk_and_several_planets_orbiting_it__in_a_banner_s.png",
     Physics2: "/bio.jpg",
     Physics3: "/phyyyy3.jpg",
   

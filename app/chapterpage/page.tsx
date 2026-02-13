@@ -24,15 +24,21 @@ const chaptersData: ChaptersData = {
   'JEE Main': {
     Physics: [
       { title: 'Units and Measurements.', questions: 100 },
-      { title: 'Kinematics.', questions: 70 },
+   
+ 
+      { title: 'Kinematics 1-D.', questions: 70 },
+      { title: 'Kinematics 2-D.', questions: 70 },
+      { title: 'Circular Motion.', questions: 70 },
+
       { title: 'Laws of Motion.', questions: 90 },
       { title: 'Work, Energy, and Power.', questions: 80 },
+      { title: 'Center of Mass and Collision.', questions: 80 },
       { title: 'Rotational Motion.', questions: 110 },
-      { title: 'Gravitation.', questions: 70 },
-      { title: 'Properties of Solids and Liquids.', questions: 80 },
-      { title: 'Thermodynamics.', questions: 90 },
-      { title: 'Behaviour of Perfect Gas and Kinetic Theory.', questions: 90 },
-      { title: 'Oscillations and Waves.', questions: 90 },
+      { title: 'Properties of Matter.', questions: 70 },
+      { title: 'Heat and Thermodynamics.', questions: 80 },
+      { title: 'Simple Harmonic Motion.', questions: 90 },
+      { title: 'Waves.', questions: 90 },
+      { title: 'Gravitation.', questions: 90 },
       { title: 'Electrostatics.', questions: 80 },
       { title: 'Current Electricity.', questions: 90 },
       { title: 'Magnetic Effects of Current and Magnetism.', questions: 80 },
@@ -41,6 +47,7 @@ const chaptersData: ChaptersData = {
       { title: 'Optics.', questions: 90 },
       { title: 'Dual Nature of Matter and Radiation.', questions: 70 },
       { title: 'Atoms and Nuclei.', questions: 80 },
+      { title: 'Vector Algebra.', questions: 70 },
       { title: 'Semiconductors', questions: 70 },
     ],
     Chemistry: [

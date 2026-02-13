@@ -851,7 +851,7 @@ export default function QuestionViewerPage() {
                     {/* Solution Block */}
                     {solutionRequested && solution && (
                       <div className="mt-6 rounded-xl overflow-hidden">
-                        <div className="bg-gradient-to-r from-[#47006A] to-[#0031D0] p-4 rounded-xl">
+                        <div className="bg-gradient-to-b from-[#47006A] to-[#0031D0] p-4 rounded-xl">
                           <div className="font-bold text-lg mb-2">Solution:</div>
                           <div className="whitespace-pre-line text-base leading-relaxed">
                             {renderTextWithLatex(solution)}
