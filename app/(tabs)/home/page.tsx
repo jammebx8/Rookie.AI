@@ -19,12 +19,12 @@ type User = {
   id: string;
   email?: string;
   exam?: string;
-  gender?: string;
+  class?: string;
   [key: string]: any;
 };
 
 const EXAM_OPTIONS = ['JEE Mains', 'NEET', 'JEE Advanced', 'Other'];
-const GENDER_OPTIONS = ['11th', '12th', 'Dropper', 'Other'];
+const Class_OPTIONS = ['11th', '12th', 'Dropper', 'Other'];
 
 const socialMediaLinks = [
   {
@@ -145,7 +145,7 @@ export default function Page() {
 
   const [user, setUser] = useState<User | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [gender, setGender] = useState<string>('');
+  const [cl, setcl] = useState<string>('');
   const [exam, setExam] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
@@ -167,10 +167,10 @@ export default function Page() {
       const parsed: User = JSON.parse(cached);
       setUser(parsed);
       // prompt to complete profile if missing
-      if (!parsed.gender || !parsed.exam) {
+      if (!parsed.cl || !parsed.exam) {
         setShowProfileModal(true);
       } else {
-        setGender(parsed.gender || '');
+        setcl(parsed.cl || '');
         setExam(parsed.exam || '');
       }
     } catch (err) {
@@ -180,7 +180,7 @@ export default function Page() {
   }, []);
 
   const saveProfile = async () => {
-    if (!gender || !exam) {
+    if (!cl || !exam) {
       alert('Please select your class and exam');
       return;
     }
@@ -190,13 +190,13 @@ export default function Page() {
     }
     try {
       setSaving(true);
-      const { error } = await supabase.from('users').update({ gender, exam }).eq('id', user.id);
+      const { error } = await supabase.from('users').update({ cl, exam }).eq('id', user.id);
 
       if (error) {
         throw error;
       }
 
-      const updatedUser = { ...user, gender, exam };
+      const updatedUser = { ...user, cl, exam };
       localStorage.setItem('@user', JSON.stringify(updatedUser));
       setUser(updatedUser);
       setShowProfileModal(false);
@@ -287,13 +287,13 @@ export default function Page() {
 
                   <label className="block text-sm font-medium text-slate-700 mb-2">Class</label>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {GENDER_OPTIONS.map(g => (
+                    {Class_OPTIONS.map(g => (
                       <motion.button
                         key={g}
-                        onClick={() => setGender(g)}
+                        onClick={() => setcl(g)}
                         whileTap={{ scale: 0.98 }}
                         className={`px-4 py-2 rounded-full text-sm font-medium ${
-                          gender === g ? 'bg-cyan-400 text-slate-900' : 'bg-slate-200 text-slate-800'
+                          cl === g ? 'bg-cyan-400 text-slate-900' : 'bg-slate-200 text-slate-800'
                         }`}
                       >
                         {g}
