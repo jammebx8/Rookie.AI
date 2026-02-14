@@ -10,7 +10,7 @@ const EXAM_OPTIONS = ['JEE Mains', 'NEET', 'JEE Advanced', 'Other'];
 export default function OnboardingPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
-  const [studentclass, setstudentclass] = useState('');
+  const [cl, setcl] = useState('');
   const [exam, setExam] = useState('');
   const [profileNeedsCompletion, setProfileNeedsCompletion] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
@@ -72,7 +72,7 @@ export default function OnboardingPage() {
           id: existingUser.id,
           email: existingUser.email,
           name: existingUser.name,
-          class: existingUser.class,
+          cl: existingUser.cl,
           exam: existingUser.exam,
           created_at: existingUser.created_at,
           avatar_url: existingUser.avatar_url,
@@ -91,7 +91,7 @@ export default function OnboardingPage() {
           id: user.id,
           email: user.email,
           name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || '',
-          class: null,
+          cl: null,
           exam: null,
           created_at: new Date().toISOString(),
           avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
@@ -117,7 +117,7 @@ export default function OnboardingPage() {
           id: insertedUser.id,
           email: insertedUser.email,
           name: insertedUser.name,
-          class: insertedUser.class,
+          cl: insertedUser.cl,
           exam: insertedUser.exam,
           created_at: insertedUser.created_at,
           avatar_url: insertedUser.avatar_url,
@@ -131,7 +131,7 @@ export default function OnboardingPage() {
         setCurrentEmail(insertedUser.email);
         setCurrentAvatar(insertedUser.avatar_url);
         setFullName(insertedUser.name || '');
-        setstudentclass('');
+        setcl('');
         setExam('');
         setProfileNeedsCompletion(true);
       }
@@ -180,7 +180,7 @@ export default function OnboardingPage() {
    * Save profile completion (class and exam) for new users
    */
   async function saveProfileCompletion() {
-    if (!fullName.trim() || !studentclass || !exam) {
+    if (!fullName.trim() || !cl || !exam) {
       alert('Please fill all fields');
       return;
     }
@@ -192,7 +192,7 @@ export default function OnboardingPage() {
         .from('users')
         .update({ 
           name: fullName.trim(), 
-          class: studentclass, 
+          cl: cl, 
           exam: exam 
         })
         .eq('id', currentUserId);
@@ -223,7 +223,7 @@ export default function OnboardingPage() {
         id: updatedUser.id,
         email: updatedUser.email,
         name: updatedUser.name,
-        class: updatedUser.class,
+        cl: updatedUser.cl,
         exam: updatedUser.exam,
         created_at: updatedUser.created_at,
         avatar_url: updatedUser.avatar_url,
@@ -294,9 +294,9 @@ export default function OnboardingPage() {
               {CLASS_OPTIONS.map((c) => (
                 <button 
                   key={c} 
-                  onClick={() => setstudentclass(c)} 
+                  onClick={() => setcl(c)} 
                   className={`pill-press px-4 py-2 rounded-full border ${
-                    studentclass === c 
+                    cl === c 
                       ? 'bg-white text-slate-900' 
                       : 'bg-slate-900 text-white/90'
                   }`}
@@ -356,9 +356,9 @@ export default function OnboardingPage() {
                 {CLASS_OPTIONS.map((c) => (
                   <button 
                     key={c} 
-                    onClick={() => setstudentclass(c)} 
+                    onClick={() => setcl(c)} 
                     className={`pill-press px-4 py-2 rounded-full border ${
-                      studentclass === c 
+                      cl === c 
                         ? 'bg-white text-slate-900' 
                         : 'bg-slate-900 text-white/90'
                     }`}
