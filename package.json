@@ -15,10 +15,12 @@
     "katex": "^0.16.28",
     "next": "16.1.1",
     "react": "19.2.3",
+    "react-confetti": "^6.4.0",
     "react-dom": "19.2.3",
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.5.0",
-    "react-katex": "^3.1.0"
+    "react-katex": "^3.1.0",
+    "react-use": "^17.6.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
