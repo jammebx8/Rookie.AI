@@ -30,6 +30,65 @@ type Question = {
   year?: number | string;
 };
 
+type AIBuddy = {
+  id: number;
+  name: string;
+  description: string;
+  image: string;
+  prompts: {
+    onCorrect: string;
+    onWrong: string;
+    solutionPrefix: string;
+  };
+};
+
+const aiBuddies: AIBuddy[] = [
+  {
+    id: 1,
+    name: 'Jeetu Bhaiya',
+    description: 'No description needed, he is the legend himself.',
+    image: '/HD-wallpaper-kota-factory-lip-jeetu-bhaiya.jpg',
+    prompts: {
+      onCorrect: "Give a short not more than 15 words, cheerful message for getting a question correct.you are jeetu bhaiya who talks in hinglish.you call your students as bhai or didi as sarcasm. as Jeetu Bhaiya in hinglish.encourage them to solve more questions.",
+      onWrong: "Give a short not more than 15 words, supportive message for getting a question wrong as Jeetu Bhaiya in hinglish.encourage them to solve more questions.",
+      solutionPrefix: "you are jeetu bhaiya who talks in hinglish.you call your students as bhai or didi as sarcasm. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+    },
+  },
+  {
+    id: 2,
+    name: 'Einstein',
+    description: 'The genius who made physics feel like poetry.',
+    image: '/einstein.jpg',
+    prompts: {
+      onCorrect: "Give a short not more than 15 words, cheerful message for getting a question correct, as Albert Einstein in a witty, philosophical style. Encourage them to keep exploring.",
+      onWrong: "Give a short not more than 15 words, supportive message for getting a question wrong, as Albert Einstein in a wise, encouraging style. Motivate them to keep trying.",
+      solutionPrefix: "You are Albert Einstein. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, thoughtful text a curious student can understand. Be insightful yet approachable.",
+    },
+  },
+  {
+    id: 3,
+    name: 'Hermione Granger',
+    description: 'Always prepared, always precise — your study companion.',
+    image: '/hermione.jpg',
+    prompts: {
+      onCorrect: "Give a short not more than 15 words, cheerful message for getting a question correct, as Hermione Granger in an enthusiastic, bookish style. Encourage more studying.",
+      onWrong: "Give a short not more than 15 words, supportive message for getting a question wrong, as Hermione Granger in a helpful, motivating style. Encourage them not to give up.",
+      solutionPrefix: "You are Hermione Granger. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, clear text that any student can follow. Be precise, thorough, and encouraging.",
+    },
+  },
+  {
+    id: 4,
+    name: 'Sheldon Cooper',
+    description: 'Bazinga! Science explained with nerdy precision.',
+    image: '/sheldon.jpg',
+    prompts: {
+      onCorrect: "Give a short not more than 15 words, cheerful message for getting a question correct, as Sheldon Cooper in his typical superior-yet-excited style. Encourage further excellence.",
+      onWrong: "Give a short not more than 15 words, supportive message for getting a question wrong, as Sheldon Cooper in a condescending-but-helpful style. Motivate them to try harder.",
+      solutionPrefix: "You are Sheldon Cooper. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write in Sheldon's precise, slightly pedantic but ultimately helpful style. Be thorough and methodical.",
+    },
+  },
+];
+
 const API_BASE = 'https://rookie-backend.vercel.app/api';
 
 const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
@@ -65,6 +124,7 @@ export default function QuestionViewerPage() {
   const [showCoinReward, setShowCoinReward] = useState<boolean>(false);
   const [solutionLoading, setSolutionLoading] = useState<boolean>(false);
   const [motivationLoading, setMotivationLoading] = useState<boolean>(false);
+  const [selectedBuddy, setSelectedBuddy] = useState<AIBuddy>(aiBuddies[0]);
 
   // Dig Deeper states
   const [isDigging, setIsDigging] = useState<boolean>(false);
@@ -84,6 +144,19 @@ export default function QuestionViewerPage() {
   const questionStartTime = useRef<number>(Date.now());
 
   // ---------- Fetch questions from Supabase ----------
+  useEffect(() => {
+    // Load selected buddy from localStorage
+    try {
+      const savedBuddyId = localStorage.getItem('selectedBuddy');
+      if (savedBuddyId) {
+        const found = aiBuddies.find(b => b.id === parseInt(savedBuddyId));
+        if (found) setSelectedBuddy(found);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     const fetchQuestionsFromSupabase = async () => {
       if (!chapterTitle) return;
@@ -346,6 +419,7 @@ export default function QuestionViewerPage() {
         option_D: questionData.option_D,
         solution: questionData.solution,
         correct_option: questionData.correct_option,
+        system_prompt: selectedBuddy.prompts,
       });
 
       const aiSolution = response.data.solution || questionData.solution;
@@ -369,16 +443,16 @@ export default function QuestionViewerPage() {
   const generateMotivation = async (correct: boolean) => {
     try {
       setMotivationLoading(true);
-      const message = correct
-        ? 'Generate a short, encouraging message for getting a question right'
-        : 'Generate a short, motivating message for getting a question wrong';
+      const prompt = correct
+        ? selectedBuddy.prompts.onCorrect
+        : selectedBuddy.prompts.onWrong;
 
       const response = await axios.post(`${API_BASE}/motivation`, {
-        message,
+        message: prompt,
       });
 
       const motivationText = response.data.choices?.[0]?.message?.content || 
-        (correct ? 'Great job! Keep it up!' : 'Don\'t worry, learn from this!');
+        (correct ? 'Great job! Keep it up!' : "Don't worry, learn from this!");
       
       setMotivation(motivationText);
       return motivationText;
@@ -443,7 +517,7 @@ export default function QuestionViewerPage() {
     if (correct && coins > 0) {
       setShowConfetti(true);
       setShowCoinReward(true);
-      setTimeout(() => setShowConfetti(false), 5000);
+      setTimeout(() => setShowConfetti(false), 6500); // extra time for fade
       setTimeout(() => setShowCoinReward(false), 3000);
       await updateRookieCoins(coins);
     }
@@ -591,7 +665,7 @@ export default function QuestionViewerPage() {
     });
   };
 
-  // ---------- Typing effect for AI text ----------
+  // ---------- Smooth word-by-word appearing effect for AI text ----------
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
@@ -599,17 +673,23 @@ export default function QuestionViewerPage() {
     if (solution && solutionRequested) {
       setIsTyping(true);
       setDisplayedText('');
+      const words = solution.split(' ');
       let index = 0;
-      const interval = setInterval(() => {
-        setDisplayedText(solution.slice(0, index));
-        index++;
-        if (index > solution.length) {
-          clearInterval(interval);
+
+      const revealNext = () => {
+        if (index < words.length) {
+          index++;
+          setDisplayedText(words.slice(0, index).join(' '));
+          // Slightly randomize speed for organic feel
+          const delay = 18 + Math.random() * 12;
+          setTimeout(revealNext, delay);
+        } else {
           setIsTyping(false);
         }
-      }, 10);
+      };
 
-      return () => clearInterval(interval);
+      const startDelay = setTimeout(revealNext, 150);
+      return () => clearTimeout(startDelay);
     }
   }, [solution, solutionRequested]);
 
@@ -629,8 +709,24 @@ export default function QuestionViewerPage() {
 
   return (
     <div className="min-h-screen bg-black text-white pb-24">
-      {/* Confetti */}
-      {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={500} />}
+      {/* Confetti - full page with fade effect */}
+      {showConfetti && (
+        <motion.div
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1.5, delay: 3 }}
+          style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 9999 }}
+        >
+          <Confetti
+            width={width}
+            height={typeof window !== 'undefined' ? document.documentElement.scrollHeight : height}
+            recycle={false}
+            numberOfPieces={500}
+            style={{ position: 'fixed', top: 0, left: 0 }}
+          />
+        </motion.div>
+      )}
 
       {/* Coin Reward Display */}
       <AnimatePresence>
@@ -642,7 +738,13 @@ export default function QuestionViewerPage() {
             className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-gradient-to-r from-yellow-500 to-orange-500 px-8 py-4 rounded-2xl shadow-2xl"
           >
             <div className="flex items-center gap-3">
-              <FiAward size={32} className="text-white" />
+              <Image
+                src={imagepath.RC || '/coin.png'}
+                alt="Rookie Coin"
+                width={40}
+                height={40}
+                className="w-10 h-10 object-contain drop-shadow-lg"
+              />
               <div>
                 <div className="text-2xl font-bold text-white">+{coinsEarned} Rookie Coins!</div>
                 <div className="text-sm text-white/90">Total: {rookieCoins + coinsEarned}</div>
@@ -674,7 +776,13 @@ export default function QuestionViewerPage() {
 
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 px-3 py-2 bg-[#151B27] border border-[#1D2939] rounded-xl">
-              <FiAward className="text-yellow-500" />
+              <Image
+                src={imagepath.RC || '/coin.png'}
+                alt="Coin"
+                width={20}
+                height={20}
+                className="w-5 h-5 object-contain"
+              />
               <span className="font-semibold">{rookieCoins}</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-2 bg-[#151B27] border border-[#1D2939] rounded-xl">
@@ -813,7 +921,7 @@ export default function QuestionViewerPage() {
                 {!determiningAnswer && (
                   <>
                     {motivationLoading ? (
-                      <div className="bg-gradient-to-r from-[#47006A] to-[#0031D0] rounded-2xl p-6">
+                      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6">
                         <div className="flex items-center gap-3">
                           <motion.div
                             animate={{ rotate: 360 }}
@@ -828,9 +936,23 @@ export default function QuestionViewerPage() {
                         <motion.div
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="bg-gradient-to-r from-[#47006A] to-[#0031D0] rounded-2xl p-6"
+                          className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-5"
                         >
-                          <p className="text-lg font-medium">{motivation}</p>
+                          <div className="flex items-center gap-3">
+                            <div className="relative flex-shrink-0">
+                              <Image
+                                src={selectedBuddy.image}
+                                alt={selectedBuddy.name}
+                                width={48}
+                                height={48}
+                                className="w-12 h-12 rounded-full object-cover border-2 border-white/30"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-xs font-semibold text-white/70 mb-1">{selectedBuddy.name}</div>
+                              <MotivationText text={motivation} />
+                            </div>
+                          </div>
                         </motion.div>
                       )
                     )}
@@ -838,8 +960,21 @@ export default function QuestionViewerPage() {
                     {/* Solution */}
                     {solutionRequested && (
                       <div className="bg-[#0A0E17] border border-[#1D2939] rounded-2xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-xl font-bold">Solution</h3>
+                        <div className="flex items-center gap-3 mb-5">
+                          <div className="relative flex-shrink-0">
+                            <Image
+                              src={selectedBuddy.image}
+                              alt={selectedBuddy.name}
+                              width={44}
+                              height={44}
+                              className="w-11 h-11 rounded-full object-cover border-2 border-[#262F4C]"
+                            />
+                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-[#0A0E17]" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold leading-tight">{selectedBuddy.name}</h3>
+                            <p className="text-xs text-gray-500">Solution</p>
+                          </div>
                         </div>
 
                         {solutionLoading ? (
@@ -853,9 +988,8 @@ export default function QuestionViewerPage() {
                           </div>
                         ) : (
                           <div className="prose prose-invert max-w-none">
-                            <div className="text-gray-200 leading-relaxed whitespace-pre-wrap">
-                              {renderLatex(solution)}
-                            </div>
+                            {renderLatex(displayedText || solution)}
+                            <AppearingText text={displayedText || solution} isRevealing={isTyping} />
                           </div>
                         )}
 
@@ -863,12 +997,12 @@ export default function QuestionViewerPage() {
                         {!solutionLoading && solution && (
                           <div className="mt-6">
                             {!aiFollowup && !aiFollowupLoading && (
-                              <div className="flex flex-wrap gap-3 ">
+                              <div className="flex flex-wrap gap-3 items-center justify-center mr-10">
                                 <motion.button
                                   whileTap={{ scale: 0.98 }}
                                   onClick={handleDigDeeper}
                                   disabled={aiFollowupLoading}
-                                  className="flex items-center align-item gap-2 px-4 py-2 rounded-full bg-[#fff] text-slate-900 disabled:opacity-50 "
+                                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#fff] text-slate-900 disabled:opacity-50 "
                                 >
                                   <FiSearch /> <span>Test Your Understanding</span>
                                 </motion.button>
@@ -1070,6 +1204,53 @@ export default function QuestionViewerPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// AppearingText: smooth word-by-word fade-in, premium AI style
+function AppearingText({ text, isRevealing }: { text: string; isRevealing: boolean }) {
+  const words = text.split(' ');
+  return (
+    <div className="text-gray-200 leading-relaxed whitespace-pre-wrap">
+      {words.map((word, i) => (
+        <motion.span
+          key={`${word}-${i}`}
+          initial={{ opacity: 0, filter: 'blur(4px)', y: 4 }}
+          animate={{ opacity: 1, filter: 'blur(0px)', y: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+          className="inline"
+        >
+          {word}{' '}
+        </motion.span>
+      ))}
+      {isRevealing && (
+        <motion.span
+          animate={{ opacity: [1, 0] }}
+          transition={{ duration: 0.5, repeat: Infinity, repeatType: 'reverse' }}
+          className="inline-block w-0.5 h-4 bg-blue-400 ml-0.5 align-middle"
+        />
+      )}
+    </div>
+  );
+}
+
+// MotivationText: quick word-by-word appear for motivation message
+function MotivationText({ text }: { text: string }) {
+  const words = text.split(' ');
+  return (
+    <p className="text-base font-medium leading-snug">
+      {words.map((word, i) => (
+        <motion.span
+          key={`mot-${word}-${i}`}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, delay: i * 0.04, ease: 'easeOut' }}
+          className="inline"
+        >
+          {word}{' '}
+        </motion.span>
+      ))}
+    </p>
   );
 }
 
