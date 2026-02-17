@@ -629,8 +629,24 @@ export default function QuestionViewerPage() {
 
   return (
     <div className="min-h-screen bg-black text-white pb-24">
-      {/* Confetti */}
-      {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={500} />}
+           {/* Confetti - full page with fade effect */}
+      {showConfetti && (
+        <motion.div
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1.5, delay: 3 }}
+          style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 9999 }}
+        >
+          <Confetti
+            width={width}
+            height={typeof window !== 'undefined' ? document.documentElement.scrollHeight : height}
+            recycle={false}
+            numberOfPieces={500}
+            style={{ position: 'fixed', top: 0, left: 0 }}
+          />
+        </motion.div>
+        )}
 
       {/* Coin Reward Display */}
       <AnimatePresence>

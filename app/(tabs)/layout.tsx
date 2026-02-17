@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { color, motion } from 'framer-motion';
+import { FiAward } from 'react-icons/fi';
+import { supabase } from '@/public/src/utils/supabase';
 
 
 type Tab = {
@@ -30,22 +32,31 @@ const tabIconTap = { scale: 0.96 };
 export default function TabLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [coins, setCoins] = useState<number>(0);
+  const [rookieCoins, setRookieCoins] = useState(0);
 
-  // useEffect(() => {
-  //   const loadCoins = async () => {
-  //     try {
-  //      const coinAmount = await storage.getCoins();
-  //       setCoins(coinAmount);
-  //     } catch (err) {
-  //       // eslint-disable-next-line no-console
-  //       console.error('Failed to load coins', err);
-  //       setCoins(0);
-  //     }
-  //   };
 
-  //   loadCoins();
-  // }, []);
+  useEffect(() => {
+    const loadUserCoins = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data, error } = await supabase
+            .from('users')
+            .select('rookieCoinsEarned')
+            .eq('id', user.id)
+            .single();
+
+          if (!error && data) {
+            setRookieCoins(data.rookieCoinsEarned || 0);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading user coins:', err);
+      }
+    };
+
+    loadUserCoins();
+  }, []);
 
   const tabs: Tab[] = [
     {
@@ -104,26 +115,10 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
             {/* Header Right - Coins & Bookmark */}
             {showHeaderRight && (
               <div className="flex items-center gap-2 sm:gap-3">
-                {/* Coin Badge */}
-                <motion.button
-                  className="flex items-center gap-1.5 sm:gap-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-full px-3 py-1.5 sm:px-4 sm:py-2"
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                  aria-label="Coins"
-                  type="button"
-                >
-                  <Image
-                    src="/coin.png"
-                    alt="Coin"
-                    width={22}
-                    height={22}
-                    className="w-5 h-5 sm:w-6 sm:h-6"
-                    priority
-                  />
-                  <span className="text-[#FFD700] font-bold text-sm sm:text-base tabular-nums">
-                    {coins}
-                  </span>
-                </motion.button>
+         <div className="flex items-center gap-2 px-3 py-2 bg-[#151B27] border border-[#1D2939] rounded-xl">
+                       <FiAward className="text-yellow-500" />
+                       <span className="font-semibold">{rookieCoins}</span>
+                     </div>
 
                 {/* Bookmark Button */}
                 <motion.button
