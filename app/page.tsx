@@ -75,12 +75,36 @@ const BookIcon = () => (
   </svg>
 );
 
-// Exam badge placeholder (replace src with actual SVGs from public)
+// Red info/warning icon
+const InfoRedIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="8" x2="12" y2="12"/>
+    <line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+);
+
+// Exam badge using images from /public folder
 const ExamBadge = ({ name, abbr, color }: { name: string; abbr: string; color: string }) => (
   <div className="exam-badge" style={{ '--badge-color': color } as React.CSSProperties}>
     <div className="exam-badge-icon">
-      {/* Replace with: <Image src={`/${abbr.toLowerCase()}.svg`} alt={name} width={28} height={28} /> */}
-      <span className="exam-abbr">{abbr.slice(0, 2)}</span>
+      <Image
+        src={`/${abbr.toLowerCase()}.png`}
+        alt={name}
+        width={28}
+        height={28}
+        onError={(e) => {
+          // Fallback to abbr text if image not found
+          (e.target as HTMLImageElement).style.display = 'none';
+          const parent = (e.target as HTMLImageElement).parentElement;
+          if (parent && !parent.querySelector('.exam-abbr')) {
+            const span = document.createElement('span');
+            span.className = 'exam-abbr';
+            span.textContent = abbr.slice(0, 2);
+            parent.appendChild(span);
+          }
+        }}
+      />
     </div>
     <span className="exam-name">{name}</span>
   </div>
@@ -91,7 +115,7 @@ const EXAMS = [
   { name: 'JEE Advanced', abbr: 'JA', color: '#8b5cf6' },
   { name: 'NEET', abbr: 'NT', color: '#10b981' },
   { name: 'MHT CET', abbr: 'MC', color: '#f59e0b' },
-  { name: 'KCET', abbr: 'KC', color: '#ef4444' },
+
   { name: 'BITSAT', abbr: 'BS', color: '#6366f1' },
 ];
 
@@ -99,6 +123,14 @@ const FEATURES = [
   { icon: <BookIcon />, title: '50,000+ PYQs', desc: 'From JEE, NEET & 10+ entrance exams across all years and subjects.' },
   { icon: <BrainIcon />, title: 'AI-Powered Solutions', desc: 'Step-by-step AI explanations that adapt to how you think and learn.' },
   { icon: <ChartIcon />, title: 'Smart Analytics', desc: 'Know exactly where you stand with real-time performance insights and AIR.' },
+];
+
+// Social proof student avatars (images from public folder)
+const SOCIAL_AVATARS = [
+  { src: '/student1.png', fallback: 'AK' },
+  { src: '/student2.png', fallback: 'PV' },
+  { src: '/student3.png', fallback: 'RS' },
+  { src: '/student4.png', fallback: 'MG' },
 ];
 
 export default function OnboardingPage() {
@@ -115,6 +147,9 @@ export default function OnboardingPage() {
   // Selections for landing page (pre-auth)
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedExam, setSelectedExam] = useState('');
+
+  // Validation error state
+  const [selectionError, setSelectionError] = useState(false);
 
   useEffect(() => {
     try {
@@ -149,6 +184,7 @@ export default function OnboardingPage() {
         .single();
 
       if (existingUser && !fetchError) {
+        // Existing user — save to localStorage FIRST, then redirect
         const userData = {
           id: existingUser.id,
           email: existingUser.email,
@@ -163,6 +199,7 @@ export default function OnboardingPage() {
         localStorage.setItem('@user_onboarded', 'true');
         router.replace('https://rookieai.vercel.app/home');
       } else {
+        // New user — insert into Supabase users table
         const newUserData = {
           id: user.id,
           email: user.email,
@@ -196,9 +233,11 @@ export default function OnboardingPage() {
           avatar_url: insertedUser.avatar_url,
           rookieCoinsEarned: insertedUser.rookieCoinsEarned ?? 0,
         };
+        // Always save to localStorage before any redirect
         localStorage.setItem('@user', JSON.stringify(userData));
 
         if (!insertedUser.cl || !insertedUser.exam) {
+          // Show profile completion step (no redirect yet)
           setCurrentUserId(insertedUser.id);
           setFullName(insertedUser.name || '');
           setcl(insertedUser.cl || selectedClass || '');
@@ -218,9 +257,20 @@ export default function OnboardingPage() {
   }
 
   async function signInWithGoogle() {
+    // Validate selections first — show red warning if not chosen
+    if (!selectedClass || !selectedExam) {
+      setSelectionError(true);
+      return;
+    }
+    setSelectionError(false);
+
     try {
       setAuthLoading(true);
-      const redirectUrl = 'https://rookieai.vercel.app/home';
+      // Redirect back to THIS onboarding page so auth callback runs and saves localStorage
+      const redirectUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}${window.location.pathname}`
+        : 'https://rookieai.vercel.app';
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: redirectUrl },
@@ -274,6 +324,7 @@ export default function OnboardingPage() {
         avatar_url: updatedUser.avatar_url,
         rookieCoinsEarned: updatedUser.rookieCoinsEarned ?? 0,
       };
+      // Save updated user data to localStorage BEFORE redirecting
       localStorage.setItem('@user', JSON.stringify(userData));
       localStorage.setItem('@user_onboarded', 'true');
       router.replace('https://rookieai.vercel.app/home');
@@ -332,12 +383,7 @@ export default function OnboardingPage() {
           font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: var(--text);
           text-decoration: none;
         }
-        .nav-logo-mark {
-          width: 34px; height: 34px; border-radius: 10px;
-          background: linear-gradient(135deg, var(--primary), var(--accent));
-          display: flex; align-items: center; justify-content: center;
-          color: white; font-size: 1rem; font-weight: 800;
-        }
+        .nav-logo-img { width: 34px; height: 34px; object-fit: contain; }
         .nav-logo-text span { color: var(--primary-light); }
         .nav-badge {
           font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;
@@ -364,22 +410,22 @@ export default function OnboardingPage() {
 
         .hero-h1 {
           font-family: var(--font-display);
-          font-size: clamp(2rem, 4vw, 3.1rem);
-          font-weight: 800; line-height: 1.13; color: var(--text);
-          margin-bottom: 18px; letter-spacing: -0.03em;
+          font-size: clamp(2rem, 4vw, 3rem);
+          font-weight: 800; line-height: 1.13;
+          letter-spacing: -0.03em; color: var(--text);
+          margin-bottom: 18px;
         }
-        .hero-h1 .gradient-text {
+        .gradient-text {
           background: linear-gradient(135deg, var(--primary), var(--accent));
-          -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+          -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+          background-clip: text;
         }
-
-        .hero-sub { font-size: 1.05rem; color: var(--text2); line-height: 1.65; margin-bottom: 32px; max-width: 480px; }
-
-        .hero-bullets { display: flex; flex-direction: column; gap: 10px; margin-bottom: 36px; }
-        .hero-bullet {
-          display: flex; align-items: center; gap: 10px;
-          font-size: 0.92rem; color: var(--text2);
+        .hero-sub {
+          font-size: 1rem; color: var(--text2); line-height: 1.65;
+          max-width: 500px; margin-bottom: 28px;
         }
+        .hero-bullets { display: flex; flex-direction: column; gap: 10px; margin-bottom: 32px; }
+        .hero-bullet { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: var(--text2); }
         .hero-bullet-icon {
           width: 22px; height: 22px; border-radius: 50%;
           background: linear-gradient(135deg, var(--primary), var(--accent));
@@ -387,70 +433,74 @@ export default function OnboardingPage() {
           color: white; flex-shrink: 0;
         }
 
-        .social-proof {
-          display: flex; align-items: center; gap: 12px;
-          font-size: 0.88rem; color: var(--text2);
-        }
+        /* ── Social proof ── */
+        .social-proof { display: flex; align-items: center; gap: 12px; font-size: 0.88rem; color: var(--text2); }
         .avatars { display: flex; }
         .avatar-circle {
-          width: 32px; height: 32px; border-radius: 50%;
-          border: 2px solid var(--surface);
-          background: linear-gradient(135deg, #c4b5fd, #818cf8);
-          margin-left: -8px; display: flex; align-items: center;
-          justify-content: center; font-size: 0.6rem; font-weight: 700; color: white;
+          width: 34px; height: 34px; border-radius: 50%;
+          border: 2px solid white;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 0.68rem; font-weight: 700; color: white;
+          margin-left: -8px; overflow: hidden; flex-shrink: 0;
         }
         .avatar-circle:first-child { margin-left: 0; }
         .avatar-circle.more {
           background: linear-gradient(135deg, var(--primary), var(--accent));
-          font-size: 0.65rem;
+          font-size: 0.6rem;
         }
-        .social-proof strong { color: var(--primary); font-weight: 700; }
+        .avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 
-        /* ── Sign Up Card ── */
+        /* ── Sign-up card ── */
         .signup-card {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 20px;
-          padding: 36px 32px;
-          box-shadow: var(--shadow-md);
-          position: relative; overflow: hidden;
+          background: var(--surface); border: 1.5px solid var(--border);
+          border-radius: 22px; padding: 36px 32px;
+          box-shadow: var(--shadow-md); position: relative; overflow: hidden;
         }
         .signup-card::before {
           content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
           background: linear-gradient(90deg, var(--primary), var(--accent), var(--accent2));
         }
-
         .signup-card-title {
-          font-family: var(--font-display); font-size: 1.25rem; font-weight: 700;
+          font-family: var(--font-display); font-size: 1.35rem; font-weight: 800;
           color: var(--text); margin-bottom: 4px;
         }
-        .signup-card-sub { font-size: 0.88rem; color: var(--text2); margin-bottom: 24px; }
+        .signup-card-sub { font-size: 0.87rem; color: var(--text2); margin-bottom: 24px; line-height: 1.5; }
 
-        .field-label {
-          font-size: 0.8rem; font-weight: 600; color: var(--text); letter-spacing: 0.02em;
-          margin-bottom: 8px; display: block;
-        }
-        .field-group { margin-bottom: 20px; }
+        .field-group { margin-bottom: 18px; }
+        .field-label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 8px; letter-spacing: 0.02em; }
 
-        .pill-group { display: flex; flex-wrap: wrap; gap: 8px; }
+        .pill-group { display: flex; flex-wrap: wrap; gap: 7px; }
         .pill {
-          padding: 7px 16px; border-radius: var(--radius-pill);
-          border: 1.5px solid var(--border); background: var(--surface);
-          font-size: 0.86rem; font-weight: 500; color: var(--text2);
-          cursor: pointer; transition: all var(--transition);
-          font-family: var(--font-sans);
+          padding: 7px 15px; border: 1.5px solid var(--border);
+          border-radius: var(--radius-pill); background: transparent;
+          font-size: 0.83rem; font-weight: 500; color: var(--text2);
+          cursor: pointer; transition: all var(--transition); font-family: var(--font-sans);
         }
-        .pill:hover { border-color: var(--primary-light); color: var(--primary); background: #ede9fe22; }
+        .pill:hover { border-color: var(--primary-light); color: var(--primary); background: #f0f0ff; }
         .pill.active {
-          border-color: var(--primary);
-          background: linear-gradient(135deg, #ede9fe, #dbeafe);
+          border-color: var(--primary); background: linear-gradient(135deg, #ede9fe, #dbeafe);
           color: var(--primary); font-weight: 600;
         }
-        .pill:active { transform: scale(0.95); }
+
+        /* ── Selection error warning ── */
+        .selection-error {
+          display: flex; align-items: center; gap: 7px;
+          background: #fff5f5; border: 1.5px solid #fecaca;
+          border-radius: var(--radius-sm); padding: 10px 13px;
+          margin-bottom: 12px;
+          font-size: 0.82rem; font-weight: 500; color: #ef4444;
+          animation: shake 0.3s ease;
+        }
+        @keyframes shake {
+          0%,100% { transform: translateX(0); }
+          25% { transform: translateX(-4px); }
+          75% { transform: translateX(4px); }
+        }
 
         .divider {
           display: flex; align-items: center; gap: 12px;
-          margin: 22px 0; color: var(--text3); font-size: 0.8rem;
+          font-size: 0.78rem; color: var(--text3); font-weight: 500;
+          margin: 20px 0;
         }
         .divider::before, .divider::after {
           content: ''; flex: 1; height: 1px; background: var(--border);
@@ -525,7 +575,7 @@ export default function OnboardingPage() {
         .exam-badge-icon {
           width: 36px; height: 36px; border-radius: 10px;
           background: var(--bg2); display: flex; align-items: center;
-          justify-content: center; flex-shrink: 0;
+          justify-content: center; flex-shrink: 0; overflow: hidden;
         }
         .exam-abbr {
           font-size: 0.7rem; font-weight: 800; color: var(--primary);
@@ -575,12 +625,7 @@ export default function OnboardingPage() {
           background: linear-gradient(90deg, var(--primary), var(--accent), var(--accent2));
         }
         .profile-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
-        .profile-logo-mark {
-          width: 38px; height: 38px; border-radius: 11px;
-          background: linear-gradient(135deg, var(--primary), var(--accent));
-          display: flex; align-items: center; justify-content: center;
-          color: white; font-weight: 800; font-size: 1.05rem;
-        }
+        .profile-logo-img { width: 38px; height: 38px; object-fit: contain; }
         .profile-logo-text { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; }
         .profile-logo-text span { color: var(--primary-light); }
 
@@ -605,12 +650,7 @@ export default function OnboardingPage() {
           flex-wrap: wrap; gap: 12px;
         }
         .footer-logo { display: flex; align-items: center; gap: 9px; font-size: 0.9rem; font-weight: 600; color: var(--text2); }
-        .footer-logo-mark {
-          width: 26px; height: 26px; border-radius: 7px;
-          background: linear-gradient(135deg, var(--primary), var(--accent));
-          display: flex; align-items: center; justify-content: center;
-          color: white; font-weight: 800; font-size: 0.72rem;
-        }
+        .footer-logo-img { width: 26px; height: 26px; object-fit: contain; }
         .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
         .footer-link { font-size: 0.82rem; color: var(--text3); text-decoration: none; transition: color var(--transition); }
         .footer-link:hover { color: var(--primary); }
@@ -643,8 +683,8 @@ export default function OnboardingPage() {
         <div className="profile-page">
           <div className="profile-card">
             <div className="profile-logo">
-              <div className="profile-logo-mark">R</div>
-              {/* Replace with: <Image src="/logo.svg" alt="Logo" width={34} height={34} /> */}
+              {/* Logo image from /public/logo.png */}
+              <Image src="/logo.png" alt="RookieAI Logo" width={38} height={38} className="profile-logo-img" />
               <span className="profile-logo-text">Rookie<span>AI</span></span>
             </div>
 
@@ -698,8 +738,8 @@ export default function OnboardingPage() {
         {/* Nav */}
         <nav className="nav">
           <a href="#" className="nav-logo">
-            <div className="nav-logo-mark">R</div>
-            {/* Replace with: <Image src="/logo.svg" alt="Logo" width={32} height={32} /> */}
+            {/* Logo image from /public/logo.png */}
+            <Image src="/icon.svg" alt="RookieAI Logo" width={34} height={34} className="nav-logo-img" />
             <span className="nav-logo-text">Rookie<span>AI</span></span>
           </a>
           <span className="nav-badge">✦ AI-Powered</span>
@@ -726,10 +766,23 @@ export default function OnboardingPage() {
                 </div>
               ))}
             </div>
+
+            {/* Social proof with real images from /public */}
             <div className="social-proof">
               <div className="avatars">
-                {['AK', 'PV', 'RS', 'MG'].map((i, idx) => (
-                  <div key={i} className="avatar-circle" style={{ background: `linear-gradient(135deg, hsl(${idx * 60 + 220},70%,65%), hsl(${idx * 60 + 260},70%,55%))` }}>{i}</div>
+                {SOCIAL_AVATARS.map((av, idx) => (
+                  <div
+                    key={av.fallback}
+                    className="avatar-circle"
+                    style={{ background: `linear-gradient(135deg, hsl(${idx * 60 + 220},70%,65%), hsl(${idx * 60 + 260},70%,55%))` }}
+                  >
+                    <img
+                      src={av.src}
+                      alt={av.fallback}
+                      className="avatar-img"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
                 ))}
                 <div className="avatar-circle more">+5K</div>
               </div>
@@ -746,7 +799,11 @@ export default function OnboardingPage() {
               <label className="field-label">I'm currently in</label>
               <div className="pill-group">
                 {CLASS_OPTIONS.map((c) => (
-                  <button key={c} className={`pill ${selectedClass === c ? 'active' : ''}`} onClick={() => setSelectedClass(c)}>{c}</button>
+                  <button
+                    key={c}
+                    className={`pill ${selectedClass === c ? 'active' : ''}`}
+                    onClick={() => { setSelectedClass(c); setSelectionError(false); }}
+                  >{c}</button>
                 ))}
               </div>
             </div>
@@ -755,10 +812,28 @@ export default function OnboardingPage() {
               <label className="field-label">Preparing for</label>
               <div className="pill-group">
                 {EXAM_OPTIONS.map((e) => (
-                  <button key={e} className={`pill ${selectedExam === e ? 'active' : ''}`} onClick={() => setSelectedExam(e)}>{e}</button>
+                  <button
+                    key={e}
+                    className={`pill ${selectedExam === e ? 'active' : ''}`}
+                    onClick={() => { setSelectedExam(e); setSelectionError(false); }}
+                  >{e}</button>
                 ))}
               </div>
             </div>
+
+            {/* Red warning shown when user clicks Google without selecting options */}
+            {selectionError && (
+              <div className="selection-error">
+                <InfoRedIcon />
+                <span>
+                  {!selectedClass && !selectedExam
+                    ? 'Please select your class and exam before continuing.'
+                    : !selectedClass
+                    ? 'Please select your class before continuing.'
+                    : 'Please select your exam before continuing.'}
+                </span>
+              </div>
+            )}
 
             <div className="divider">then sign up with</div>
 
@@ -809,7 +884,8 @@ export default function OnboardingPage() {
         {/* Footer */}
         <footer className="footer">
           <div className="footer-logo">
-            <div className="footer-logo-mark">R</div>
+            {/* Logo image from /public/logo.png */}
+            <Image src="/icon.svg" alt="RookieAI" width={26} height={26} className="footer-logo-img" />
             RookieAI
           </div>
           <p className="footer-copy">© 2026 RookieAI. All rights reserved.</p>
