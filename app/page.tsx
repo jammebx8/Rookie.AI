@@ -220,7 +220,7 @@ export default function OnboardingPage() {
   async function signInWithGoogle() {
     try {
       setAuthLoading(true);
-      const redirectUrl = 'https://rookieai.vercel.app/auth/onboarding';
+      const redirectUrl = 'https://rookieai.vercel.app/home';
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: redirectUrl },

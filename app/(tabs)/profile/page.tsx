@@ -345,7 +345,7 @@ export default function ProfilePage() {
 
   const handleLogout = () => {
     localStorage.clear();
-    router.push('/auth/terms-agree');
+    router.push('https://rookieai.vercel.app/');
   };
 
 
