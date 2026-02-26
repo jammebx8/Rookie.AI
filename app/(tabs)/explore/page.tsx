@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image, { StaticImageData } from 'next/image';
 import { useRouter } from 'next/navigation';
 import { FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import imagepath from '../../../public/src/constants/imagepath';
-
 
 type Subject = {
   name: string;
@@ -15,7 +14,7 @@ type Subject = {
   weightage: string;
   badge: string;
   badgeColor: string;
-  imageKey: string; // key into imagepath
+  imageKey: string;
   color: string;
 };
 
@@ -29,7 +28,7 @@ const SUBJECTS: Record<string, Subject[]> = {
       questions: 1600,
       weightage: '33%',
       badge: '#1 Subject',
-      badgeColor: '#00FFB0',
+      badgeColor: '#00C48C',
       imageKey: 'Physics1',
       color: '#1E90FF',
     },
@@ -49,7 +48,7 @@ const SUBJECTS: Record<string, Subject[]> = {
       questions: 1270,
       weightage: '37%',
       badge: '#2 Subject',
-      badgeColor: '#FFD700',
+      badgeColor: '#F59E0B',
       imageKey: 'Maths1',
       color: '#D32F8D',
     },
@@ -61,7 +60,7 @@ const SUBJECTS: Record<string, Subject[]> = {
       questions: 1520,
       weightage: '33%',
       badge: '#1 Subject',
-      badgeColor: '#00FFB0',
+      badgeColor: '#00C48C',
       imageKey: 'Physics',
       color: '#1E90FF',
     },
@@ -81,7 +80,7 @@ const SUBJECTS: Record<string, Subject[]> = {
       questions: 1270,
       weightage: '33%',
       badge: '#2 Subject',
-      badgeColor: '#FFD700',
+      badgeColor: '#F59E0B',
       imageKey: 'Maths',
       color: '#D32F8D',
     },
@@ -93,7 +92,7 @@ const SUBJECTS: Record<string, Subject[]> = {
       questions: 4100,
       weightage: '34%',
       badge: '#1 Subject',
-      badgeColor: '#00FFB0',
+      badgeColor: '#00C48C',
       imageKey: 'Physics3',
       color: '#1E90FF',
     },
@@ -113,7 +112,7 @@ const SUBJECTS: Record<string, Subject[]> = {
       questions: 7300,
       weightage: '34%',
       badge: '#2 Subject',
-      badgeColor: '#FFD700',
+      badgeColor: '#F59E0B',
       imageKey: 'Biology',
       color: '#32CD32',
     },
@@ -122,7 +121,7 @@ const SUBJECTS: Record<string, Subject[]> = {
 
 const containerVariants = {
   hidden: { opacity: 0, y: 6 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4,  } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
 const dropdownVariants = {
@@ -135,77 +134,109 @@ const cardVariants = {
   enter: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.06, duration: 0.36,   },
+    transition: { delay: i * 0.06, duration: 0.36 },
   }),
-  hover: { scale: 1.02, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' },
+  hover: { scale: 1.015, boxShadow: '0 8px 28px rgba(0,0,0,0.12)' },
   tap: { scale: 0.995 },
 };
 
 export default function ExplorePage() {
   const [selectedExam, setSelectedExam] = useState<string>(EXAMS[0].name);
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
+  const [isDark, setIsDark] = useState(true);
   const router = useRouter();
+
+  // Read theme from localStorage (set by layout)
+  useEffect(() => {
+    const updateTheme = () => {
+      const stored = localStorage.getItem('theme');
+      setIsDark(stored !== 'light');
+    };
+    updateTheme();
+
+    // Listen for storage events from other tabs / layout toggle
+    window.addEventListener('storage', updateTheme);
+
+    // Also watch for DOM class changes (when layout toggles on same page)
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    return () => {
+      window.removeEventListener('storage', updateTheme);
+      observer.disconnect();
+    };
+  }, []);
 
   const handleSubjectPress = (subject: Subject) => {
     const params = new URLSearchParams({
       examName: selectedExam,
       subjectName: subject.name,
       subjectColor: subject.color,
-      badge: subject.badge.split(' ')[0], // '#1', '#2', ...
+      badge: subject.badge.split(' ')[0],
       badgeColor: subject.badgeColor,
       imageKey: subject.imageKey,
     });
-
     router.push(`/chapterpage?${params.toString()}`);
   };
 
-  // helper to safely resolve image import (imagepath might contain URLs or StaticImageData)
   const resolveImage = (key: string): StaticImageData | string | undefined => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (imagepath as any)?.[key];
   };
 
+  // Theme-derived classes
+  const pageBg = isDark ? 'bg-[#000]' : 'bg-[#F8F9FF]';
+  const textPrimary = isDark ? 'text-white' : 'text-[#111827]';
+  const textMuted = isDark ? 'text-gray-400' : 'text-gray-500';
+  const cardBg = isDark ? 'bg-black border-[#262626]' : 'bg-white border-[#E5E7EB]';
+  const dropdownBg = isDark ? 'bg-black border-[#262626]' : 'bg-white border-[#E5E7EB]';
+  const dropdownItemHover = isDark ? 'hover:bg-[#0f1724]' : 'hover:bg-gray-50';
+  const btnBg = isDark
+    ? 'bg-black border-[#262626] text-white'
+    : 'bg-white border-[#D1D5DB] text-[#111827]';
+  const badgeBg = isDark ? 'bg-[#18183A]' : 'bg-[#F5F3FF]';
+  const statsText = isDark ? 'text-gray-300' : 'text-gray-500';
+  const dividerColor = isDark ? 'divide-[#262626]' : 'divide-[#F3F4F6]';
+  const imagePlaceholder = isDark ? 'bg-[#111]' : 'bg-[#F0F0F5]';
+
   return (
     <motion.main
-      className="min-h-screen bg-[#000] text-white pb-10 px-4 sm:px-6"
+      className={`min-h-screen ${pageBg} ${textPrimary} pb-10 px-4 sm:px-6 transition-colors duration-300`}
       initial="hidden"
       animate="visible"
       variants={containerVariants}
       layout
     >
-      <div className="max-w-4xl mx-auto pt-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-3 relative">
+      <div className="max-w-2xl mx-auto pt-6">
+
+        {/* ─── Header ──────────────────────────────── */}
+        <div className="flex items-center justify-between mb-5 relative">
           <h1
-            className="text-white text-3xl sm:text-4xl font-medium tracking-wide"
+            className={`text-2xl sm:text-3xl font-semibold tracking-tight ${textPrimary}`}
             style={{ fontFamily: 'Geist, sans-serif' }}
           >
             Practice
           </h1>
 
+          {/* Exam Selector Dropdown */}
           <div className="relative">
             <motion.button
               onClick={() => setShowDropdown((s) => !s)}
-              className="flex items-center bg-black border border-[#262626] rounded-full px-4 py-2 text-sm sm:text-base"
-              whileTap={{ scale: 0.98 }}
+              className={`flex items-center gap-2 border rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${btnBg}`}
+              whileTap={{ scale: 0.97 }}
               aria-expanded={showDropdown}
               aria-haspopup="listbox"
               type="button"
             >
-              <span
-                className="text-white font-medium"
-                style={{ fontFamily: 'Geist, sans-serif' }}
-              >
-                {selectedExam}
-              </span>
-              <span className="ml-2 text-white">
-                {showDropdown ? <FaChevronUp size={14} /> : <FaChevronDown size={14} />}
+              <span style={{ fontFamily: 'Geist, sans-serif' }}>{selectedExam}</span>
+              <span className={textMuted}>
+                {showDropdown ? <FaChevronUp size={11} /> : <FaChevronDown size={11} />}
               </span>
             </motion.button>
 
             {showDropdown && (
               <motion.ul
-                className="absolute right-0 mt-2 w-40 bg-black border border-[#22223A] rounded-lg shadow-lg z-50 overflow-hidden"
+                className={`absolute right-0 mt-2 w-40 border rounded-xl shadow-xl z-50 overflow-hidden ${dropdownBg}`}
                 initial="hidden"
                 animate="visible"
                 exit="hidden"
@@ -219,7 +250,7 @@ export default function ExplorePage() {
                         setSelectedExam(exam.name);
                         setShowDropdown(false);
                       }}
-                      className="w-full text-left px-4 py-3 text-sm text-white hover:bg-[#0f1724]"
+                      className={`w-full text-left px-4 py-2.5 text-sm ${textPrimary} ${dropdownItemHover} transition-colors`}
                       style={{ fontFamily: 'Geist, sans-serif' }}
                       type="button"
                     >
@@ -232,12 +263,12 @@ export default function ExplorePage() {
           </div>
         </div>
 
-        {/* Subject Cards */}
-        <div className="space-y-5 mt-2">
+        {/* ─── Subject Cards ────────────────────────── */}
+        <div className="space-y-4">
           {SUBJECTS[selectedExam]?.map((subject, idx) => (
             <motion.article
               key={subject.name}
-              className="bg-black border border-[#262626] rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow cursor-pointer"
+              className={`border rounded-2xl overflow-hidden cursor-pointer transition-colors duration-300 ${cardBg}`}
               onClick={() => handleSubjectPress(subject)}
               initial="initial"
               animate="enter"
@@ -249,40 +280,42 @@ export default function ExplorePage() {
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  handleSubjectPress(subject);
-                }
+                if (e.key === 'Enter' || e.key === ' ') handleSubjectPress(subject);
               }}
             >
-              <div className="relative w-full h-20 sm:h-28 md:h-32 bg-[#222]">
+              {/* Image banner */}
+              <div className={`relative w-full h-24 sm:h-32 ${imagePlaceholder}`}>
                 {resolveImage(subject.imageKey) ? (
                   <Image
                     src={resolveImage(subject.imageKey) as StaticImageData | string}
                     alt={subject.name}
                     fill
                     className="object-cover"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                    sizes="(max-width: 640px) 100vw, 50vw"
                   />
                 ) : null}
+           
               </div>
 
-              <div className="p-4 sm:p-5">
-                <div className="flex items-center justify-between mb-2">
+              {/* Card body */}
+              <div className="px-4 py-3.5 sm:px-5 sm:py-4">
+                <div className="flex items-center justify-between mb-2.5">
                   <h2
-                    className="text-white text-lg sm:text-xl font-medium"
+                    className={`text-base sm:text-lg font-semibold ${textPrimary}`}
                     style={{ fontFamily: 'Geist, sans-serif' }}
                   >
                     {subject.name}
                   </h2>
 
+                  {/* Badge */}
                   <motion.div
-                    className="rounded-lg px-3 py-1 bg-[#18183A] border inline-flex items-center"
-                    style={{ borderColor: subject.badgeColor }}
-                    whileHover={{ scale: 1.03 }}
+                    className={`rounded-lg px-3 py-1 border inline-flex items-center ${badgeBg}`}
+                    style={{ borderColor: `${subject.badgeColor}40` }}
+                    whileHover={{ scale: 1.04 }}
                     transition={{ type: 'spring', stiffness: 300, damping: 18 }}
                   >
                     <span
-                      className="text-sm font-medium"
+                      className="text-xs font-semibold"
                       style={{ color: subject.badgeColor, fontFamily: 'Geist, sans-serif' }}
                     >
                       {subject.badge}
@@ -290,15 +323,17 @@ export default function ExplorePage() {
                   </motion.div>
                 </div>
 
-                <div className="flex items-center justify-between text-gray-300 text-xs sm:text-sm">
-                  <span>{subject.chapters} Chapters</span>
-                  <span>{subject.questions.toLocaleString()} Questions</span>
-                  <span>{subject.weightage} Weightage</span>
+                {/* Stats row */}
+                <div className={`flex items-center justify-between text-xs sm:text-sm ${statsText} divide-x ${dividerColor}`}>
+                  <span className="pr-3">{subject.chapters} Chapters</span>
+                  <span className="px-3">{subject.questions.toLocaleString()} Questions</span>
+                  <span className="pl-3">{subject.weightage} Weightage</span>
                 </div>
               </div>
             </motion.article>
           ))}
         </div>
+
       </div>
     </motion.main>
   );

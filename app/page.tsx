@@ -75,12 +75,31 @@ const BookIcon = () => (
   </svg>
 );
 
-// Red info/warning icon
 const InfoRedIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
     <circle cx="12" cy="12" r="10"/>
     <line x1="12" y1="8" x2="12" y2="12"/>
     <line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+);
+
+const SunIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="5"/>
+    <line x1="12" y1="1" x2="12" y2="3"/>
+    <line x1="12" y1="21" x2="12" y2="23"/>
+    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+    <line x1="1" y1="12" x2="3" y2="12"/>
+    <line x1="21" y1="12" x2="23" y2="12"/>
+    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
   </svg>
 );
 
@@ -94,7 +113,6 @@ const ExamBadge = ({ name, abbr, color }: { name: string; abbr: string; color: s
         width={28}
         height={28}
         onError={(e) => {
-          // Fallback to abbr text if image not found
           (e.target as HTMLImageElement).style.display = 'none';
           const parent = (e.target as HTMLImageElement).parentElement;
           if (parent && !parent.querySelector('.exam-abbr')) {
@@ -115,7 +133,6 @@ const EXAMS = [
   { name: 'JEE Advanced', abbr: 'JA', color: '#8b5cf6' },
   { name: 'NEET', abbr: 'NT', color: '#10b981' },
   { name: 'MHT CET', abbr: 'MC', color: '#f59e0b' },
-
   { name: 'BITSAT', abbr: 'BS', color: '#6366f1' },
 ];
 
@@ -125,7 +142,6 @@ const FEATURES = [
   { icon: <ChartIcon />, title: 'Smart Analytics', desc: 'Know exactly where you stand with real-time performance insights and AIR.' },
 ];
 
-// Social proof student avatars (images from public folder)
 const SOCIAL_AVATARS = [
   { src: '/student1.png', fallback: 'AK' },
   { src: '/student2.png', fallback: 'PV' },
@@ -143,14 +159,29 @@ export default function OnboardingPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [step, setStep] = useState<'landing' | 'profile'>('landing');
-
-  // Selections for landing page (pre-auth)
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedExam, setSelectedExam] = useState('');
-
-  // Validation error state
   const [selectionError, setSelectionError] = useState(false);
 
+  // ─── Theme state ──────────────────────────────────────────────────────────
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('theme');
+      setIsDark(stored === 'dark');
+    } catch {}
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    setIsDark(next);
+    try {
+      localStorage.setItem('theme', next ? 'dark' : 'light');
+    } catch {}
+  };
+
+  // ─── Auth ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     try {
       const onboarded = localStorage.getItem('@user_onboarded');
@@ -184,7 +215,6 @@ export default function OnboardingPage() {
         .single();
 
       if (existingUser && !fetchError) {
-        // Existing user — save to localStorage FIRST, then redirect
         const userData = {
           id: existingUser.id,
           email: existingUser.email,
@@ -199,7 +229,6 @@ export default function OnboardingPage() {
         localStorage.setItem('@user_onboarded', 'true');
         router.replace('https://rookieai.vercel.app/home');
       } else {
-        // New user — insert into Supabase users table
         const newUserData = {
           id: user.id,
           email: user.email,
@@ -233,11 +262,9 @@ export default function OnboardingPage() {
           avatar_url: insertedUser.avatar_url,
           rookieCoinsEarned: insertedUser.rookieCoinsEarned ?? 0,
         };
-        // Always save to localStorage before any redirect
         localStorage.setItem('@user', JSON.stringify(userData));
 
         if (!insertedUser.cl || !insertedUser.exam) {
-          // Show profile completion step (no redirect yet)
           setCurrentUserId(insertedUser.id);
           setFullName(insertedUser.name || '');
           setcl(insertedUser.cl || selectedClass || '');
@@ -257,16 +284,13 @@ export default function OnboardingPage() {
   }
 
   async function signInWithGoogle() {
-    // Validate selections first — show red warning if not chosen
     if (!selectedClass || !selectedExam) {
       setSelectionError(true);
       return;
     }
     setSelectionError(false);
-
     try {
       setAuthLoading(true);
-      // Redirect back to THIS onboarding page so auth callback runs and saves localStorage
       const redirectUrl = typeof window !== 'undefined'
         ? `${window.location.origin}${window.location.pathname}`
         : 'https://rookieai.vercel.app';
@@ -324,7 +348,6 @@ export default function OnboardingPage() {
         avatar_url: updatedUser.avatar_url,
         rookieCoinsEarned: updatedUser.rookieCoinsEarned ?? 0,
       };
-      // Save updated user data to localStorage BEFORE redirecting
       localStorage.setItem('@user', JSON.stringify(userData));
       localStorage.setItem('@user_onboarded', 'true');
       router.replace('https://rookieai.vercel.app/home');
@@ -334,9 +357,56 @@ export default function OnboardingPage() {
     }
   }
 
+  // ─── Theme-driven CSS variable blocks ────────────────────────────────────
+  const themeVars = isDark ? `
+    --bg: #09090f;
+    --bg2: #111120;
+    --surface: #13131f;
+    --border: #1e1e30;
+    --text: #f1f5f9;
+    --text2: #94a3b8;
+    --text3: #475569;
+    --nav-bg: rgba(9, 9, 15, 0.92);
+    --pill-hover-bg: #1e1e35;
+    --pill-active-bg: linear-gradient(135deg, #1e1b4b, #1e3a5f);
+    --feature-icon-bg: linear-gradient(135deg, #1e1b4b, #1a2a4a);
+    --exam-icon-bg: #1a1a2e;
+    --toggle-bg: linear-gradient(135deg, #1e1b4b, #1a1a3e);
+    --toggle-border: #3730a3;
+    --toggle-color: #a5b4fc;
+    --btn-google-hover: #1a1a2e;
+    --error-bg: #2d1515;
+    --error-border: #7f1d1d;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    --shadow-md: 0 8px 40px rgba(0,0,0,0.5);
+  ` : `
+    --bg: #f8f9ff;
+    --bg2: #eef0fb;
+    --surface: #ffffff;
+    --border: #e2e5f1;
+    --text: #0f172a;
+    --text2: #475569;
+    --text3: #94a3b8;
+    --nav-bg: rgba(248, 249, 255, 0.92);
+    --pill-hover-bg: #f0f0ff;
+    --pill-active-bg: linear-gradient(135deg, #ede9fe, #dbeafe);
+    --feature-icon-bg: linear-gradient(135deg, #ede9fe, #dbeafe);
+    --exam-icon-bg: #eef0fb;
+    --toggle-bg: linear-gradient(135deg, #ede9fe, #dbeafe);
+    --toggle-border: #c4b5fd;
+    --toggle-color: #4f46e5;
+    --btn-google-hover: #fafafe;
+    --error-bg: #fff5f5;
+    --error-border: #fecaca;
+    --shadow: 0 4px 24px rgba(79, 70, 229, 0.08);
+    --shadow-md: 0 8px 40px rgba(79, 70, 229, 0.14);
+  `;
+
   return (
     <>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Sora:wght@600;700;800&display=swap');
+
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
@@ -345,26 +415,21 @@ export default function OnboardingPage() {
           --primary-dark: #3730a3;
           --accent: #8b5cf6;
           --accent2: #06b6d4;
-          --bg: #f8f9ff;
-          --bg2: #eef0fb;
-          --surface: #ffffff;
-          --border: #e2e5f1;
-          --text: #0f172a;
-          --text2: #475569;
-          --text3: #94a3b8;
           --radius: 14px;
           --radius-sm: 10px;
           --radius-pill: 999px;
-          --shadow: 0 4px 24px rgba(79, 70, 229, 0.08);
-          --shadow-md: 0 8px 40px rgba(79, 70, 229, 0.14);
           --transition: 0.18s ease;
           --font-sans: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
           --font-display: 'Sora', 'DM Sans', system-ui, sans-serif;
+          ${themeVars}
         }
 
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Sora:wght@600;700;800&display=swap');
-
-        body { font-family: var(--font-sans); background: var(--bg); color: var(--text); }
+        body {
+          font-family: var(--font-sans);
+          background: var(--bg);
+          color: var(--text);
+          transition: background 0.25s ease, color 0.25s ease;
+        }
 
         /* ── Layout ── */
         .page { min-height: 100vh; display: flex; flex-direction: column; }
@@ -374,23 +439,36 @@ export default function OnboardingPage() {
           position: sticky; top: 0; z-index: 50;
           display: flex; align-items: center; justify-content: space-between;
           padding: 0 5vw; height: 64px;
-          background: rgba(248, 249, 255, 0.88);
-          backdrop-filter: blur(12px);
+          background: var(--nav-bg);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
           border-bottom: 1px solid var(--border);
+          transition: background 0.25s, border-color 0.25s;
         }
         .nav-logo {
           display: flex; align-items: center; gap: 10px;
-          font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: var(--text);
-          text-decoration: none;
+          font-family: var(--font-display); font-size: 1.15rem; font-weight: 700;
+          color: var(--text); text-decoration: none; transition: color 0.25s;
         }
         .nav-logo-img { width: 34px; height: 34px; object-fit: contain; }
         .nav-logo-text span { color: var(--primary-light); }
-        .nav-badge {
-          font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;
-          background: linear-gradient(135deg, #ede9fe, #dbeafe);
-          color: var(--primary); padding: 3px 10px; border-radius: var(--radius-pill);
-          border: 1px solid #c4b5fd;
+
+        /* ── Theme Toggle ── */
+        .theme-toggle {
+          display: flex; align-items: center; gap: 6px;
+          background: var(--toggle-bg);
+          color: var(--toggle-color);
+          border: 1px solid var(--toggle-border);
+          border-radius: var(--radius-pill);
+          padding: 5px 13px 5px 10px;
+          font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;
+          cursor: pointer; font-family: var(--font-sans);
+          transition: all var(--transition); white-space: nowrap;
+          line-height: 1;
         }
+        .theme-toggle:hover { opacity: 0.82; transform: scale(1.04); }
+        .theme-toggle:active { transform: scale(0.97); }
+        .toggle-icon { display: flex; align-items: center; }
 
         /* ── Hero ── */
         .hero {
@@ -398,34 +476,31 @@ export default function OnboardingPage() {
           display: grid; grid-template-columns: 1fr 420px; gap: 60px;
           align-items: center; max-width: 1200px; margin: 0 auto; width: 100%;
         }
-
         .hero-eyebrow {
           display: inline-flex; align-items: center; gap: 7px;
           font-size: 0.82rem; font-weight: 600; letter-spacing: 0.06em;
           text-transform: uppercase; color: var(--primary-light);
-          background: linear-gradient(135deg, #ede9fe, #dbeafe);
-          border: 1px solid #c4b5fd; border-radius: var(--radius-pill);
-          padding: 5px 14px; margin-bottom: 20px;
+          background: ${isDark ? 'linear-gradient(135deg,#1e1b4b,#1e3a5f)' : 'linear-gradient(135deg,#ede9fe,#dbeafe)'};
+          border: 1px solid ${isDark ? '#3730a3' : '#c4b5fd'};
+          border-radius: var(--radius-pill); padding: 5px 14px; margin-bottom: 20px;
         }
-
         .hero-h1 {
           font-family: var(--font-display);
           font-size: clamp(2rem, 4vw, 3rem);
           font-weight: 800; line-height: 1.13;
-          letter-spacing: -0.03em; color: var(--text);
-          margin-bottom: 18px;
+          letter-spacing: -0.03em; color: var(--text); margin-bottom: 18px;
+          transition: color 0.25s;
         }
         .gradient-text {
           background: linear-gradient(135deg, var(--primary), var(--accent));
-          -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-          background-clip: text;
+          -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
         }
         .hero-sub {
           font-size: 1rem; color: var(--text2); line-height: 1.65;
-          max-width: 500px; margin-bottom: 28px;
+          max-width: 500px; margin-bottom: 28px; transition: color 0.25s;
         }
         .hero-bullets { display: flex; flex-direction: column; gap: 10px; margin-bottom: 32px; }
-        .hero-bullet { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: var(--text2); }
+        .hero-bullet { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: var(--text2); transition: color 0.25s; }
         .hero-bullet-icon {
           width: 22px; height: 22px; border-radius: 50%;
           background: linear-gradient(135deg, var(--primary), var(--accent));
@@ -434,20 +509,18 @@ export default function OnboardingPage() {
         }
 
         /* ── Social proof ── */
-        .social-proof { display: flex; align-items: center; gap: 12px; font-size: 0.88rem; color: var(--text2); }
+        .social-proof { display: flex; align-items: center; gap: 12px; font-size: 0.88rem; color: var(--text2); transition: color 0.25s; }
         .avatars { display: flex; }
         .avatar-circle {
           width: 34px; height: 34px; border-radius: 50%;
-          border: 2px solid white;
+          border: 2px solid var(--surface);
           display: flex; align-items: center; justify-content: center;
           font-size: 0.68rem; font-weight: 700; color: white;
           margin-left: -8px; overflow: hidden; flex-shrink: 0;
+          transition: border-color 0.25s;
         }
         .avatar-circle:first-child { margin-left: 0; }
-        .avatar-circle.more {
-          background: linear-gradient(135deg, var(--primary), var(--accent));
-          font-size: 0.6rem;
-        }
+        .avatar-circle.more { background: linear-gradient(135deg, var(--primary), var(--accent)); font-size: 0.6rem; }
         .avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 
         /* ── Sign-up card ── */
@@ -455,6 +528,7 @@ export default function OnboardingPage() {
           background: var(--surface); border: 1.5px solid var(--border);
           border-radius: 22px; padding: 36px 32px;
           box-shadow: var(--shadow-md); position: relative; overflow: hidden;
+          transition: background 0.25s, border-color 0.25s;
         }
         .signup-card::before {
           content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
@@ -462,12 +536,12 @@ export default function OnboardingPage() {
         }
         .signup-card-title {
           font-family: var(--font-display); font-size: 1.35rem; font-weight: 800;
-          color: var(--text); margin-bottom: 4px;
+          color: var(--text); margin-bottom: 4px; transition: color 0.25s;
         }
-        .signup-card-sub { font-size: 0.87rem; color: var(--text2); margin-bottom: 24px; line-height: 1.5; }
+        .signup-card-sub { font-size: 0.87rem; color: var(--text2); margin-bottom: 24px; line-height: 1.5; transition: color 0.25s; }
 
         .field-group { margin-bottom: 18px; }
-        .field-label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 8px; letter-spacing: 0.02em; }
+        .field-label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 8px; letter-spacing: 0.02em; transition: color 0.25s; }
 
         .pill-group { display: flex; flex-wrap: wrap; gap: 7px; }
         .pill {
@@ -476,18 +550,18 @@ export default function OnboardingPage() {
           font-size: 0.83rem; font-weight: 500; color: var(--text2);
           cursor: pointer; transition: all var(--transition); font-family: var(--font-sans);
         }
-        .pill:hover { border-color: var(--primary-light); color: var(--primary); background: #f0f0ff; }
+        .pill:hover { border-color: var(--primary-light); color: var(--primary); background: var(--pill-hover-bg); }
         .pill.active {
-          border-color: var(--primary); background: linear-gradient(135deg, #ede9fe, #dbeafe);
-          color: var(--primary); font-weight: 600;
+          border-color: var(--primary);
+          background: var(--pill-active-bg);
+          color: var(--primary-light); font-weight: 600;
         }
 
-        /* ── Selection error warning ── */
+        /* ── Selection error ── */
         .selection-error {
           display: flex; align-items: center; gap: 7px;
-          background: #fff5f5; border: 1.5px solid #fecaca;
-          border-radius: var(--radius-sm); padding: 10px 13px;
-          margin-bottom: 12px;
+          background: var(--error-bg); border: 1.5px solid var(--error-border);
+          border-radius: var(--radius-sm); padding: 10px 13px; margin-bottom: 12px;
           font-size: 0.82rem; font-weight: 500; color: #ef4444;
           animation: shake 0.3s ease;
         }
@@ -499,12 +573,10 @@ export default function OnboardingPage() {
 
         .divider {
           display: flex; align-items: center; gap: 12px;
-          font-size: 0.78rem; color: var(--text3); font-weight: 500;
-          margin: 20px 0;
+          font-size: 0.78rem; color: var(--text3); font-weight: 500; margin: 20px 0;
+          transition: color 0.25s;
         }
-        .divider::before, .divider::after {
-          content: ''; flex: 1; height: 1px; background: var(--border);
-        }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
         .btn-google {
           width: 100%; padding: 13px 20px;
@@ -514,7 +586,7 @@ export default function OnboardingPage() {
           color: var(--text); cursor: pointer; transition: all var(--transition);
           font-family: var(--font-sans);
         }
-        .btn-google:hover { border-color: var(--primary-light); box-shadow: 0 4px 16px rgba(79,70,229,0.1); background: #fafafe; }
+        .btn-google:hover { border-color: var(--primary-light); box-shadow: 0 4px 16px rgba(79,70,229,0.15); background: var(--btn-google-hover); }
         .btn-google:active { transform: scale(0.98); }
         .btn-google:disabled { opacity: 0.6; cursor: not-allowed; }
 
@@ -539,32 +611,24 @@ export default function OnboardingPage() {
         @keyframes spin { to { transform: rotate(360deg); } }
         .spinner {
           width: 17px; height: 17px; border-radius: 50%;
-          border: 2px solid rgba(255,255,255,0.3);
-          border-top-color: currentColor;
+          border: 2px solid rgba(255,255,255,0.3); border-top-color: currentColor;
           animation: spin 0.7s linear infinite; flex-shrink: 0;
         }
-        .spinner.dark {
-          border-color: rgba(79,70,229,0.15);
-          border-top-color: var(--primary);
-        }
+        .spinner.dark { border-color: rgba(99,102,241,0.2); border-top-color: var(--primary); }
 
         /* ── Exam badges ── */
-        .exams-section { padding: 60px 5vw; background: var(--bg2); }
+        .exams-section { padding: 60px 5vw; background: var(--bg2); transition: background 0.25s; }
         .exams-inner { max-width: 1200px; margin: 0 auto; }
         .section-label {
           font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em;
-          text-transform: uppercase; color: var(--text3); margin-bottom: 8px;
+          text-transform: uppercase; color: var(--text3); margin-bottom: 8px; transition: color 0.25s;
         }
         .section-title {
           font-family: var(--font-display); font-size: clamp(1.4rem, 2.5vw, 2rem);
-          font-weight: 700; color: var(--text); margin-bottom: 32px; letter-spacing: -0.02em;
+          font-weight: 700; color: var(--text); margin-bottom: 32px; letter-spacing: -0.02em; transition: color 0.25s;
         }
         .section-title span { color: var(--primary-light); }
-
-        .exam-grid {
-          display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px;
-        }
-
+        .exam-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
         .exam-badge {
           display: flex; align-items: center; gap: 12px;
           background: var(--surface); border: 1.5px solid var(--border);
@@ -574,17 +638,14 @@ export default function OnboardingPage() {
         .exam-badge:hover { border-color: var(--primary-light); box-shadow: var(--shadow); transform: translateY(-2px); }
         .exam-badge-icon {
           width: 36px; height: 36px; border-radius: 10px;
-          background: var(--bg2); display: flex; align-items: center;
-          justify-content: center; flex-shrink: 0; overflow: hidden;
+          background: var(--exam-icon-bg); display: flex; align-items: center;
+          justify-content: center; flex-shrink: 0; overflow: hidden; transition: background 0.25s;
         }
-        .exam-abbr {
-          font-size: 0.7rem; font-weight: 800; color: var(--primary);
-          letter-spacing: 0.03em;
-        }
-        .exam-name { font-size: 0.86rem; font-weight: 600; color: var(--text); }
+        .exam-abbr { font-size: 0.7rem; font-weight: 800; color: var(--primary); letter-spacing: 0.03em; }
+        .exam-name { font-size: 0.86rem; font-weight: 600; color: var(--text); transition: color 0.25s; }
 
         /* ── Features ── */
-        .features-section { padding: 70px 5vw; }
+        .features-section { padding: 70px 5vw; background: var(--bg); transition: background 0.25s; }
         .features-inner { max-width: 1200px; margin: 0 auto; }
         .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 36px; }
         .feature-card {
@@ -599,26 +660,25 @@ export default function OnboardingPage() {
         }
         .feature-card:hover { box-shadow: var(--shadow-md); transform: translateY(-4px); }
         .feature-card:hover::after { transform: scaleX(1); }
-
         .feature-icon {
           width: 48px; height: 48px; border-radius: 14px;
-          background: linear-gradient(135deg, #ede9fe, #dbeafe);
+          background: var(--feature-icon-bg);
           display: flex; align-items: center; justify-content: center;
-          margin-bottom: 18px;
+          margin-bottom: 18px; transition: background 0.25s;
         }
-        .feature-title { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; color: var(--text); margin-bottom: 8px; }
-        .feature-desc { font-size: 0.88rem; color: var(--text2); line-height: 1.6; }
+        .feature-title { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; color: var(--text); margin-bottom: 8px; transition: color 0.25s; }
+        .feature-desc { font-size: 0.88rem; color: var(--text2); line-height: 1.6; transition: color 0.25s; }
 
         /* ── Profile completion step ── */
         .profile-page {
           min-height: 100vh; display: flex; align-items: center; justify-content: center;
-          padding: 40px 5vw; background: var(--bg);
+          padding: 40px 5vw; background: var(--bg); transition: background 0.25s;
         }
         .profile-card {
           background: var(--surface); border: 1px solid var(--border);
           border-radius: 22px; padding: 44px 40px;
           box-shadow: var(--shadow-md); max-width: 480px; width: 100%;
-          position: relative; overflow: hidden;
+          position: relative; overflow: hidden; transition: background 0.25s, border-color 0.25s;
         }
         .profile-card::before {
           content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
@@ -626,35 +686,34 @@ export default function OnboardingPage() {
         }
         .profile-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
         .profile-logo-img { width: 38px; height: 38px; object-fit: contain; }
-        .profile-logo-text { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; }
+        .profile-logo-text { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: var(--text); transition: color 0.25s; }
         .profile-logo-text span { color: var(--primary-light); }
-
         .profile-step { font-size: 0.78rem; font-weight: 600; color: var(--primary-light); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
-        .profile-title { font-family: var(--font-display); font-size: 1.6rem; font-weight: 800; color: var(--text); margin-bottom: 6px; }
-        .profile-sub { font-size: 0.9rem; color: var(--text2); margin-bottom: 32px; }
-
+        .profile-title { font-family: var(--font-display); font-size: 1.6rem; font-weight: 800; color: var(--text); margin-bottom: 6px; transition: color 0.25s; }
+        .profile-sub { font-size: 0.9rem; color: var(--text2); margin-bottom: 32px; transition: color 0.25s; }
         .name-input {
           width: 100%; padding: 12px 16px;
           border: 1.5px solid var(--border); border-radius: var(--radius-sm);
           font-size: 0.95rem; font-family: var(--font-sans); color: var(--text);
-          background: var(--bg); transition: border-color var(--transition);
-          outline: none;
+          background: var(--bg); outline: none;
+          transition: border-color var(--transition), background 0.25s, color 0.25s;
         }
-        .name-input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+        .name-input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
         .name-input::placeholder { color: var(--text3); }
 
         /* ── Footer ── */
         .footer {
           border-top: 1px solid var(--border); padding: 32px 5vw;
           display: flex; align-items: center; justify-content: space-between;
-          flex-wrap: wrap; gap: 12px;
+          flex-wrap: wrap; gap: 12px; background: var(--bg);
+          transition: background 0.25s, border-color 0.25s;
         }
-        .footer-logo { display: flex; align-items: center; gap: 9px; font-size: 0.9rem; font-weight: 600; color: var(--text2); }
+        .footer-logo { display: flex; align-items: center; gap: 9px; font-size: 0.9rem; font-weight: 600; color: var(--text2); transition: color 0.25s; }
         .footer-logo-img { width: 26px; height: 26px; object-fit: contain; }
         .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
         .footer-link { font-size: 0.82rem; color: var(--text3); text-decoration: none; transition: color var(--transition); }
         .footer-link:hover { color: var(--primary); }
-        .footer-copy { font-size: 0.78rem; color: var(--text3); }
+        .footer-copy { font-size: 0.78rem; color: var(--text3); transition: color 0.25s; }
 
         /* ── Progress dots ── */
         .progress-dots { display: flex; gap: 6px; align-items: center; margin-bottom: 28px; }
@@ -675,6 +734,7 @@ export default function OnboardingPage() {
           .signup-card { padding: 28px 22px; }
           .profile-card { padding: 32px 24px; }
           .footer { flex-direction: column; align-items: flex-start; }
+          .theme-toggle span:last-child { display: none; }
         }
       `}</style>
 
@@ -683,20 +743,16 @@ export default function OnboardingPage() {
         <div className="profile-page">
           <div className="profile-card">
             <div className="profile-logo">
-              {/* Logo image from /public/logo.png */}
-              <Image src="/logo.png" alt="RookieAI Logo" width={38} height={38} className="profile-logo-img" />
+              <Image src="/icon.svg" alt="RookieAI Logo" width={38} height={38} className="profile-logo-img" />
               <span className="profile-logo-text">Rookie<span>AI</span></span>
             </div>
-
             <div className="progress-dots">
               <div className="dot"></div>
               <div className="dot active"></div>
             </div>
-
             <p className="profile-step">One last step</p>
             <h1 className="profile-title">Personalize your experience</h1>
             <p className="profile-sub">Help us tailor your practice sessions with the right questions for you.</p>
-
             <div className="field-group">
               <label className="field-label">Full Name</label>
               <input
@@ -706,7 +762,6 @@ export default function OnboardingPage() {
                 placeholder="How should we address you?"
               />
             </div>
-
             <div className="field-group">
               <label className="field-label">I'm currently in</label>
               <div className="pill-group">
@@ -715,7 +770,6 @@ export default function OnboardingPage() {
                 ))}
               </div>
             </div>
-
             <div className="field-group">
               <label className="field-label">Preparing for</label>
               <div className="pill-group">
@@ -724,7 +778,6 @@ export default function OnboardingPage() {
                 ))}
               </div>
             </div>
-
             <button className="btn-primary" onClick={saveProfileCompletion} disabled={loadingSave}>
               {loadingSave ? <><div className="spinner" /><span>Saving...</span></> : 'Start Practicing →'}
             </button>
@@ -738,11 +791,15 @@ export default function OnboardingPage() {
         {/* Nav */}
         <nav className="nav">
           <a href="#" className="nav-logo">
-            {/* Logo image from /public/logo.png */}
             <Image src="/icon.svg" alt="RookieAI Logo" width={34} height={34} className="nav-logo-img" />
             <span className="nav-logo-text">Rookie<span>AI</span></span>
           </a>
-          <span className="nav-badge">✦ AI-Powered</span>
+
+          {/* Theme Toggle — replaces the old ✦ AI-Powered badge */}
+          <button className="theme-toggle" onClick={toggleTheme} type="button" aria-label="Toggle theme">
+            <span className="toggle-icon">{isDark ? <SunIcon /> : <MoonIcon />}</span>
+            <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+          </button>
         </nav>
 
         {/* Hero */}
@@ -766,8 +823,6 @@ export default function OnboardingPage() {
                 </div>
               ))}
             </div>
-
-            {/* Social proof with real images from /public */}
             <div className="social-proof">
               <div className="avatars">
                 {SOCIAL_AVATARS.map((av, idx) => (
@@ -792,9 +847,8 @@ export default function OnboardingPage() {
 
           {/* Sign Up Card */}
           <div className="signup-card">
-            <h2 className="signup-card-title">Get started </h2>
+            <h2 className="signup-card-title">Get started</h2>
             <p className="signup-card-sub">Join thousands of students already acing their prep.</p>
-
             <div className="field-group">
               <label className="field-label">I'm currently in</label>
               <div className="pill-group">
@@ -807,7 +861,6 @@ export default function OnboardingPage() {
                 ))}
               </div>
             </div>
-
             <div className="field-group">
               <label className="field-label">Preparing for</label>
               <div className="pill-group">
@@ -820,8 +873,6 @@ export default function OnboardingPage() {
                 ))}
               </div>
             </div>
-
-            {/* Red warning shown when user clicks Google without selecting options */}
             {selectionError && (
               <div className="selection-error">
                 <InfoRedIcon />
@@ -834,9 +885,7 @@ export default function OnboardingPage() {
                 </span>
               </div>
             )}
-
             <div className="divider">then sign up with</div>
-
             <button className="btn-google" onClick={signInWithGoogle} disabled={authLoading}>
               {authLoading ? (
                 <><div className="spinner dark" /><span>Please wait...</span></>
@@ -844,7 +893,6 @@ export default function OnboardingPage() {
                 <><GoogleIcon /><span>Continue with Google</span></>
               )}
             </button>
-
             <p className="tos-note">
               By signing up you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
             </p>
@@ -884,7 +932,6 @@ export default function OnboardingPage() {
         {/* Footer */}
         <footer className="footer">
           <div className="footer-logo">
-            {/* Logo image from /public/logo.png */}
             <Image src="/icon.svg" alt="RookieAI" width={26} height={26} className="footer-logo-img" />
             RookieAI
           </div>

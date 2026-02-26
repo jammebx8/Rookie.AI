@@ -24,6 +24,7 @@ const chaptersData: ChaptersData = {
   'JEE Main': {
     Physics: [
       { title: 'Units and Measurements.', questions: 100 },
+      { title: 'Vector Algebra.', questions: 100 },
    
  
       { title: 'Kinematics 1-D.', questions: 70 },

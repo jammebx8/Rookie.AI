@@ -18,16 +18,21 @@ type Question = {
   question: string;
   question_id: string;
   question_text: string;
-  option_A: string;
-  option_B: string;
-  option_C: string;
-  option_D: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
   correct_option: string | null;
   exam_shift: string;
   source_url: string;
   solution: string;
   sol_ai?: string;
   year?: number | string;
+  question_img_url?: string | null;
+  option_a_img?: string | null;
+  option_b_img?: string | null;
+  option_c_img?: string | null;
+  option_d_img?: string | null;
 };
 
 const API_BASE = 'https://rookie-backend.vercel.app/api';
@@ -75,7 +80,7 @@ export default function QuestionViewerPage() {
   const [conceptDone, setConceptDone] = useState<boolean>(false);
   const [digDeepSelected, setDigDeepSelected] = useState<string | null>(null);
   const [prevDigResult, setPrevDigResult] = useState<{ status: 'correct' | 'incorrect' | ''; explanation?: string; answer?: string } | null>(null);
-
+  const [integerAnswer, setIntegerAnswer] = useState<string>('');
   const [solutionRequested, setSolutionRequested] = useState<boolean>(false);
   const [determiningAnswer, setDeterminingAnswer] = useState<boolean>(false);
 
@@ -161,6 +166,94 @@ export default function QuestionViewerPage() {
     } catch (e) {
       // ignore
     }
+  };
+
+
+
+
+    // ---------- Handle Integer Answer Submission ----------
+    const handleIntegerSubmit = async () => {
+      if (isCorrect !== null) return; // already answered
+      const currentQuestion = questions[currentIndex];
+      if (!currentQuestion || integerAnswer.trim() === '') return;
+  
+      const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000);
+  
+      let correctAnswer = currentQuestion.correct_option;
+      if (!correctAnswer) {
+        setDeterminingAnswer(true);
+        try {
+          const response = await axios.post(`${API_BASE}/solution`, {
+            action: 'determine_answer',
+            question_text: currentQuestion.question_text,
+            option_a: currentQuestion.option_a,
+            option_b: currentQuestion.option_b,
+            option_c: currentQuestion.option_c,
+            option_d: currentQuestion.option_d,
+            solution: currentQuestion.solution,
+          });
+          correctAnswer = response.data.correct_answer;
+  
+          await supabase
+            .from(chapterTitle)
+            .update({ correct_option: correctAnswer })
+            .eq('question_id', currentQuestion.question_id);
+  
+          currentQuestion.correct_option = correctAnswer;
+        } catch (err) {
+          console.error('Error determining answer:', err);
+        } finally {
+          setDeterminingAnswer(false);
+        }
+      }
+  
+      // Compare as numbers if possible, else string
+      const userNum = parseFloat(integerAnswer.trim());
+      const correctNum = parseFloat(correctAnswer || '');
+      const correct = !isNaN(userNum) && !isNaN(correctNum)
+        ? userNum === correctNum
+        : integerAnswer.trim() === (correctAnswer || '').trim();
+  
+      setIsCorrect(correct);
+      // Use 'INTEGER' as a sentinel so we know it was submitted
+      setSelectedOption('INTEGER');
+  
+      const coins = calculateCoinReward(timeSpent, correct);
+      setCoinsEarned(coins);
+  
+      if (correct && coins > 0) {
+        setShowConfetti(true);
+        setShowCoinReward(true);
+        setTimeout(() => setShowConfetti(false), 5000);
+        setTimeout(() => setShowCoinReward(false), 3000);
+        await updateRookieCoins(coins);
+      }
+  
+      await generateMotivation(correct);
+      const aiSolution = await generateAISolution(currentQuestion);
+      setSolution(aiSolution);
+      setSolutionRequested(true);
+  
+      setTimeout(() => {
+        scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+  
+      await saveSessionForCurrent({
+        selectedOption: 'INTEGER',
+        isCorrect: correct,
+        solution: aiSolution,
+        solutionRequested: true,
+        integerAnswer: integerAnswer.trim(),
+      });
+    };
+
+
+    
+  // ---------- Helper: Is this an integer-type question? ----------
+  const isIntegerQuestion = (q: Question) => {
+    const hasTextOptions = q.option_a || q.option_b || q.option_c || q.option_d;
+    const hasImgOptions = q.option_a_img || q.option_b_img || q.option_c_img || q.option_d_img;
+    return !hasTextOptions && !hasImgOptions;
   };
 
   const loadSessionForIndex = (index: number) => {
@@ -340,10 +433,10 @@ export default function QuestionViewerPage() {
       const response = await axios.post(`${API_BASE}/solution`, {
         action: 'generate_solution',
         question_text: questionData.question_text,
-        option_A: questionData.option_A,
-        option_B: questionData.option_B,
-        option_C: questionData.option_C,
-        option_D: questionData.option_D,
+        option_A: questionData.option_a,
+        option_B: questionData.option_b,
+        option_C: questionData.option_c,
+        option_D: questionData.option_d,
         solution: questionData.solution,
         correct_option: questionData.correct_option,
       });
@@ -410,10 +503,10 @@ export default function QuestionViewerPage() {
         const response = await axios.post(`${API_BASE}/solution`, {
           action: 'determine_answer',
           question_text: currentQuestion.question_text,
-          option_A: currentQuestion.option_A,
-          option_B: currentQuestion.option_B,
-          option_C: currentQuestion.option_C,
-          option_D: currentQuestion.option_D,
+          option_A: currentQuestion.option_a,
+          option_B: currentQuestion.option_b,
+          option_C: currentQuestion.option_c,
+          option_D: currentQuestion.option_d,
           solution: currentQuestion.solution,
         });
 
@@ -570,6 +663,7 @@ export default function QuestionViewerPage() {
   };
 
   const handleBack = () => {
+   // localStorage.removeItem(SESSION_RESPONSES_KEY);
     router.back();
   };
 
@@ -737,6 +831,15 @@ export default function QuestionViewerPage() {
               <div className="text-xl font-medium leading-relaxed">
                 {renderLatex(currentQuestion.question_text)}
               </div>
+              {currentQuestion.question_img_url && (
+                <div className="mt-4">
+                  <img
+                    src={currentQuestion.question_img_url}
+                    alt="Question illustration"
+                    className="rounded-xl max-w-full border border-[#1D2939]"
+                  />
+                </div>
+              )}
               {currentQuestion.source_url && (
                 <a 
                   href={currentQuestion.source_url} 
@@ -751,61 +854,147 @@ export default function QuestionViewerPage() {
        
       
 
-            {/* Options */}
-            {selectedOption === null ? (
-              <div className="space-y-3">
-                {['A', 'B', 'C', 'D'].map((option) => (
-                  <motion.button
-                    key={option}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleOptionClick(option)}
-                    className="w-full text-left rounded-xl p-4 bg-[#0A0E17] border border-[#1D2939] hover:border-blue-500/50 transition-colors flex items-center gap-4"
+    {/* Options / Integer Input */}
+
+
+    
+            {isIntegerQuestion(currentQuestion) ? (
+              /* ---- INTEGER TYPE ---- */
+              <div className="space-y-4">
+                {isCorrect === null ? (
+                  <>
+                    <div className="text-sm text-gray-400">Enter your integer answer:</div>
+                    <div className="flex gap-3">
+                      <input
+                        type="number"
+                        value={integerAnswer}
+                        onChange={(e) => setIntegerAnswer(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleIntegerSubmit(); }}
+                        placeholder="Type your answer..."
+                        className="flex-1 bg-[#0A0E17] border border-[#1D2939] rounded-xl px-4 py-3 text-white text-lg focus:border-blue-500 outline-none"
+                      />
+                      <motion.button
+                        whileTap={{ scale: 0.97 }}
+                        onClick={handleIntegerSubmit}
+                        disabled={integerAnswer.trim() === ''}
+                        className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 font-semibold transition-colors"
+                      >
+                        Submit
+                      </motion.button>
+                    </div>
+                  </>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`rounded-xl p-5 border-2 ${
+                      isCorrect
+                        ? 'bg-[#04271C] border-[#1DC97A]'
+                        : 'bg-[#2D0A0A] border-[#DC2626]'
+                    }`}
                   >
-                    <div className="w-10 h-10 rounded-lg bg-[#151B27] border border-[#262F4C] flex items-center justify-center font-semibold">
-                      {option}
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className={`font-bold text-lg ${isCorrect ? 'text-[#1DC97A]' : 'text-[#DC2626]'}`}>
+                        {isCorrect ? '✓ Correct!' : '✗ Incorrect'}
+                      </span>
                     </div>
-                    <div className="flex-1">
-                      {renderLatex(currentQuestion[`option_${option}` as keyof Question] as string)}
+                    <div className="text-gray-300 text-sm">
+                      Your answer: <span className="font-semibold text-white">{integerAnswer}</span>
                     </div>
-                  </motion.button>
-                ))}
+                    {!isCorrect && currentQuestion.correct_option && (
+                      <div className="text-gray-300 text-sm mt-1">
+                        Correct answer: <span className="font-semibold text-[#1DC97A]">{currentQuestion.correct_option}</span>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+
+
+                {/* Determining Answer Loader */}
+                {determiningAnswer && (
+                  <div className="flex items-center justify-center gap-3 py-4">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      className="w-6 h-6 border-2 border-white border-t-transparent rounded-full"
+                    />
+                    <span className="text-gray-400">Determining correct answer...</span>
+                  </div>
+                )}
+              </div>
+            ) : selectedOption === null ? (
+              /* ---- MCQ UNANSWERED ---- */
+              <div className="space-y-3">
+                {['a', 'b', 'c', 'd'].map((option) => {
+                  const textVal = currentQuestion[`option_${option}` as keyof Question] as string;
+                  const imgVal = currentQuestion[`option_${option}_img` as keyof Question] as string | null | undefined;
+                  if (!textVal && !imgVal) return null;
+                  return (
+                    <motion.button
+                      key={option}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleOptionClick(option)}
+                      className="w-full text-left rounded-xl p-4 bg-[#0A0E17] border border-[#1D2939] hover:border-blue-500/50 transition-colors flex items-center gap-4"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-[#151B27] border border-[#262F4C] flex items-center justify-center font-semibold flex-shrink-0">
+                        {option}
+                      </div>
+                      <div className="flex-1">
+                        {imgVal ? (
+                          <img src={imgVal} alt={`Option ${option}`} className="max-h-24 rounded-lg" />
+                        ) : (
+                          renderLatex(textVal)
+                        )}
+                      </div>
+                    </motion.button>
+                  );
+                })}
               </div>
             ) : (
               <>
                 {/* Answered Options */}
                 <div className="space-y-3">
-                  {['A', 'B', 'C', 'D'].map((option) => {
+                  {['a', 'b', 'c', 'd'].map((option) => {
+                    const textVal = currentQuestion[`option_${option}` as keyof Question] as string;
+                    const imgVal = currentQuestion[`option_${option}_img` as keyof Question] as string | null | undefined;
+                    if (!textVal && !imgVal) return null;
                     const isSelected = selectedOption === option;
-                    const isCorrectOption = option === currentQuestion.correct_option;
+                    const isCorrectOption =
+                    option.toLowerCase().trim() ===
+                    currentQuestion.correct_option?.toLowerCase().trim();
                     const showCorrect = isCorrectOption;
                     const showIncorrect = isSelected && !isCorrectOption;
 
                     return (
                       <motion.div
-                        key={option}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`w-full text-left rounded-xl p-4 flex items-center gap-4 ${
+                      key={option}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`w-full text-left rounded-xl p-4 flex items-center gap-4 ${
+                        showCorrect
+                          ? 'bg-[#04271C] border-2 border-[#1DC97A]'
+                          : showIncorrect
+                          ? 'bg-[#2D0A0A] border-2 border-[#DC2626]'
+                          : 'bg-[#0A0E17] border border-[#1D2939]'
+                      }`}
+                    >
+                      <div
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center font-semibold ${
                           showCorrect
-                            ? 'bg-[#04271C] border-2 border-[#1DC97A]'
+                            ? 'bg-[#1DC97A] text-black'
                             : showIncorrect
-                            ? 'bg-[#2D0A0A] border-2 border-[#DC2626]'
-                            : 'bg-[#0A0E17] border border-[#1D2939]'
+                            ? 'bg-[#DC2626] text-white'
+                            : 'bg-[#151B27] border border-[#262F4C]'
                         }`}
                       >
-                        <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center font-semibold ${
-                            showCorrect
-                              ? 'bg-[#1DC97A] text-black'
-                              : showIncorrect
-                              ? 'bg-[#DC2626] text-white'
-                              : 'bg-[#151B27] border border-[#262F4C]'
-                          }`}
-                        >
                           {option}
                         </div>
                         <div className="flex-1">
-                          {renderLatex(currentQuestion[`option_${option}` as keyof Question] as string)}
+                          {imgVal ? (
+                            <img src={imgVal} alt={`Option ${option}`} className="max-h-24 rounded-lg" />
+                          ) : (
+                            renderLatex(textVal)
+                          )}
                         </div>
                         {showCorrect && <FiCheckIcon />}
                       </motion.div>
@@ -984,7 +1173,7 @@ export default function QuestionViewerPage() {
                       </div>
                       <div className="space-y-3">
                         {conceptMCQ.mcq.options.map((opt: string, i: number) => {
-                          const letter = ['A', 'B', 'C', 'D'][i];
+                          const letter = ['a', 'b', 'c', 'd'][i];
                           const isSelected = digDeepSelected === letter;
                           return (
                             <motion.button
