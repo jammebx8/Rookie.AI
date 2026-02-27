@@ -139,6 +139,8 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
       iconFilled: '/set_filled.png',
       iconUnfilled: '/set_unfilled.png',
     },
+
+    
   ];
 
   // Colors based on theme
@@ -161,22 +163,39 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
         animate="visible"
         variants={headerVariants}
       >
-        <div className="lg:pl-56">
+        <div className="">
           <div className="flex items-center justify-between h-12 sm:h-14 px-4 sm:px-6">
 
             {/* Logo (SVG, no image file needed) */}
             <div className="flex items-center gap-2.5">
-              <AppLogo isDark={isDark} />
-              <span className={`font-semibold text-sm sm:text-base tracking-tight ${textPrimary} hidden sm:block`}>
-              Rookie
-              </span>
+            <Image
+  src="/icon.svg"
+  alt="Rookie Logo"
+  width={36}
+  height={36}
+  priority
+  
+/>
+<Image
+  src="/vector.svg"
+  alt="Rookie Logo"
+  width={76}
+  height={76}
+  priority
+  className={isDark ? "" : "invert"}
+/>
             </div>
 
             {/* Right side: coins + theme toggle */}
             <div className="flex items-center gap-2">
               {/* Rookie Coins */}
               <div className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg ${coinsBg} transition-colors duration-300`}>
-                <FiAward className="text-yellow-500 w-3.5 h-3.5" />
+              <Image
+  src="coin (1).svg"
+  alt="Coins"
+  width={16}
+  height={16}
+/>
                 <span className={`font-semibold text-xs sm:text-sm ${coinsText}`}>{rookieCoins}</span>
               </div>
 
@@ -215,13 +234,13 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
 
         {/* ─── DESKTOP SIDEBAR ──────────────────────────────────── */}
         <motion.aside
-          className={`hidden lg:flex flex-col fixed left-0 top-12 sm:top-14 bottom-0 w-52 ${sidebarBg} border-r ${borderColor} z-30 transition-colors duration-300`}
+          className={`hidden lg:flex flex-col fixed left-0 top-12 sm:top-14 bottom-0 w-62  ${sidebarBg} border-r ${borderColor} z-30 transition-colors duration-300`}
           initial="hidden"
           animate="visible"
           variants={navVariants}
         >
           {/* Nav links */}
-          <nav className="flex-1 px-3 pt-4 pb-4 space-y-1">
+          <nav className="flex-1 px-3 pt-4 pb-4 space-y-1 ">
             {tabs.map((tab) => {
               const isActive = pathname === tab.path;
               return (
@@ -239,7 +258,9 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                   }`}
                   aria-current={isActive ? 'page' : undefined}
                 >
-                  <div className="w-5 h-5 flex-shrink-0 relative">
+
+                  
+                  <div className="w-8 h-8 flex-shrink-0 relative mt-2">
                     <Image
                       src={isActive ? tab.iconFilled : tab.iconUnfilled}
                       alt={tab.name}

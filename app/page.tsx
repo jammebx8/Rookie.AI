@@ -112,6 +112,7 @@ const ExamBadge = ({ name, abbr, color }: { name: string; abbr: string; color: s
         alt={name}
         width={28}
         height={28}
+        unoptimized
         onError={(e) => {
           (e.target as HTMLImageElement).style.display = 'none';
           const parent = (e.target as HTMLImageElement).parentElement;
@@ -131,7 +132,7 @@ const ExamBadge = ({ name, abbr, color }: { name: string; abbr: string; color: s
 const EXAMS = [
   { name: 'JEE Mains', abbr: 'JM', color: '#3b82f6' },
   { name: 'JEE Advanced', abbr: 'JA', color: '#8b5cf6' },
-  { name: 'NEET', abbr: 'NT', color: '#10b981' },
+  { name: 'NEET', abbr: 'nt', color: '#10b981' },
   { name: 'MHT CET', abbr: 'MC', color: '#f59e0b' },
   { name: 'BITSAT', abbr: 'BS', color: '#6366f1' },
 ];

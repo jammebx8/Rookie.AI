@@ -5,15 +5,75 @@ import axios from 'axios';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiChevronLeft, FiBookmark, FiSearch, FiSmile, FiX, FiArrowRight, FiArrowLeft, FiAward } from 'react-icons/fi';
+import {
+  FiChevronLeft, FiBookmark, FiSearch, FiSmile,
+  FiX, FiArrowRight, FiArrowLeft, FiZoomIn, FiCheck
+} from 'react-icons/fi';
 import { IoTimeOutline, IoBookmark } from 'react-icons/io5';
-import imagepath from '../../public/src/constants/imagepath';
 import { supabase } from '../../public/src/utils/supabase';
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
-import Confetti from 'react-confetti';
-import useWindowSize from 'react-use/lib/useWindowSize';
 
+// ─── AI Buddy Definitions ────────────────────────────────────────────────────
+// Each buddy has: id (matches localStorage "selectedBuddy"), name, emoji, columnKey (Supabase col), systemPrompt
+export const AI_BUDDIES: Record<string, {
+  name: string; emoji: string; columnKey: string; systemPrompt: string; color: string;
+}> = {
+  '1': {
+    name: 'Jeetu Bhaiya',
+    emoji: '🤖',
+    columnKey: 'buddy_nova',
+    color: '#6366F1',
+    systemPrompt:
+    "you are jeetu bhaiya who talks in hinglish.you call your students as bhai or didi as sarcasm. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+  },
+  '2': {
+    name: 'Riya',
+    emoji: '🔥',
+    columnKey: 'buddy_blaze',
+    color: '#EF4444',
+    systemPrompt:
+    "You are Riya, a fun, teenage girl who replies in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+  },
+  '3': {
+    name: 'Rei',
+    emoji: '🧙',
+    columnKey: 'buddy_sage',
+    color: '#10B981',
+    systemPrompt:
+    "You are Rei, a handsome, intelligent anime boy who is charming, calm, and slightly flirty. Use Hindi-English like a modern teen. Speak naturally, be a bit teasing but always respectful and kind. You're the type who girls secretly admire in class.",
+  },
+  '4': {
+    name: 'Ritu',
+    emoji: '⚡',
+    columnKey: 'buddy_spark',
+    color: '#F59E0B',
+    systemPrompt:
+    "You are Ritu, a fun, teenage girl who replies in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+  },
+
+  '5': {
+    name: 'Shreya',
+    emoji: '⚡',
+    columnKey: 'buddy_spark',
+    color: '#F59E0B',
+    systemPrompt:
+    "You are Shreya, an Indian gamer girl who is introverted but sharp. You speak calmly and prefer short Hinglish lines. You're confident like someone who top-frags quietly. Be cool, concise, and real.",
+  },
+
+  '6': {
+    name: 'Neha',
+    emoji: '⚡',
+    columnKey: 'buddy_spark',
+    color: '#F59E0B',
+    systemPrompt:
+    'you are Neha, a 17-year old indian girl who is a little sassy and loves to gossip.avoid giving long responses. You speak in a fun, casual Hinglish style, using lots of emojis and slang. Youre all about the drama.',
+  },
+};
+
+const DEFAULT_BUDDY_ID = '1';
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 type Question = {
   question: string;
   question_id: string;
@@ -33,334 +93,283 @@ type Question = {
   option_b_img?: string | null;
   option_c_img?: string | null;
   option_d_img?: string | null;
+  [key: string]: any; // buddy_nova, buddy_blaze, etc.
 };
 
+type ToastType = 'success' | 'error' | 'info' | 'coin' | 'bookmark';
+
+interface ToastItem {
+  id: number;
+  message: string;
+  type: ToastType;
+}
+
 const API_BASE = 'https://rookie-backend.vercel.app/api';
-
-const WEAK_CONCEPTS_KEY = 'userWeakConcepts';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
-const SESSION_RESPONSES_KEY = 'questionSessionResponses_v1';
+const SESSION_KEY = 'questionSessionResponses_v1';
 
+// ─── Theme hook ──────────────────────────────────────────────────────────────
+function useTheme() {
+  const [isDark, setIsDark] = useState(true);
+  useEffect(() => {
+    try { setIsDark(localStorage.getItem('theme') !== 'light'); } catch {}
+    const ob = new MutationObserver(() => {
+      try { setIsDark(localStorage.getItem('theme') !== 'light'); } catch {}
+    });
+    ob.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    const fn = () => { try { setIsDark(localStorage.getItem('theme') !== 'light'); } catch {} };
+    window.addEventListener('storage', fn);
+    return () => { ob.disconnect(); window.removeEventListener('storage', fn); };
+  }, []);
+  return isDark;
+}
+
+// ─── Toast component ─────────────────────────────────────────────────────────
+function Toast({ toast, onClose }: { toast: ToastItem; onClose: (id: number) => void }) {
+  const styles: Record<ToastType, string> = {
+    success:  'bg-emerald-600 text-white',
+    error:    'bg-rose-600 text-white',
+    info:     'bg-slate-700 text-white',
+    coin:     'bg-gradient-to-r from-amber-500 to-orange-500 text-white',
+    bookmark: 'bg-indigo-600 text-white',
+  };
+  const icons: Record<ToastType, string> = {
+    success: '✓', error: '✗', info: 'ℹ', coin: '🪙', bookmark: '🔖',
+  };
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20, scale: 0.92 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -16, scale: 0.94 }}
+      className={`flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl ${styles[toast.type]}`}
+    >
+      <span className="text-base font-bold">{icons[toast.type]}</span>
+      <span className="font-semibold text-sm">{toast.message}</span>
+      <button onClick={() => onClose(toast.id)} className="ml-1 opacity-60 hover:opacity-100 transition-opacity">
+        <FiX size={13} />
+      </button>
+    </motion.div>
+  );
+}
+
+// ─── Image Modal ─────────────────────────────────────────────────────────────
+function ImageModal({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-sm p-6"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.86 }} animate={{ scale: 1 }} exit={{ scale: 0.86 }}
+        onClick={e => e.stopPropagation()}
+        className="relative max-w-xl w-full"
+      >
+        <button
+          onClick={onClose}
+          className="absolute -top-3 -right-3 z-10 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center shadow-lg font-bold"
+        >
+          <FiX size={14} />
+        </button>
+        <img
+          src={src} alt="Question"
+          className="rounded-2xl object-contain max-h-[72vh] w-full shadow-2xl border border-white/10"
+        />
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Spinner ─────────────────────────────────────────────────────────────────
+function Spinner({ size = 20, cls = 'border-indigo-500' }: { size?: number; cls?: string }) {
+  return (
+    <motion.div
+      animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+      style={{ width: size, height: size }}
+      className={`border-2 ${cls} border-t-transparent rounded-full flex-shrink-0`}
+    />
+  );
+}
+
+// ─── Render LaTeX ─────────────────────────────────────────────────────────────
+function renderLatex(text: string): React.ReactNode {
+  if (!text) return null;
+  return text.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/).map((part, i) => {
+    if (part.startsWith('$$') && part.endsWith('$$')) return <BlockMath key={i} math={part.slice(2, -2)} />;
+    if (part.startsWith('$')  && part.endsWith('$'))  return <InlineMath key={i} math={part.slice(1, -1)} />;
+    return <span key={i}>{part}</span>;
+  });
+}
+
+// ─── CheckIcon ───────────────────────────────────────────────────────────────
+function CheckIcon() {
+  return (
+    <svg width="14" height="11" viewBox="0 0 14 11" fill="none">
+      <path d="M1 5.5L5 9L13 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function QuestionViewerPage() {
+  const isDark = useTheme();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const chapterTitle = (searchParams.get('chapterTitle') || '') as string;
-  const subjectName = (searchParams.get('subjectName') || 'Physics') as string;
-  const imageKey = (searchParams.get('imageKey') || '') as string;
+  const sp = useSearchParams();
+  const chapterTitle = sp.get('chapterTitle') || '';
+  const subjectName  = sp.get('subjectName')  || 'Physics';
+  const imageKey     = sp.get('imageKey')     || '';
 
-  const [loading, setLoading] = useState<boolean>(true);
-  const [rookieCoins, setRookieCoins] = useState<number>(0);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [shownIndices, setShownIndices] = useState<Set<number>>(new Set([0]));
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  // ── Core state ────────────────────────────────────────────────────────────
+  const [loading, setLoading]               = useState(true);
+  const [questions, setQuestions]           = useState<Question[]>([]);
+  const [currentIndex, setCurrentIndex]     = useState(0);
+  const [rookieCoins, setRookieCoins]       = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [motivation, setMotivation] = useState<string>('');
-  const timerRef = useRef<number | null>(null);
-  const [timer, setTimer] = useState<number>(0);
-  const [solution, setSolution] = useState<string>('');
-  const [buddy, setBuddy] = useState<any>(null);
-  const [showConfetti, setShowConfetti] = useState<boolean>(false);
-  const [aiFollowup, setAIFollowup] = useState<string | null>(null);
-  const [aiFollowupLoading, setAIFollowupLoading] = useState<boolean>(false);
-  const [isConnected, setIsConnected] = useState<boolean>(true);
-  const [bookmarked, setBookmarked] = useState<boolean>(false);
-  const [showToast, setShowToast] = useState<boolean>(false);
-  const [coinsEarned, setCoinsEarned] = useState<number>(0);
-  const [showCoinReward, setShowCoinReward] = useState<boolean>(false);
-  const [solutionLoading, setSolutionLoading] = useState<boolean>(false);
-  const [motivationLoading, setMotivationLoading] = useState<boolean>(false);
+  const [isCorrect, setIsCorrect]           = useState<boolean | null>(null);
+  const [motivation, setMotivation]         = useState('');
+  const [timer, setTimer]                   = useState(0);
+  const [solution, setSolution]             = useState('');
+  const [displayedText, setDisplayedText]   = useState('');
+  const [isTyping, setIsTyping]             = useState(false);
+  const [aiFollowup, setAIFollowup]         = useState<string | null>(null);
+  const [aiFollowupLoading, setAIFollowupLoading] = useState(false);
+  const [bookmarked, setBookmarked]         = useState(false);
+  const [solutionLoading, setSolutionLoading] = useState(false);
+  const [motivationLoading, setMotivationLoading] = useState(false);
+  const [solutionRequested, setSolutionRequested] = useState(false);
+  const [determiningAnswer, setDeterminingAnswer] = useState(false);
+  const [integerAnswer, setIntegerAnswer]   = useState('');
+  const [imageModal, setImageModal]         = useState<string | null>(null);
+  const [buddyId, setBuddyId]               = useState(DEFAULT_BUDDY_ID);
+  const [toasts, setToasts]                 = useState<ToastItem[]>([]);
+  const [isConnected, setIsConnected]       = useState(true);
 
-  // Dig Deeper states
-  const [isDigging, setIsDigging] = useState<boolean>(false);
-  const [conceptMCQ, setConceptMCQ] = useState<any>(null);
-  const [conceptHistory, setConceptHistory] = useState<any[]>([]);
-  const [conceptLoading, setConceptLoading] = useState<boolean>(false);
-  const [conceptFeedback, setConceptFeedback] = useState<string>('');
-  const [conceptDone, setConceptDone] = useState<boolean>(false);
+  // Dig Deeper
+  const [isDigging, setIsDigging]           = useState(false);
+  const [conceptMCQ, setConceptMCQ]         = useState<any>(null);
+  const [conceptLoading, setConceptLoading] = useState(false);
+  const [conceptFeedback, setConceptFeedback] = useState('');
   const [digDeepSelected, setDigDeepSelected] = useState<string | null>(null);
-  const [prevDigResult, setPrevDigResult] = useState<{ status: 'correct' | 'incorrect' | ''; explanation?: string; answer?: string } | null>(null);
-  const [integerAnswer, setIntegerAnswer] = useState<string>('');
-  const [solutionRequested, setSolutionRequested] = useState<boolean>(false);
-  const [determiningAnswer, setDeterminingAnswer] = useState<boolean>(false);
+  const [prevDigResult, setPrevDigResult]   = useState<{
+    status: 'correct' | 'incorrect' | ''; explanation?: string; answer?: string;
+  } | null>(null);
 
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const { width, height } = useWindowSize();
-  const questionStartTime = useRef<number>(Date.now());
+  const timerRef          = useRef<number | null>(null);
+  const scrollRef         = useRef<HTMLDivElement | null>(null);
+  const questionStartTime = useRef(Date.now());
 
-  // ---------- Fetch questions from Supabase ----------
+  const buddy = AI_BUDDIES[buddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID];
+
+  // ── Theme tokens ──────────────────────────────────────────────────────────
+  const T = {
+    page:        isDark ? 'bg-[#07090f] text-white'              : 'bg-[#F0F2FA] text-[#0f172a]',
+    header:      isDark ? 'bg-[#07090f]/95 border-[#1e2538]'    : 'bg-white/95 border-[#E5E7EB]',
+    card:        isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-white border-[#E5E7EB]',
+    optionIdle:  isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/50 text-white'
+                        : 'bg-white border-[#E5E7EB] hover:border-indigo-400 text-[#0f172a]',
+    optionLabel: isDark ? 'bg-[#151B27] border-[#262F4C] text-slate-200'
+                        : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]',
+    input:       isDark ? 'bg-[#0d1117] border-[#1e2538] text-white placeholder-gray-500 focus:border-indigo-500'
+                        : 'bg-white border-[#D1D5DB] text-[#0f172a] placeholder-gray-400 focus:border-indigo-400',
+    muted:       isDark ? 'text-slate-400'                       : 'text-slate-500',
+    progress:    isDark ? 'bg-[#1e2538]'                         : 'bg-gray-200',
+    footer:      isDark ? 'bg-[#07090f]/95 border-[#1e2538]'    : 'bg-white/95 border-[#E5E7EB]',
+    btnSecondary:isDark ? 'bg-[#111827] border-[#1D2939] text-white hover:bg-[#1a2235]'
+                        : 'bg-white border-[#D1D5DB] text-[#0f172a] hover:bg-gray-50',
+    solCard:     isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-white border-[#E5E7EB]',
+    followCard:  isDark ? 'bg-[#0a0f1a] border-[#1D2939] text-slate-300'
+                        : 'bg-indigo-50 border-indigo-200 text-slate-700',
+    // Exam shift badge - highlighted like screenshot
+    examBadge:   isDark ? 'bg-indigo-900/50 text-indigo-300 border border-indigo-700/60'
+                        : 'bg-blue-100 text-blue-700 border border-blue-300',
+    subjectBadge:isDark ? 'bg-[#1e2538] text-slate-300 border border-[#2a3548]'
+                        : 'bg-slate-100 text-slate-600 border border-slate-200',
+    yearBadge:   isDark ? 'bg-[#1a2235] text-slate-400'         : 'bg-gray-100 text-gray-500',
+    imgWrapper:  isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-gray-50 border-gray-200',
+    coinBadge:   isDark ? 'bg-[#111827] border-[#1D2939] text-white'
+                        : 'bg-amber-50 border-amber-200 text-amber-800',
+    buddyPanel:  isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-indigo-50 border-indigo-200',
+  };
+
+  // ── Toast helpers ─────────────────────────────────────────────────────────
+  const addToast = (message: string, type: ToastType = 'info', ms = 3500) => {
+    const id = Date.now() + Math.random();
+    setToasts(p => [...p, { id, message, type }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), ms);
+  };
+  const removeToast = (id: number) => setToasts(p => p.filter(t => t.id !== id));
+
+  // ── Load buddy from localStorage ──────────────────────────────────────────
   useEffect(() => {
-    const fetchQuestionsFromSupabase = async () => {
-      if (!chapterTitle) return;
-      
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from(chapterTitle)
-          .select('*')
-          .order('question', { ascending: true });
-
-        if (error) {
-          console.error('Error fetching questions from Supabase:', error);
-          setQuestions([]);
-          return;
-        }
-
-        if (data && data.length > 0) {
-          setQuestions(data as Question[]);
-        } else {
-          setQuestions([]);
-        }
-      } catch (err) {
-        console.error('Error fetching questions:', err);
-        setQuestions([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchQuestionsFromSupabase();
-  }, [chapterTitle]);
-
-  // ---------- Load user's rookie coins ----------
-  useEffect(() => {
-    const loadUserCoins = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data, error } = await supabase
-            .from('users')
-            .select('rookieCoinsEarned')
-            .eq('id', user.id)
-            .single();
-
-          if (!error && data) {
-            setRookieCoins(data.rookieCoinsEarned || 0);
-          }
-        }
-      } catch (err) {
-        console.error('Error loading user coins:', err);
-      }
-    };
-
-    loadUserCoins();
+    try {
+      const s = localStorage.getItem('selectedBuddy');
+      if (s && AI_BUDDIES[s]) setBuddyId(s);
+    } catch {}
   }, []);
 
-  // ---------- Helpers for local/session storage ----------
-  const saveSessionForCurrent = async (partial: Record<string, any> = {}) => {
+  // ── Network detection ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const online  = () => setIsConnected(true);
+    const offline = () => { setIsConnected(false); addToast('No internet connection', 'error'); };
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline); };
+  }, []);
+
+  // ── Fetch questions ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!chapterTitle) return;
+    setLoading(true);
+    supabase.from(chapterTitle).select('*').order('question', { ascending: true })
+      .then(({ data, error }) => {
+        if (!error && data?.length) setQuestions(data as Question[]);
+        else setQuestions([]);
+      })
+      .catch(() => setQuestions([]))
+      .finally(() => setLoading(false));
+  }, [chapterTitle]);
+
+  // ── Load coins ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase.from('users').select('rookieCoinsEarned').eq('id', user.id).single()
+        .then(({ data, error }) => { if (!error && data) setRookieCoins(data.rookieCoinsEarned || 0); });
+    });
+  }, []);
+
+  // ── Session helpers ───────────────────────────────────────────────────────
+  const saveSession = (partial: Record<string, any> = {}) => {
     try {
-      const stored = localStorage.getItem(SESSION_RESPONSES_KEY);
-      const obj = stored ? JSON.parse(stored) : {};
+      const raw = localStorage.getItem(SESSION_KEY);
+      const obj = raw ? JSON.parse(raw) : {};
       if (!obj[chapterTitle]) obj[chapterTitle] = {};
       obj[chapterTitle][String(currentIndex)] = {
         ...(obj[chapterTitle][String(currentIndex)] || {}),
-        selectedOption,
-        isCorrect,
-        motivation,
-        solutionRequested,
-        solution,
-        aiFollowup,
+        selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup,
         ...partial,
       };
-      localStorage.setItem(SESSION_RESPONSES_KEY, JSON.stringify(obj));
-    } catch (e) {
-      // ignore
-    }
+      localStorage.setItem(SESSION_KEY, JSON.stringify(obj));
+    } catch {}
   };
 
-
-
-
-    // ---------- Handle Integer Answer Submission ----------
-    const handleIntegerSubmit = async () => {
-      if (isCorrect !== null) return; // already answered
-      const currentQuestion = questions[currentIndex];
-      if (!currentQuestion || integerAnswer.trim() === '') return;
-  
-      const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000);
-  
-      let correctAnswer = currentQuestion.correct_option;
-      if (!correctAnswer) {
-        setDeterminingAnswer(true);
-        try {
-          const response = await axios.post(`${API_BASE}/solution`, {
-            action: 'determine_answer',
-            question_text: currentQuestion.question_text,
-            option_a: currentQuestion.option_a,
-            option_b: currentQuestion.option_b,
-            option_c: currentQuestion.option_c,
-            option_d: currentQuestion.option_d,
-            solution: currentQuestion.solution,
-          });
-          correctAnswer = response.data.correct_answer;
-  
-          await supabase
-            .from(chapterTitle)
-            .update({ correct_option: correctAnswer })
-            .eq('question_id', currentQuestion.question_id);
-  
-          currentQuestion.correct_option = correctAnswer;
-        } catch (err) {
-          console.error('Error determining answer:', err);
-        } finally {
-          setDeterminingAnswer(false);
-        }
-      }
-  
-      // Compare as numbers if possible, else string
-      const userNum = parseFloat(integerAnswer.trim());
-      const correctNum = parseFloat(correctAnswer || '');
-      const correct = !isNaN(userNum) && !isNaN(correctNum)
-        ? userNum === correctNum
-        : integerAnswer.trim() === (correctAnswer || '').trim();
-  
-      setIsCorrect(correct);
-      // Use 'INTEGER' as a sentinel so we know it was submitted
-      setSelectedOption('INTEGER');
-  
-      const coins = calculateCoinReward(timeSpent, correct);
-      setCoinsEarned(coins);
-  
-      if (correct && coins > 0) {
-        setShowConfetti(true);
-        setShowCoinReward(true);
-        setTimeout(() => setShowConfetti(false), 5000);
-        setTimeout(() => setShowCoinReward(false), 3000);
-        await updateRookieCoins(coins);
-      }
-  
-      await generateMotivation(correct);
-      const aiSolution = await generateAISolution(currentQuestion);
-      setSolution(aiSolution);
-      setSolutionRequested(true);
-  
-      setTimeout(() => {
-        scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 300);
-  
-      await saveSessionForCurrent({
-        selectedOption: 'INTEGER',
-        isCorrect: correct,
-        solution: aiSolution,
-        solutionRequested: true,
-        integerAnswer: integerAnswer.trim(),
-      });
-    };
-
-
-    
-  // ---------- Helper: Is this an integer-type question? ----------
-  const isIntegerQuestion = (q: Question) => {
-    const hasTextOptions = q.option_a || q.option_b || q.option_c || q.option_d;
-    const hasImgOptions = q.option_a_img || q.option_b_img || q.option_c_img || q.option_d_img;
-    return !hasTextOptions && !hasImgOptions;
-  };
-
-  const loadSessionForIndex = (index: number) => {
+  const loadSession = (i: number) => {
     try {
-      const stored = localStorage.getItem(SESSION_RESPONSES_KEY);
-      if (!stored) return null;
-      const obj = JSON.parse(stored);
-      const chapterObj = obj[chapterTitle];
-      if (!chapterObj) return null;
-      return chapterObj[String(index)] || null;
-    } catch (e) {
-      return null;
-    }
+      const raw = localStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw)?.[chapterTitle]?.[String(i)] || null : null;
+    } catch { return null; }
   };
 
-  const clearSession = () => {
-    try {
-      localStorage.removeItem(SESSION_RESPONSES_KEY);
-    } catch (e) {
-      // ignore
-    }
-  };
-
-  // ---------- Bookmark handling ----------
-  useEffect(() => {
-    if (questions.length === 0) return;
-    try {
-      const stored = localStorage.getItem(BOOKMARKS_KEY);
-      if (!stored) {
-        setBookmarked(false);
-        return;
-      }
-      const arr = JSON.parse(stored) as any[];
-      const currentQuestion = questions[currentIndex];
-      if (!currentQuestion) return;
-      const isBookmarked = arr.some(
-        (q) =>
-          q.question_id === currentQuestion.question_id &&
-          q.chapterTitle === chapterTitle &&
-          q.subjectName === subjectName
-      );
-      setBookmarked(isBookmarked);
-    } catch (e) {
-      setBookmarked(false);
-    }
-  }, [currentIndex, questions, chapterTitle, subjectName]);
-
-  const handleBookmark = () => {
-    try {
-      const currentQuestion = questions[currentIndex];
-      if (!currentQuestion) return;
-      const stored = localStorage.getItem(BOOKMARKS_KEY);
-      let arr = stored ? JSON.parse(stored) : [];
-
-      if (!bookmarked) {
-        arr.push({
-          ...currentQuestion,
-          chapterTitle,
-          subjectName,
-          imageKey,
-        });
-        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
-        setBookmarked(true);
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 2000);
-      } else {
-        arr = arr.filter(
-          (q: any) =>
-            !(q.question_id === currentQuestion.question_id &&
-              q.chapterTitle === chapterTitle &&
-              q.subjectName === subjectName)
-        );
-        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
-        setBookmarked(false);
-      }
-    } catch (e) {
-      console.error('Error handling bookmark:', e);
-    }
-  };
-
-  // ---------- Timer ----------
-  useEffect(() => {
-    if (timerRef.current !== null) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
-    if (selectedOption === null && questions[currentIndex]) {
-      const start = Date.now();
-      questionStartTime.current = start;
-      timerRef.current = window.setInterval(() => {
-        setTimer(Math.floor((Date.now() - start) / 1000));
-      }, 1000);
-    }
-
-    return () => {
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [selectedOption, currentIndex, questions]);
-
-  // ---------- Load previous session ----------
+  // ── Restore session on question change ────────────────────────────────────
   useEffect(() => {
     if (!questions.length) return;
-    const prev = loadSessionForIndex(currentIndex);
+    const prev = loadSession(currentIndex);
     if (prev) {
       setSelectedOption(prev.selectedOption || null);
       setIsCorrect(prev.isCorrect ?? null);
@@ -368,439 +377,344 @@ export default function QuestionViewerPage() {
       setSolution(prev.solution || '');
       setAIFollowup(prev.aiFollowup || null);
       setSolutionRequested(prev.solutionRequested || false);
+      if (prev.integerAnswer) setIntegerAnswer(prev.integerAnswer);
     } else {
-      setSelectedOption(null);
-      setIsCorrect(null);
-      setMotivation('');
-      setSolution('');
-      setAIFollowup(null);
-      setSolutionRequested(false);
-      setIsDigging(false);
-      setConceptMCQ(null);
-      setPrevDigResult(null);
-      setDigDeepSelected(null);
+      setSelectedOption(null); setIsCorrect(null); setMotivation('');
+      setSolution(''); setAIFollowup(null); setSolutionRequested(false);
+      setIsDigging(false); setConceptMCQ(null); setPrevDigResult(null);
+      setDigDeepSelected(null); setIntegerAnswer(''); setDisplayedText('');
     }
   }, [currentIndex, questions, chapterTitle]);
 
-  // ---------- Calculate coin reward ----------
-  const calculateCoinReward = (timeSpent: number, correct: boolean): number => {
+  // ── Bookmark sync ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!questions.length) return;
+    try {
+      const raw = localStorage.getItem(BOOKMARKS_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      const q = questions[currentIndex];
+      setBookmarked(arr.some((b: any) => b.question_id === q?.question_id && b.chapterTitle === chapterTitle));
+    } catch { setBookmarked(false); }
+  }, [currentIndex, questions, chapterTitle]);
+
+  // ── Timer ─────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (selectedOption === null && questions[currentIndex]) {
+      const start = Date.now();
+      questionStartTime.current = start;
+      timerRef.current = window.setInterval(() => setTimer(Math.floor((Date.now() - start) / 1000)), 1000);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [selectedOption, currentIndex, questions]);
+
+  // ── Typing effect ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!solution || !solutionRequested) return;
+    setIsTyping(true); setDisplayedText('');
+    let i = 0;
+    const iv = setInterval(() => {
+      setDisplayedText(solution.slice(0, i)); i++;
+      if (i > solution.length) { clearInterval(iv); setIsTyping(false); }
+    }, 8);
+    return () => clearInterval(iv);
+  }, [solution, solutionRequested]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const isIntegerQ = (q: Question) =>
+    !q.option_a && !q.option_b && !q.option_c && !q.option_d &&
+    !q.option_a_img && !q.option_b_img && !q.option_c_img && !q.option_d_img;
+
+  const calcCoins = (timeSpent: number, correct: boolean): number => {
     if (!correct) return 0;
-
-    // Time-based scoring (faster = more coins)
-    let timeScore = 0;
-    if (timeSpent <= 30) timeScore = 5;
-    else if (timeSpent <= 60) timeScore = 4;
-    else if (timeSpent <= 90) timeScore = 3;
-    else if (timeSpent <= 120) timeScore = 2;
-    else timeScore = 1;
-
-    // Accuracy bonus
-    const accuracyBonus = 5;
-
-    return Math.min(timeScore + accuracyBonus, 10);
+    const t = timeSpent <= 30 ? 5 : timeSpent <= 60 ? 4 : timeSpent <= 90 ? 3 : timeSpent <= 120 ? 2 : 1;
+    return Math.min(t + 5, 10);
   };
 
-  // ---------- Update rookie coins in Supabase ----------
-  const updateRookieCoins = async (coinsToAdd: number) => {
+  const updateCoins = async (add: number) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const newTotal = rookieCoins + coinsToAdd;
-        const { error } = await supabase
-          .from('users')
-          .update({ rookieCoinsEarned: newTotal })
-          .eq('id', user.id);
-
-        if (!error) {
-          setRookieCoins(newTotal);
-        }
-      }
-    } catch (err) {
-      console.error('Error updating rookie coins:', err);
-    }
+      if (!user) return;
+      const total = rookieCoins + add;
+      const { error } = await supabase.from('users').update({ rookieCoinsEarned: total }).eq('id', user.id);
+      if (!error) setRookieCoins(total);
+    } catch {}
   };
 
-  // ---------- Generate AI Solution ----------
-  const generateAISolution = async (questionData: Question): Promise<string> => {
+  // ── Bookmark handler ──────────────────────────────────────────────────────
+  const handleBookmark = () => {
+    try {
+      const q = questions[currentIndex];
+      if (!q) return;
+      const raw = localStorage.getItem(BOOKMARKS_KEY);
+      let arr = raw ? JSON.parse(raw) : [];
+      if (!bookmarked) {
+        arr.push({ ...q, chapterTitle, subjectName, imageKey });
+        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
+        setBookmarked(true);
+        addToast('Question bookmarked!', 'bookmark');
+      } else {
+        arr = arr.filter((b: any) => !(b.question_id === q.question_id && b.chapterTitle === chapterTitle));
+        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
+        setBookmarked(false);
+        addToast('Bookmark removed', 'info');
+      }
+    } catch {}
+  };
+
+  // ── Determine answer via AI ────────────────────────────────────────────────
+  const determineAnswer = async (q: Question): Promise<string | null> => {
+    setDeterminingAnswer(true);
+    try {
+      const res = await axios.post(`${API_BASE}/solution`, {
+        action: 'determine_answer',
+        question_text: q.question_text,
+        option_A: q.option_a, option_B: q.option_b,
+        option_C: q.option_c, option_D: q.option_d,
+        solution: q.solution,
+      });
+      const ans = res.data.correct_answer;
+      await supabase.from(chapterTitle).update({ correct_option: ans }).eq('question_id', q.question_id);
+      q.correct_option = ans;
+      return ans;
+    } catch { return null; }
+    finally { setDeterminingAnswer(false); }
+  };
+
+  // ── Generate buddy-flavoured AI solution ───────────────────────────────────
+  const generateAISolution = async (q: Question): Promise<string> => {
     try {
       setSolutionLoading(true);
-      
-      // Check if AI solution already exists
-      if (questionData.sol_ai) {
-        return questionData.sol_ai;
-      }
+      const col = buddy.columnKey;
+      // Return cached buddy solution if present
+      if (q[col]) return q[col] as string;
+      // Fall back to generic sol_ai only for default buddy
+      if (buddyId === DEFAULT_BUDDY_ID && q.sol_ai) return q.sol_ai;
 
-      const response = await axios.post(`${API_BASE}/solution`, {
+      const res = await axios.post(`${API_BASE}/solution`, {
         action: 'generate_solution',
-        question_text: questionData.question_text,
-        option_A: questionData.option_a,
-        option_B: questionData.option_b,
-        option_C: questionData.option_c,
-        option_D: questionData.option_d,
-        solution: questionData.solution,
-        correct_option: questionData.correct_option,
+        question_text: q.question_text,
+        option_A: q.option_a, option_B: q.option_b,
+        option_C: q.option_c, option_D: q.option_d,
+        solution: q.solution,
+        correct_option: q.correct_option,
+        buddy_id: buddyId,
+        buddy_name: buddy.name,
+        buddy_system_prompt: buddy.systemPrompt,
       });
 
-      const aiSolution = response.data.solution || questionData.solution;
+      const aiSol = res.data.solution || q.solution;
 
-      // Save AI solution to Supabase
-      await supabase
-        .from(chapterTitle)
-        .update({ sol_ai: aiSolution })
-        .eq('question_id', questionData.question_id);
-
-      return aiSolution;
-    } catch (err) {
-      console.error('Error generating AI solution:', err);
-      return questionData.solution;
-    } finally {
-      setSolutionLoading(false);
-    }
+      // Cache in Supabase under the buddy-specific column
+      await supabase.from(chapterTitle).update({ [col]: aiSol }).eq('question_id', q.question_id);
+      setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: aiSol } : item));
+      return aiSol;
+    } catch { return q.solution; }
+    finally { setSolutionLoading(false); }
   };
 
-  // ---------- Generate motivation message ----------
+  // ── Generate buddy motivation ──────────────────────────────────────────────
   const generateMotivation = async (correct: boolean) => {
     try {
       setMotivationLoading(true);
-      const message = correct
-        ? 'Generate a short, encouraging message for getting a question right'
-        : 'Generate a short, motivating message for getting a question wrong';
-
-      const response = await axios.post(`${API_BASE}/motivation`, {
-        message,
+      const res = await axios.post(`${API_BASE}/motivation`, {
+        message: correct
+          ? `In the voice of ${buddy.name} (personality: ${buddy.systemPrompt}), give a very short 1-2 sentence encouraging message to a student who just got a JEE question CORRECT.`
+          : `In the voice of ${buddy.name} (personality: ${buddy.systemPrompt}), give a very short 1-2 sentence motivating message to a student who just got a JEE question WRONG. Encourage them to keep going.`,
+        buddy_id: buddyId,
+        buddy_name: buddy.name,
       });
-
-      const motivationText = response.data.choices?.[0]?.message?.content || 
-        (correct ? 'Great job! Keep it up!' : 'Don\'t worry, learn from this!');
-      
-      setMotivation(motivationText);
-      return motivationText;
-    } catch (err) {
-      console.error('Error generating motivation:', err);
-      const fallback = correct ? 'Excellent work!' : 'Keep practicing!';
-      setMotivation(fallback);
-      return fallback;
-    } finally {
-      setMotivationLoading(false);
-    }
+      const text = res.data.choices?.[0]?.message?.content || (correct ? 'Great job!' : 'Keep going!');
+      setMotivation(text);
+      return text;
+    } catch {
+      const fb = correct ? 'Excellent!' : 'Keep practicing!';
+      setMotivation(fb); return fb;
+    } finally { setMotivationLoading(false); }
   };
 
-  // ---------- Handle Option Selection ----------
-  const handleOptionClick = async (option: string) => {
-    if (selectedOption !== null) return;
-
-    const currentQuestion = questions[currentIndex];
-    if (!currentQuestion) return;
-
-    const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000);
-    setSelectedOption(option);
-
-    // Determine correct answer if not already set
-    let correctAnswer = currentQuestion.correct_option;
-    if (!correctAnswer) {
-      setDeterminingAnswer(true);
-      try {
-        const response = await axios.post(`${API_BASE}/solution`, {
-          action: 'determine_answer',
-          question_text: currentQuestion.question_text,
-          option_A: currentQuestion.option_a,
-          option_B: currentQuestion.option_b,
-          option_C: currentQuestion.option_c,
-          option_D: currentQuestion.option_d,
-          solution: currentQuestion.solution,
-        });
-
-        correctAnswer = response.data.correct_answer;
-
-        // Update Supabase with correct answer
-        await supabase
-          .from(chapterTitle)
-          .update({ correct_option: correctAnswer })
-          .eq('question_id', currentQuestion.question_id);
-
-        currentQuestion.correct_option = correctAnswer;
-      } catch (err) {
-        console.error('Error determining answer:', err);
-      } finally {
-        setDeterminingAnswer(false);
-      }
+  // ── Post-answer: award coins + motivation + solution ───────────────────────
+  const handlePostAnswer = async (
+    correct: boolean, timeSpent: number, q: Question, optKey: string
+  ) => {
+    const coins = calcCoins(timeSpent, correct);
+    if (correct) {
+      addToast(coins > 0 ? `✓ Correct! +${coins} Coins earned` : '✓ Correct!', 'coin', 3500);
+      if (coins > 0) await updateCoins(coins);
+    } else {
+      addToast(`✗ Not quite — keep going!`, 'error', 3000);
     }
-
-    const correct = option === correctAnswer;
-    setIsCorrect(correct);
-
-    // Calculate and award coins
-    const coins = calculateCoinReward(timeSpent, correct);
-    setCoinsEarned(coins);
-
-    if (correct && coins > 0) {
-      setShowConfetti(true);
-      setShowCoinReward(true);
-      setTimeout(() => setShowConfetti(false), 5000);
-      setTimeout(() => setShowCoinReward(false), 3000);
-      await updateRookieCoins(coins);
-    }
-
-    // Generate motivation
-    await generateMotivation(correct);
-
-    // Generate AI solution
-    const aiSolution = await generateAISolution(currentQuestion);
-    setSolution(aiSolution);
+    const [, aiSol] = await Promise.all([generateMotivation(correct), generateAISolution(q)]);
+    setSolution(aiSol);
     setSolutionRequested(true);
-
-    // Scroll to solution
-    setTimeout(() => {
-      scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 300);
-
-    await saveSessionForCurrent({
-      selectedOption: option,
-      isCorrect: correct,
-      solution: aiSolution,
-      solutionRequested: true,
-    });
+    setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+    saveSession({ selectedOption: optKey, isCorrect: correct, solution: aiSol, solutionRequested: true });
   };
 
-  // ---------- AI Followup (Explain like 5yr / Better Understanding) ----------
+  // ── MCQ selection ─────────────────────────────────────────────────────────
+  const handleOptionClick = async (opt: string) => {
+    if (selectedOption !== null) return;
+    const q = questions[currentIndex];
+    if (!q) return;
+    const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000);
+    setSelectedOption(opt);
+    let ans = q.correct_option;
+    if (!ans) ans = await determineAnswer(q);
+    const correct = opt === ans;
+    setIsCorrect(correct);
+    await handlePostAnswer(correct, timeSpent, q, opt);
+  };
+
+  // ── Integer submit ─────────────────────────────────────────────────────────
+  const handleIntegerSubmit = async () => {
+    if (isCorrect !== null) return;
+    const q = questions[currentIndex];
+    if (!q || !integerAnswer.trim()) return;
+    const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000);
+    let ans = q.correct_option;
+    if (!ans) ans = await determineAnswer(q);
+    const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '');
+    const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim();
+    setIsCorrect(correct);
+    setSelectedOption('INTEGER');
+    await handlePostAnswer(correct, timeSpent, q, 'INTEGER');
+  };
+
+  // ── AI Followup ───────────────────────────────────────────────────────────
   const handleAIFollowup = async (type: '5yr' | 'better') => {
-    const currentQuestion = questions[currentIndex];
-    if (!currentQuestion) return;
-
-    setAIFollowupLoading(true);
-    setAIFollowup(null);
-
+    const q = questions[currentIndex];
+    if (!q) return;
+    setAIFollowupLoading(true); setAIFollowup(null);
     try {
-      const action = type === '5yr' ? 'explain_5yr' : 'better_understanding';
-      const response = await axios.post(`${API_BASE}/solution`, {
-        action,
-        question_text: currentQuestion.question_text,
-        solution: currentQuestion.solution,
+      const res = await axios.post(`${API_BASE}/solution`, {
+        action: type === '5yr' ? 'explain_5yr' : 'better_understanding',
+        question_text: q.question_text,
+        solution: q.solution,
+        buddy_id: buddyId,
+        buddy_name: buddy.name,
+        buddy_system_prompt: buddy.systemPrompt,
       });
-
-      const explanation = response.data.explanation || 'Could not generate explanation.';
-      setAIFollowup(explanation);
-    } catch (err) {
-      console.error('Error generating AI followup:', err);
-      setAIFollowup('Error generating explanation. Please try again.');
-    } finally {
-      setAIFollowupLoading(false);
-    }
+      setAIFollowup(res.data.explanation || 'Could not generate explanation.');
+    } catch { setAIFollowup('Error generating explanation. Please try again.'); }
+    finally { setAIFollowupLoading(false); }
   };
 
-  // ---------- Dig Deeper ----------
+  // ── Dig Deeper ────────────────────────────────────────────────────────────
   const handleDigDeeper = async () => {
-    const currentQuestion = questions[currentIndex];
-    if (!currentQuestion) return;
-
-    setIsDigging(true);
-    setConceptLoading(true);
-    setConceptMCQ(null);
-    setPrevDigResult(null);
-
+    const q = questions[currentIndex];
+    if (!q) return;
+    setIsDigging(true); setConceptLoading(true); setConceptMCQ(null); setPrevDigResult(null);
     try {
-      const response = await axios.post(`${API_BASE}/solution`, {
+      const res = await axios.post(`${API_BASE}/solution`, {
         action: 'dig_deeper',
-        question_text: currentQuestion.question_text,
-        solution: currentQuestion.solution,
+        question_text: q.question_text,
+        solution: q.solution,
+        buddy_id: buddyId,
+        buddy_name: buddy.name,
+        buddy_system_prompt: buddy.systemPrompt,
       });
-
-      setConceptMCQ(response.data);
-    } catch (err) {
-      console.error('Error digging deeper:', err);
-      setConceptFeedback('Error generating concept question.');
-    } finally {
-      setConceptLoading(false);
-    }
+      setConceptMCQ(res.data);
+    } catch { setConceptFeedback('Error generating concept question.'); }
+    finally { setConceptLoading(false); }
   };
 
-  const handleConceptUserResponse = (userAnswer: string) => {
-    if (!conceptMCQ || !conceptMCQ.mcq) return;
-    setDigDeepSelected(userAnswer);
-
-    if (userAnswer === 'I_am_not_sure') {
-      setPrevDigResult({
-        status: 'incorrect',
-        explanation: conceptMCQ.mcq.explanation,
-        answer: conceptMCQ.mcq.correctAnswer,
-      });
+  const handleConceptResponse = (ans: string) => {
+    if (!conceptMCQ?.mcq) return;
+    setDigDeepSelected(ans);
+    if (ans === 'I_am_not_sure') {
+      setPrevDigResult({ status: 'incorrect', explanation: conceptMCQ.mcq.explanation, answer: conceptMCQ.mcq.correctAnswer });
       return;
     }
-
-    const correct = userAnswer === conceptMCQ.mcq.correctAnswer;
-    if (correct) {
-      setPrevDigResult({ status: 'correct' });
-      setConceptFeedback('Correct! Great understanding.');
-    } else {
-      setPrevDigResult({
-        status: 'incorrect',
-        explanation: conceptMCQ.mcq.explanation,
-        answer: conceptMCQ.mcq.correctAnswer,
-      });
-    }
+    const correct = ans === conceptMCQ.mcq.correctAnswer;
+    setPrevDigResult(correct
+      ? { status: 'correct' }
+      : { status: 'incorrect', explanation: conceptMCQ.mcq.explanation, answer: conceptMCQ.mcq.correctAnswer });
   };
 
-  const handleExitDigDeeper = () => {
-    setIsDigging(false);
-    setConceptMCQ(null);
-    setPrevDigResult(null);
-    setDigDeepSelected(null);
-    setConceptFeedback('');
-  };
-
-  // ---------- Navigation ----------
-  const handlePrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
-  };
-
-  const handleNext = () => {
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-      setShownIndices((prev) => new Set(prev).add(currentIndex + 1));
-    }
-  };
-
-  const handleBack = () => {
-   // localStorage.removeItem(SESSION_RESPONSES_KEY);
-    router.back();
-  };
-
-  // ---------- Render LaTeX ----------
-  const renderLatex = (text: string) => {
-    if (!text) return null;
-
-    const parts = text.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/);
-    
-    return parts.map((part, index) => {
-      if (part.startsWith('$$') && part.endsWith('$$')) {
-        const latex = part.slice(2, -2);
-        return <BlockMath key={index} math={latex} />;
-      } else if (part.startsWith('$') && part.endsWith('$')) {
-        const latex = part.slice(1, -1);
-        return <InlineMath key={index} math={latex} />;
-      }
-      return <span key={index}>{part}</span>;
-    });
-  };
-
-  // ---------- Typing effect for AI text ----------
-  const [displayedText, setDisplayedText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-
-  useEffect(() => {
-    if (solution && solutionRequested) {
-      setIsTyping(true);
-      setDisplayedText('');
-      let index = 0;
-      const interval = setInterval(() => {
-        setDisplayedText(solution.slice(0, index));
-        index++;
-        if (index > solution.length) {
-          clearInterval(interval);
-          setIsTyping(false);
-        }
-      }, 10);
-
-      return () => clearInterval(interval);
-    }
-  }, [solution, solutionRequested]);
-
-  // ---------- Main Render ----------
+  // ── Loading screen ────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#07090f] text-white' : 'bg-[#F0F2FA] text-[#0f172a]'}`}>
         <div className="text-center">
-          <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-white animate-spin mx-auto mb-4" />
-          <div>Loading questions...</div>
+          <div className="w-12 h-12 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mx-auto mb-4" />
+          <p className={T.muted}>Loading questions…</p>
         </div>
       </div>
     );
   }
 
-  const currentQuestion = questions[currentIndex];
+  const Q = questions[currentIndex];
 
+  // Helper: parse exam_shift into readable label
+  const parseShift = (s: string) => s?.split('_').join(' ') || null;
+
+  // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-black text-white pb-24">
-           {/* Confetti - full page with fade effect */}
-      {showConfetti && (
-        <motion.div
-          initial={{ opacity: 1 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 1.5, delay: 3 }}
-          style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 9999 }}
-        >
-          <Confetti
-            width={width}
-            height={typeof window !== 'undefined' ? document.documentElement.scrollHeight : height}
-            recycle={false}
-            numberOfPieces={500}
-            style={{ position: 'fixed', top: 0, left: 0 }}
-          />
-        </motion.div>
-        )}
-
-      {/* Coin Reward Display */}
-      <AnimatePresence>
-        {showCoinReward && coinsEarned > 0 && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5, y: -50 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.5, y: -50 }}
-            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-gradient-to-r from-yellow-500 to-orange-500 px-8 py-4 rounded-2xl shadow-2xl"
-          >
-            <div className="flex items-center gap-3">
-              <FiAward size={32} className="text-white" />
-              <div>
-                <div className="text-2xl font-bold text-white">+{coinsEarned} Rookie Coins!</div>
-                <div className="text-sm text-white/90">Total: {rookieCoins + coinsEarned}</div>
-              </div>
+    <div
+      className={`min-h-screen pb-20 transition-colors duration-300 ${T.page}`}
+      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
+    >
+      {/* ── Toast stack ─────────────────────────────────────────────────────── */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] flex flex-col gap-2 items-center pointer-events-none">
+        <AnimatePresence mode="popLayout">
+          {toasts.map(t => (
+            <div key={t.id} className="pointer-events-auto">
+              <Toast toast={t} onClose={removeToast} />
             </div>
-          </motion.div>
-        )}
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Image modal ──────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {imageModal && <ImageModal src={imageModal} onClose={() => setImageModal(null)} />}
       </AnimatePresence>
 
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-black/95 backdrop-blur-sm border-b border-[#232B3B]">
-        <div className="flex items-center justify-between px-6 py-4">
+      {/* ── Header ───────────────────────────────────────────────────────────── */}
+      <div className={`sticky top-0 z-30 backdrop-blur-sm border-b transition-colors duration-300 ${T.header}`}>
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3">
+          {/* Back button */}
           <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={handleBack}
-            className="w-10 h-10 rounded-xl bg-[#151B27] border border-[#1D2939] flex items-center justify-center"
+            whileTap={{ scale: 0.95 }} onClick={() => router.back()}
+            className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 transition-colors ${T.btnSecondary}`}
           >
-            <FiChevronLeft size={20} />
+            <FiChevronLeft size={18} />
           </motion.button>
 
-          <div className="flex items-center gap-4 ">
-          
-          
-            <div className="text-center ">
-              <h1 className="text-lg font-bold">{chapterTitle}</h1>
-              <p className="text-xs text-gray-400">{subjectName}</p>
-            </div>
+          {/* Chapter title */}
+          <div className="flex-1 mx-3 min-w-0 text-center">
+            <h1 className="text-sm sm:text-base font-bold truncate">{chapterTitle}</h1>
+            <p className={`text-xs ${T.muted}`}>{subjectName}</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-2 bg-[#151B27] border border-[#1D2939] rounded-xl">
-              <FiAward className="text-yellow-500" />
-              <span className="font-semibold">{rookieCoins}</span>
+          {/* Right: coins + timer */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors ${T.coinBadge}`}>
+              <Image src="coin (1).svg" alt="Coins" width={13} height={13} />
+              <span>{rookieCoins}</span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 bg-[#151B27] border border-[#1D2939] rounded-xl">
-              <IoTimeOutline />
+            <div className={`flex items-center gap-1 px-2.5 py-1.5 border rounded-lg text-xs transition-colors ${T.btnSecondary}`}>
+              <IoTimeOutline size={13} />
               <span>{Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')}</span>
             </div>
           </div>
         </div>
 
-        <div className="px-6 pb-3">
-          <div className="text-xs text-gray-400">
-            Question {currentIndex + 1} of {questions.length}
+        {/* Progress bar */}
+        <div className="px-4 sm:px-6 pb-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className={`text-[11px] ${T.muted}`}>
+              Q {currentIndex + 1} / {questions.length}
+            </span>
+            {/* Buddy indicator */}
+            <span className={`text-[11px] font-medium flex items-center gap-1 ${T.muted}`}>
+              <span>{buddy.emoji}</span>
+              <span>{buddy.name}</span>
+            </span>
           </div>
-          <div className="mt-2 h-1 bg-[#151B27] rounded-full overflow-hidden">
+          <div className={`h-1 rounded-full overflow-hidden ${T.progress}`}>
             <motion.div
-              className="h-full bg-[#fff]"
+              className="h-full bg-indigo-500"
               initial={{ width: 0 }}
               animate={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
               transition={{ duration: 0.3 }}
@@ -809,480 +723,394 @@ export default function QuestionViewerPage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="px-4 sm:px-8 md:px-16 lg:px-32 xl:px-60 pt-10 pb-10">
-        {!currentQuestion ? (
-          <div className="text-center py-12">
-            <p className="text-gray-400">No questions available</p>
-          </div>
+      {/* ── Main content ──────────────────────────────────────────────────────── */}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-7 pb-8">
+        {!Q ? (
+          <p className={`text-center py-20 ${T.muted}`}>No questions available.</p>
         ) : (
           <motion.div
             key={currentIndex}
-            initial={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, x: 14 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
+            className="space-y-4"
           >
-                  <div className="mb-6">
-              <div className="text-sm text-gray-400 mb-2">
-                {currentQuestion.exam_shift && `${currentQuestion.exam_shift}`}
-            
+
+            {/* ── Question card ─────────────────────────────────────────────── */}
+            <div className={`rounded-2xl border p-5 sm:p-6 transition-colors duration-300 ${T.card}`}>
+              {/* Badge row */}
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                {/* Exam shift – highlighted like screenshot */}
+                {Q.exam_shift && (
+                  <span className={`inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full ${T.examBadge}`}>
+                    {parseShift(Q.exam_shift)}
+                  </span>
+                )}
+                {Q.year && (
+                  <span className={`inline-flex items-center text-[11px] font-medium px-2.5 py-1 rounded-full ${T.yearBadge}`}>
+                    {Q.year}
+                  </span>
+                )}
+                <span className={`inline-flex items-center text-[11px] font-medium px-2.5 py-1 rounded-full ${T.subjectBadge}`}>
+                  {subjectName}
+                </span>
               </div>
-              <div className="text-xl font-medium leading-relaxed">
-                {renderLatex(currentQuestion.question_text)}
+
+              {/* Question text */}
+              <div className="text-base sm:text-[17px] font-medium leading-relaxed">
+                {renderLatex(Q.question_text)}
               </div>
-              {currentQuestion.question_img_url && (
-                <div className="mt-4">
-                  <img
-                    src={currentQuestion.question_img_url}
-                    alt="Question illustration"
-                    className="rounded-xl max-w-full border border-[#1D2939]"
-                  />
+
+              {/* Question image – fitted, click to enlarge */}
+              {Q.question_img_url && (
+                <div className="mt-4 relative group">
+                  <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-64 ${T.imgWrapper}`}>
+                    <img
+                      src={Q.question_img_url}
+                      alt="Question illustration"
+                      className="max-h-56 max-w-full object-contain cursor-zoom-in select-none"
+                      onClick={() => setImageModal(Q.question_img_url!)}
+                    />
+                    {/* Enlarge button (always visible on mobile, hover on desktop) */}
+                    <button
+                      onClick={() => setImageModal(Q.question_img_url!)}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/70 text-white flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity shadow"
+                      title="Enlarge image"
+                    >
+                      <FiZoomIn size={14} />
+                    </button>
+                  </div>
                 </div>
               )}
-              {currentQuestion.source_url && (
-                <a 
-                  href={currentQuestion.source_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-400 hover:underline mt-2 inline-block"
-                >
-                  View Source
-                </a>
-              )}
             </div>
-       
-      
 
-    {/* Options / Integer Input */}
+            {/* ── Integer type ──────────────────────────────────────────────── */}
+            {isIntegerQ(Q) ? (
+              <div className={`rounded-2xl border p-5 space-y-4 transition-colors ${T.card}`}>
+                <p className={`text-sm font-medium ${T.muted}`}>Enter your integer answer:</p>
 
-
-    
-            {isIntegerQuestion(currentQuestion) ? (
-              /* ---- INTEGER TYPE ---- */
-              <div className="space-y-4">
                 {isCorrect === null ? (
-                  <>
-                    <div className="text-sm text-gray-400">Enter your integer answer:</div>
-                    <div className="flex gap-3">
-                      <input
-                        type="number"
-                        value={integerAnswer}
-                        onChange={(e) => setIntegerAnswer(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleIntegerSubmit(); }}
-                        placeholder="Type your answer..."
-                        className="flex-1 bg-[#0A0E17] border border-[#1D2939] rounded-xl px-4 py-3 text-white text-lg focus:border-blue-500 outline-none"
-                      />
-                      <motion.button
-                        whileTap={{ scale: 0.97 }}
-                        onClick={handleIntegerSubmit}
-                        disabled={integerAnswer.trim() === ''}
-                        className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 font-semibold transition-colors"
-                      >
-                        Submit
-                      </motion.button>
-                    </div>
-                  </>
+                  <div className="flex gap-3">
+                    <input
+                      type="number"
+                      value={integerAnswer}
+                      onChange={e => setIntegerAnswer(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleIntegerSubmit(); }}
+                      placeholder="Type your answer…"
+                      className={`flex-1 border rounded-xl px-4 py-3 text-lg outline-none transition-colors ${T.input}`}
+                    />
+                    <motion.button
+                      whileTap={{ scale: 0.97 }} onClick={handleIntegerSubmit}
+                      disabled={!integerAnswer.trim()}
+                      className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 font-semibold text-white transition-colors"
+                    >
+                      Submit
+                    </motion.button>
+                  </div>
                 ) : (
                   <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`rounded-xl p-5 border-2 ${
-                      isCorrect
-                        ? 'bg-[#04271C] border-[#1DC97A]'
-                        : 'bg-[#2D0A0A] border-[#DC2626]'
-                    }`}
+                    initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                    className={`rounded-xl p-4 border-2 ${isCorrect ? 'bg-[#04271C] border-[#1DC97A]' : 'bg-[#2D0A0A] border-[#DC2626]'}`}
                   >
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className={`font-bold text-lg ${isCorrect ? 'text-[#1DC97A]' : 'text-[#DC2626]'}`}>
-                        {isCorrect ? '✓ Correct!' : '✗ Incorrect'}
-                      </span>
-                    </div>
-                    <div className="text-gray-300 text-sm">
-                      Your answer: <span className="font-semibold text-white">{integerAnswer}</span>
-                    </div>
-                    {!isCorrect && currentQuestion.correct_option && (
-                      <div className="text-gray-300 text-sm mt-1">
-                        Correct answer: <span className="font-semibold text-[#1DC97A]">{currentQuestion.correct_option}</span>
-                      </div>
+                    <span className={`font-bold text-base ${isCorrect ? 'text-[#1DC97A]' : 'text-[#DC2626]'}`}>
+                      {isCorrect ? '✓ Correct!' : '✗ Incorrect'}
+                    </span>
+                    <p className="text-sm text-gray-300 mt-1">
+                      Your answer: <b className="text-white">{integerAnswer}</b>
+                    </p>
+                    {!isCorrect && Q.correct_option && (
+                      <p className="text-sm text-gray-300 mt-0.5">
+                        Correct: <b className="text-[#1DC97A]">{Q.correct_option}</b>
+                      </p>
                     )}
                   </motion.div>
                 )}
 
-
-                {/* Determining Answer Loader */}
                 {determiningAnswer && (
-                  <div className="flex items-center justify-center gap-3 py-4">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-6 h-6 border-2 border-white border-t-transparent rounded-full"
-                    />
-                    <span className="text-gray-400">Determining correct answer...</span>
+                  <div className="flex items-center gap-3">
+                    <Spinner size={16} cls="border-white" />
+                    <span className={`text-sm ${T.muted}`}>Determining correct answer…</span>
                   </div>
                 )}
               </div>
+
             ) : selectedOption === null ? (
-              /* ---- MCQ UNANSWERED ---- */
-              <div className="space-y-3">
-                {['a', 'b', 'c', 'd'].map((option) => {
-                  const textVal = currentQuestion[`option_${option}` as keyof Question] as string;
-                  const imgVal = currentQuestion[`option_${option}_img` as keyof Question] as string | null | undefined;
-                  if (!textVal && !imgVal) return null;
+              /* ── MCQ unanswered ────────────────────────────────────────────── */
+              <div className="space-y-2.5">
+                {(['a', 'b', 'c', 'd'] as const).map(opt => {
+                  const tv = Q[`option_${opt}`] as string;
+                  const iv = Q[`option_${opt}_img`] as string | null;
+                  if (!tv && !iv) return null;
                   return (
                     <motion.button
-                      key={option}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleOptionClick(option)}
-                      className="w-full text-left rounded-xl p-4 bg-[#0A0E17] border border-[#1D2939] hover:border-blue-500/50 transition-colors flex items-center gap-4"
+                      key={opt} whileTap={{ scale: 0.98 }} onClick={() => handleOptionClick(opt)}
+                      className={`w-full text-left rounded-xl p-4 border flex items-center gap-4 transition-colors ${T.optionIdle}`}
                     >
-                      <div className="w-10 h-10 rounded-lg bg-[#151B27] border border-[#262F4C] flex items-center justify-center font-semibold flex-shrink-0">
-                        {option}
+                      <div className={`w-9 h-9 rounded-lg border flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${T.optionLabel}`}>
+                        {opt}
                       </div>
-                      <div className="flex-1">
-                        {imgVal ? (
-                          <img src={imgVal} alt={`Option ${option}`} className="max-h-24 rounded-lg" />
-                        ) : (
-                          renderLatex(textVal)
-                        )}
+                      <div className="flex-1 text-sm leading-relaxed">
+                        {iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-20 rounded-lg" /> : renderLatex(tv)}
                       </div>
                     </motion.button>
                   );
                 })}
               </div>
-            ) : (
-              <>
-                {/* Answered Options */}
-                <div className="space-y-3">
-                  {['a', 'b', 'c', 'd'].map((option) => {
-                    const textVal = currentQuestion[`option_${option}` as keyof Question] as string;
-                    const imgVal = currentQuestion[`option_${option}_img` as keyof Question] as string | null | undefined;
-                    if (!textVal && !imgVal) return null;
-                    const isSelected = selectedOption === option;
-                    const isCorrectOption =
-                    option.toLowerCase().trim() ===
-                    currentQuestion.correct_option?.toLowerCase().trim();
-                    const showCorrect = isCorrectOption;
-                    const showIncorrect = isSelected && !isCorrectOption;
 
-                    return (
-                      <motion.div
-                      key={option}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`w-full text-left rounded-xl p-4 flex items-center gap-4 ${
-                        showCorrect
-                          ? 'bg-[#04271C] border-2 border-[#1DC97A]'
-                          : showIncorrect
-                          ? 'bg-[#2D0A0A] border-2 border-[#DC2626]'
-                          : 'bg-[#0A0E17] border border-[#1D2939]'
+            ) : (
+              /* ── MCQ answered ──────────────────────────────────────────────── */
+              <div className="space-y-2.5">
+                {(['a', 'b', 'c', 'd'] as const).map(opt => {
+                  const tv = Q[`option_${opt}`] as string;
+                  const iv = Q[`option_${opt}_img`] as string | null;
+                  if (!tv && !iv) return null;
+                  const sel   = selectedOption === opt;
+                  const corr  = opt === Q.correct_option?.toLowerCase().trim();
+                  return (
+                    <motion.div
+                      key={opt} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+                      className={`rounded-xl p-4 flex items-center gap-4 border-2 transition-colors ${
+                        corr ? 'bg-[#04271C] border-[#1DC97A]' :
+                        sel  ? 'bg-[#2D0A0A] border-[#DC2626]' :
+                        isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
                       }`}
                     >
-                      <div
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center font-semibold ${
-                          showCorrect
-                            ? 'bg-[#1DC97A] text-black'
-                            : showIncorrect
-                            ? 'bg-[#DC2626] text-white'
-                            : 'bg-[#151B27] border border-[#262F4C]'
-                        }`}
-                      >
-                          {option}
-                        </div>
-                        <div className="flex-1">
-                          {imgVal ? (
-                            <img src={imgVal} alt={`Option ${option}`} className="max-h-24 rounded-lg" />
-                          ) : (
-                            renderLatex(textVal)
-                          )}
-                        </div>
-                        {showCorrect && <FiCheckIcon />}
-                      </motion.div>
-                    );
-                  })}
-                </div>
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${
+                        corr ? 'bg-[#1DC97A] text-black' :
+                        sel  ? 'bg-[#DC2626] text-white' : T.optionLabel
+                      }`}>
+                        {opt}
+                      </div>
+                      <div className="flex-1 text-sm leading-relaxed">
+                        {iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-20 rounded-lg" /> : renderLatex(tv)}
+                      </div>
+                      {corr && <CheckIcon />}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
 
-                {/* Determining Answer Loader */}
-                {determiningAnswer && (
-                  <div className="flex items-center justify-center gap-3 py-4">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-6 h-6 border-2 border-white border-t-transparent rounded-full"
-                    />
-                    <span className="text-gray-400">Determining correct answer...</span>
+            {/* Determining loader */}
+            {determiningAnswer && selectedOption !== null && (
+              <div className="flex items-center gap-3 py-1">
+                <Spinner size={16} cls="border-white" />
+                <span className={`text-sm ${T.muted}`}>Determining correct answer…</span>
+              </div>
+            )}
+
+            {/* ── Post-answer section ───────────────────────────────────────── */}
+            {!determiningAnswer && selectedOption !== null && (
+              <>
+                {/* Buddy motivation card */}
+                {motivationLoading ? (
+                  <div className="rounded-2xl p-5 bg-gradient-to-r from-[#47006A] to-[#0031D0] flex items-center gap-3">
+                    <Spinner size={18} cls="border-white" />
+                    <span className="text-white text-sm">{buddy.name} is thinking…</span>
                   </div>
-                )}
+                ) : motivation ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                    className="rounded-2xl p-5 bg-gradient-to-r from-[#47006A] to-[#0031D0]"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl flex-shrink-0">{buddy.emoji}</span>
+                      <div>
+                        <p className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1">
+                          {buddy.name}
+                        </p>
+                        <p className="text-white text-sm leading-relaxed font-medium">{motivation}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : null}
 
-                {/* Motivation */}
-                {!determiningAnswer && (
-                  <>
-                    {motivationLoading ? (
-                      <div className="bg-gradient-to-r from-[#47006A] to-[#0031D0] rounded-2xl p-6">
-                        <div className="flex items-center gap-3">
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                            className="w-6 h-6 border-2 border-white border-t-transparent rounded-full"
-                          />
-                          <span>Generating...</span>
-                        </div>
+                {/* Solution card */}
+                {solutionRequested && (
+                  <div className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
+                    <div className="flex items-center gap-2.5 mb-4">
+                      <span className="text-xl">{buddy.emoji}</span>
+                      <div>
+                        <h3 className="font-bold text-sm">Solution</h3>
+                        <p className={`text-[11px] ${T.muted}`}>Explained by {buddy.name}</p>
+                      </div>
+                    </div>
+
+                    {solutionLoading ? (
+                      <div className="flex items-center gap-3 py-5">
+                        <Spinner size={20} />
+                        <span className={`text-sm ${T.muted}`}>Generating solution…</span>
                       </div>
                     ) : (
-                      motivation && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="bg-gradient-to-r from-[#47006A] to-[#0031D0] rounded-2xl p-6"
-                        >
-                          <p className="text-lg font-medium">{motivation}</p>
-                        </motion.div>
-                      )
-                    )}
-
-                    {/* Solution */}
-                    {solutionRequested && (
-                      <div className="bg-[#0A0E17] border border-[#1D2939] rounded-2xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-xl font-bold">Solution</h3>
-                        </div>
-
-                        {solutionLoading ? (
-                          <div className="flex items-center gap-3 py-8">
-                            <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                              className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"
-                            />
-                            <span className="text-gray-400">Generating solution...</span>
-                          </div>
-                        ) : (
-                          <div className="prose prose-invert max-w-none">
-                            <div className="text-gray-200 leading-relaxed whitespace-pre-wrap">
-                              {renderLatex(solution)}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* AI Followup buttons */}
-                        {!solutionLoading && solution && (
-                          <div className="mt-6">
-                            {!aiFollowup && !aiFollowupLoading && (
-                              <div className="flex flex-wrap gap-3 ">
-                                <motion.button
-                                  whileTap={{ scale: 0.98 }}
-                                  onClick={handleDigDeeper}
-                                  disabled={aiFollowupLoading}
-                                  className="flex items-center align-item gap-2 px-4 py-2 rounded-full bg-[#fff] text-slate-900 disabled:opacity-50 "
-                                >
-                                  <FiSearch /> <span>Test Your Understanding</span>
-                                </motion.button>
-                                <motion.button
-                                  whileTap={{ scale: 0.98 }}
-                                  onClick={() => handleAIFollowup('better')}
-                                  disabled={aiFollowupLoading}
-                                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#fff] text-slate-900 disabled:opacity-50 "
-                                >
-                                  <FiSmile /> <span>Simpler Explanation</span>
-                                </motion.button>
-                              </div>
-                            )}
-
-                            {aiFollowupLoading && (
-                              <div className="mt-3 flex items-center gap-3">
-                                <motion.div
-                                  animate={{ rotate: 360 }}
-                                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                                  className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"
-                                />
-                                <span className="text-gray-400">Generating explanation...</span>
-                              </div>
-                            )}
-
-                            {aiFollowup && (
-                              <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="mt-4 bg-[#151B27] border border-[#262F4C] rounded-xl p-4"
-                              >
-                                <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
-                                  {aiFollowup}
-                                </div>
-                              </motion.div>
-                            )}
-                          </div>
+                      <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                        {renderLatex(displayedText || solution)}
+                        {isTyping && (
+                          <span className="inline-block w-0.5 h-4 bg-indigo-400 animate-pulse ml-0.5 align-middle" />
                         )}
                       </div>
                     )}
-                  </>
-                )}
-              </>
-            )}
-          </motion.div>
-        )}
 
-        {/* Dig Deeper Overlay */}
-        <AnimatePresence>
-          {isDigging && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="mt-6 rounded-xl overflow-hidden"
-            >
-              <div className="bg-gradient-to-r from-[#47006A] to-[#0031D0] p-6 rounded-xl min-h-[220px]">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="font-semibold text-xl">Test Your Understanding</div>
-                    <div className="text-sm mt-1 text-white/80">
-                      {prevDigResult && prevDigResult.status && (
-                        prevDigResult.status === 'correct'
-                          ? 'Previous Answer: Correct ✓'
-                          : `Previous Answer: Incorrect (Correct: ${prevDigResult.answer})`
-                      )}
-                    </div>
-                    {prevDigResult && prevDigResult.status === 'incorrect' && prevDigResult.explanation && (
-                      <div className="mt-3 text-sm font-medium bg-white/10 rounded-lg p-3">
-                        {prevDigResult.explanation}
+                    {/* AI Followup buttons */}
+                    {!solutionLoading && solution && (
+                      <div className="mt-5">
+                        {!aiFollowup && !aiFollowupLoading && (
+                          <div className="flex flex-wrap gap-2">
+                            <motion.button
+                              whileTap={{ scale: 0.97 }} onClick={handleDigDeeper}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-colors ${isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'}`}
+                            >
+                              <FiSearch size={13} /> Test Your Understanding
+                            </motion.button>
+                            <motion.button
+                              whileTap={{ scale: 0.97 }} onClick={() => handleAIFollowup('better')}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-colors ${isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'}`}
+                            >
+                              <FiSmile size={13} /> Simpler Explanation
+                            </motion.button>
+                          </div>
+                        )}
+
+                        {aiFollowupLoading && (
+                          <div className="flex items-center gap-3 mt-3">
+                            <Spinner size={16} />
+                            <span className={`text-sm ${T.muted}`}>Generating…</span>
+                          </div>
+                        )}
+
+                        {aiFollowup && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                            className={`mt-4 rounded-xl border p-4 text-sm leading-relaxed whitespace-pre-wrap transition-colors ${T.followCard}`}
+                          >
+                            {aiFollowup}
+                          </motion.div>
+                        )}
                       </div>
                     )}
                   </div>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleExitDigDeeper}
-                    className="bg-white text-black px-4 py-2 rounded-full font-medium hover:bg-gray-100 transition-colors"
-                  >
-                    Close
-                  </motion.button>
-                </div>
+                )}
 
-                <div className="mt-6">
-                  {conceptLoading ? (
-                    <div className="flex items-center gap-3">
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                        className="w-8 h-8 border-4 border-white border-t-transparent rounded-full"
-                      />
-                      <div className="text-white">Generating concept question...</div>
-                    </div>
-                  ) : conceptMCQ && conceptMCQ.mcq ? (
-                    <>
-                      <div className="text-white font-semibold text-lg mb-4">
-                        {conceptMCQ.mcq.question}
-                      </div>
-                      <div className="space-y-3">
-                        {conceptMCQ.mcq.options.map((opt: string, i: number) => {
-                          const letter = ['a', 'b', 'c', 'd'][i];
-                          const isSelected = digDeepSelected === letter;
-                          return (
-                            <motion.button
-                              key={i}
-                              whileTap={{ scale: 0.995 }}
-                              onClick={() => handleConceptUserResponse(letter)}
-                              className={`w-full text-left rounded-lg p-4 flex items-center gap-3 transition-colors ${
-                                isSelected
-                                  ? 'bg-[#04271C] border-2 border-[#1DC97A]'
-                                  : 'bg-[#000] border border-[#262F4C] hover:border-white/30'
-                              }`}
-                            >
-                              <div
-                                className={`w-10 h-10 rounded-lg flex items-center justify-center font-semibold ${
-                                  isSelected
-                                    ? 'bg-[#1DC97A] text-black'
-                                    : 'bg-[#181C28] border border-[#262F4C]'
-                                }`}
-                              >
-                                {letter}
+                {/* ── Dig Deeper ──────────────────────────────────────────────── */}
+                <AnimatePresence>
+                  {isDigging && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                      className="rounded-2xl overflow-hidden"
+                    >
+                      <div className="bg-gradient-to-r from-[#47006A] to-[#0031D0] p-5 sm:p-6 rounded-2xl">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-white text-base">Test Your Understanding</div>
+                            {prevDigResult?.status && (
+                              <div className="text-xs text-white/70 mt-1">
+                                {prevDigResult.status === 'correct'
+                                  ? '✓ Previous: Correct!'
+                                  : `✗ Correct was: ${prevDigResult.answer}`}
                               </div>
-                              <div className="text-white">{opt}</div>
-                            </motion.button>
-                          );
-                        })}
-                      </div>
+                            )}
+                            {prevDigResult?.status === 'incorrect' && prevDigResult.explanation && (
+                              <div className="mt-2 text-sm bg-white/10 rounded-xl p-3 text-white/90">
+                                {prevDigResult.explanation}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => { setIsDigging(false); setConceptMCQ(null); setPrevDigResult(null); setDigDeepSelected(null); }}
+                            className="ml-3 flex-shrink-0 bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1.5 rounded-full font-medium transition-colors"
+                          >
+                            Close
+                          </button>
+                        </div>
 
-                      <div className="mt-4">
-                        <motion.button
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => handleConceptUserResponse('I_am_not_sure')}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black font-medium hover:bg-gray-100 transition-colors"
-                        >
-                          <FiX /> Not Sure
-                        </motion.button>
+                        {conceptLoading ? (
+                          <div className="flex items-center gap-3">
+                            <Spinner size={22} cls="border-white" />
+                            <span className="text-white text-sm">Generating question…</span>
+                          </div>
+                        ) : conceptMCQ?.mcq ? (
+                          <>
+                            <div className="text-white font-semibold text-sm sm:text-base mb-4">
+                              {conceptMCQ.mcq.question}
+                            </div>
+                            <div className="space-y-2.5">
+                              {conceptMCQ.mcq.options.map((opt: string, i: number) => {
+                                const l = ['a', 'b', 'c', 'd'][i];
+                                const sel = digDeepSelected === l;
+                                return (
+                                  <motion.button
+                                    key={i} whileTap={{ scale: 0.99 }}
+                                    onClick={() => handleConceptResponse(l)}
+                                    className={`w-full text-left rounded-xl p-3.5 flex items-center gap-3 transition-colors ${
+                                      sel ? 'bg-[#04271C] border-2 border-[#1DC97A]' : 'bg-black/30 border border-white/10 hover:border-white/30'
+                                    }`}
+                                  >
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm flex-shrink-0 ${sel ? 'bg-[#1DC97A] text-black' : 'bg-white/10 text-white'}`}>
+                                      {l}
+                                    </div>
+                                    <span className="text-white text-sm">{opt}</span>
+                                  </motion.button>
+                                );
+                              })}
+                            </div>
+                            <button
+                              onClick={() => handleConceptResponse('I_am_not_sure')}
+                              className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 text-white text-xs font-medium hover:bg-white/30 transition-colors"
+                            >
+                              <FiX size={12} /> Not Sure
+                            </button>
+                          </>
+                        ) : (
+                          <div className="text-sm text-white/60">{conceptFeedback || 'Loading…'}</div>
+                        )}
                       </div>
-                    </>
-                  ) : (
-                    <div className="text-sm text-gray-200">
-                      {conceptFeedback || 'Click to generate a concept question.'}
-                    </div>
+                    </motion.div>
                   )}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                </AnimatePresence>
+              </>
+            )}
 
-        {/* Solution scroll anchor */}
-        <div ref={scrollRef} />
+            <div ref={scrollRef} />
+          </motion.div>
+        )}
       </div>
 
-      {/* Footer navigation */}
-      <div className="fixed left-0 right-0 bottom-0 h-20 bg-black/95 backdrop-blur-sm border-t border-[#232B3B] flex items-center justify-between px-6 py-4 z-40">
-        <div className="flex-1 flex items-center gap-4">
-          {showToast && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-[#0B7A44] rounded-lg px-4 py-2 text-white"
-            >
-              Bookmarked!
-            </motion.div>
-          )}
-          {!isConnected && (
-            <div className="absolute -top-14 left-1/2 transform -translate-x-1/2 bg-[#D32F2F] rounded-lg px-4 py-2 text-white">
-              No Internet Connection
-            </div>
-          )}
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={handlePrev}
-            disabled={currentIndex === 0}
-            className="w-14 h-12 rounded-xl bg-[#151B27] border border-[#1D2939] flex items-center justify-center disabled:opacity-50"
-          >
-            <FiArrowLeft size={20} />
-          </motion.button>
-        </div>
+      {/* ── Footer navigation ────────────────────────────────────────────────── */}
+      <div className={`fixed bottom-0 left-0 right-0 h-16 backdrop-blur-sm border-t flex items-center justify-between px-4 sm:px-6 z-40 transition-colors duration-300 ${T.footer}`}>
+        {/* Previous */}
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={() => { if (currentIndex > 0) setCurrentIndex(currentIndex - 1); }}
+          disabled={currentIndex === 0}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold disabled:opacity-40 transition-colors ${T.btnSecondary}`}
+        >
+          <FiArrowLeft size={15} />
+          <span className="hidden sm:inline">Previous</span>
+        </motion.button>
 
-        <div className="flex items-center gap-4">
+        {/* Centre: question counter */}
+        <span className={`text-xs font-medium ${T.muted} hidden sm:block`}>
+          {currentIndex + 1} / {questions.length}
+        </span>
+
+        <div className="flex items-center gap-2">
+          {/* Bookmark */}
           <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={handleNext}
+            whileTap={{ scale: 0.97 }} onClick={handleBookmark}
+            className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${bookmarked ? 'bg-indigo-600 border-indigo-500 text-white' : T.btnSecondary}`}
+          >
+            {bookmarked ? <IoBookmark size={17} /> : <FiBookmark size={17} />}
+          </motion.button>
+
+          {/* Next */}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => { if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1); }}
             disabled={currentIndex === questions.length - 1}
-            className="flex items-center gap-3 bg-[#151B27] border border-[#1D2939] px-6 py-3 rounded-full disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
           >
-            <span className="text-white font-semibold">Next</span>
-            <FiArrowRight size={18} />
-          </motion.button>
-
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={handleBookmark}
-            className="w-14 h-12 rounded-xl bg-[#151B27] border border-[#1D2939] flex items-center justify-center"
-          >
-            {bookmarked ? <IoBookmark size={20} /> : <FiBookmark size={20} />}
+            <span>Next</span> <FiArrowRight size={15} />
           </motion.button>
         </div>
       </div>
     </div>
-  );
-}
-
-// Check mark icon component
-function FiCheckIcon() {
-  return (
-    <svg width="14" height="11" viewBox="0 0 14 11" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M1 5.5L5 9L13 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

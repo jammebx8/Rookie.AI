@@ -23,19 +23,22 @@ type BookmarkedQuestion = {
   question: string;
   question_id: string;
   question_text: string;
-  option_A: string;
-  option_B: string;
-  option_C: string;
-  option_D: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
   correct_option: string | null;
   exam_shift: string;
   source_url: string;
   solution: string;
   sol_ai?: string;
   year?: number | string;
-  chapterTitle: string;
-  subjectName: string;
-  imageKey: string;
+  question_img_url?: string | null;
+  option_a_img?: string | null;
+  option_b_img?: string | null;
+  option_c_img?: string | null;
+  option_d_img?: string | null;
+  [key: string]: any; // buddy_nova, buddy_blaze, etc.
 };
 
 type QuestionState = {
@@ -322,6 +325,7 @@ function QuestionCard({
               <div className="text-base font-medium leading-relaxed text-white">
                 {renderLatex(q.question_text)}
               </div>
+              
 
               {q.source_url && (
                 <a
@@ -338,7 +342,7 @@ function QuestionCard({
               {state.selectedOption === null ? (
                 /* Unanswered — interactive buttons */
                 <div className="space-y-3">
-                  {(['A', 'B', 'C', 'D'] as const).map((opt) => (
+                  {(['a', 'b', 'c', 'd'] as const).map((opt) => (
                     <motion.button
                       key={opt}
                       whileTap={{ scale: 0.98 }}
@@ -357,7 +361,7 @@ function QuestionCard({
               ) : (
                 /* Answered — colour-coded results */
                 <div className="space-y-3">
-                  {(['A', 'B', 'C', 'D'] as const).map((opt) => {
+                  {(['a', 'b', 'c', 'd'] as const).map((opt) => {
                     const isSelected = state.selectedOption === opt;
                     const isCorrectOpt = opt === q.correct_option;
                     const showCorrect = isCorrectOpt;

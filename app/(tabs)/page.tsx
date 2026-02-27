@@ -30,7 +30,7 @@ export default function HomePage() {
   const [modalChapter, setModalChapter] = useState<{ title: string; questions: number } | null>(null);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-y-scroll no-scrollbar">
       <section>
         <h2 className="text-white text-2xl font-semibold mb-3">Quick Formula Cards</h2>
 
