@@ -322,17 +322,38 @@ export default function QuestionViewerPage() {
     return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline); };
   }, []);
 
-  // ── Fetch questions ───────────────────────────────────────────────────────
+  // ---------- Fetch questions from Supabase ----------
   useEffect(() => {
-    if (!chapterTitle) return;
-    setLoading(true);
-    supabase.from(chapterTitle).select('*').order('question', { ascending: true })
-      .then(({ data, error }) => {
-        if (!error && data?.length) setQuestions(data as Question[]);
-        else setQuestions([]);
-      })
-      .catch(() => setQuestions([]))
-      .finally(() => setLoading(false));
+    const fetchQuestionsFromSupabase = async () => {
+      if (!chapterTitle) return;
+      
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from(chapterTitle)
+          .select('*')
+          .order('question', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching questions from Supabase:', error);
+          setQuestions([]);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          setQuestions(data as Question[]);
+        } else {
+          setQuestions([]);
+        }
+      } catch (err) {
+        console.error('Error fetching questions:', err);
+        setQuestions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuestionsFromSupabase();
   }, [chapterTitle]);
 
   // ── Load coins ────────────────────────────────────────────────────────────
