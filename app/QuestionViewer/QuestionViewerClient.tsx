@@ -287,6 +287,8 @@ interface ToastItem {
 const API_BASE = 'https://rookie-backend.vercel.app/api';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
 const SESSION_KEY = 'questionSessionResponses_v1';
+// Per-question AI solution cache (survives re-renders, cleared on tab close)
+const AI_SOL_CACHE_KEY = 'aiSolutionCache_v1';
 
 // ─── Theme hook ──────────────────────────────────────────────────────────────
 function useTheme() {
@@ -557,6 +559,8 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       const obj = raw ? JSON.parse(raw) : {};
+      // Ensure chapter key exists before writing
+      if (!obj[chapterTitle]) obj[chapterTitle] = {};
       obj[chapterTitle][String(currentIndex)] = {
         ...(obj[chapterTitle][String(currentIndex)] || {}),
         selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup,
@@ -574,21 +578,61 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
     } catch { return null; }
   };
 
+  // ── AI solution sessionStorage cache (persists across re-renders, not page reloads) ──
+  const getAISolCacheKey = (questionId: string, bId: string) =>
+    `${AI_SOL_CACHE_KEY}:${chapterTitle}:${questionId}:${bId}`;
+
+  const saveAISolToCache = (questionId: string, bId: string, sol: string) => {
+    try {
+      sessionStorage.setItem(getAISolCacheKey(questionId, bId), sol);
+    } catch {}
+  };
+
+  const loadAISolFromCache = (questionId: string, bId: string): string | null => {
+    try {
+      return sessionStorage.getItem(getAISolCacheKey(questionId, bId)) || null;
+    } catch { return null; }
+  };
+
   // ── Restore session on question change ────────────────────────────────────
   useEffect(() => {
     if (!questions.length) return;
     const prev = loadSession(currentIndex);
+    const q = questions[currentIndex];
+
     if (prev) {
       setSelectedOption(prev.selectedOption || null);
       setIsCorrect(prev.isCorrect ?? null);
       setMotivation(prev.motivation || '');
-      setSolution(prev.solution || '');
-      setAIFollowup(prev.aiFollowup || null);
       setSolutionRequested(prev.solutionRequested || false);
       setHasTyped(prev.hasTyped || false);
       setSolutionBuddyId(prev.solutionBuddyId || buddyId);
       if (prev.integerAnswer !== undefined)
         setIntegerAnswer(prev.integerAnswer);
+      setAIFollowup(prev.aiFollowup || null);
+
+      // Try to restore solution: first from localStorage session, then from sessionStorage cache
+      const savedBuddyId = prev.solutionBuddyId || buddyId;
+      const cachedSol = prev.solution
+        || (q ? loadAISolFromCache(q.question_id, savedBuddyId) : null);
+
+      if (cachedSol) {
+        setSolution(cachedSol);
+        setSolutionLoading(false);
+      } else if (prev.solutionRequested) {
+        // Solution was requested but not yet in cache — re-fetch silently
+        setSolution('');
+        setSolutionLoading(true);
+        if (q) {
+          generateAISolution(q).then((aiSol) => {
+            setSolution(aiSol);
+            setSolutionLoading(false);
+            saveSession({ solution: aiSol, solutionRequested: true, solutionBuddyId: savedBuddyId, hasTyped: true });
+          });
+        }
+      } else {
+        setSolution('');
+      }
     } else {
       setSelectedOption(null); setIsCorrect(null); setMotivation('');
       setSolution(''); setAIFollowup(null); setSolutionRequested(false);
@@ -622,9 +666,9 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
 
   // ── Typing effect ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!solution || !solutionRequested) return;
+    if (!solutionRequested) return;
+    if (!solution) return;
   
-    // Already typed before → don't animate
     if (hasTyped) {
       setDisplayedText(solution);
       setIsTyping(false);
@@ -635,11 +679,12 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
     setDisplayedText('');
   
     let i = 0;
-    const iv = setInterval(() => {
-      setDisplayedText(solution.slice(0, i));
-      i++;
   
-      if (i > solution.length) {
+    const iv = setInterval(() => {
+      i++;
+      setDisplayedText(solution.slice(0, i));
+  
+      if (i >= solution.length) {
         clearInterval(iv);
         setIsTyping(false);
         setHasTyped(true);
@@ -647,7 +692,7 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
     }, 8);
   
     return () => clearInterval(iv);
-  }, [solution]);
+  }, [solution, solutionRequested]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const isIntegerQ = (q: Question) =>
@@ -732,28 +777,32 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
   // ── Generate buddy-flavoured AI solution ───────────────────────────────────
   const generateAISolution = async (q: Question): Promise<string> => {
     try {
-      setSolutionLoading(true);
       const col = buddy.columnKey;
-  
+
+      // 0. Check sessionStorage cache first (survives re-renders within the same tab)
+      const cached = loadAISolFromCache(q.question_id, buddyId);
+      if (cached) return cached;
+
       // 1. Check in-memory question object first (fastest)
       if (q[col] && typeof q[col] === 'string' && q[col].trim().length > 0) {
+        saveAISolToCache(q.question_id, buddyId, q[col] as string);
         return q[col] as string;
       }
-  
+
       // 2. Re-fetch from Supabase to catch solutions saved by other users
-    
       const { data: freshRow } = await supabase
         .from(chapterTitle)
         .select(col)
         .eq('question_id', q.question_id)
         .single();
-  
+
       if ((freshRow as any)?.[col] && typeof (freshRow as any)?.[col] === 'string' && (freshRow as any)?.[col].trim().length > 0) {
-        // Update local state so future calls hit the in-memory cache
-        setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: (freshRow as any)?.[col] } : item));
-        return (freshRow as any)?.[col] as string;
+        const dbSol = (freshRow as any)?.[col] as string;
+        saveAISolToCache(q.question_id, buddyId, dbSol);
+        setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: dbSol } : item));
+        return dbSol;
       }
-  
+
       // 3. Only generate if truly not found
       const res = await axios.post(`${API_BASE}/solution`, {
         action: 'generate_solution',
@@ -766,15 +815,20 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
         buddy_name: buddy.name,
         buddy_system_prompt: buddy.systemPrompt,
       });
-  
+
       const aiSol = res.data.solution || q.solution;
-  
-      // 4. Save to Supabase and update local state
-      await supabase.from(chapterTitle).update({ [col]: aiSol }).eq('question_id', q.question_id);
-      setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: aiSol } : item));
+
+      // 4. Save to sessionStorage cache IMMEDIATELY so re-renders find it
+      saveAISolToCache(q.question_id, buddyId, aiSol);
+
+      // 5. Fire Supabase write in background — do NOT await it, return immediately
+      supabase.from(chapterTitle).update({ [col]: aiSol }).eq('question_id', q.question_id).then(() => {
+        setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: aiSol } : item));
+      });
+
       return aiSol;
     } catch { return q.solution; }
-    finally { setSolutionLoading(false); }
+    // NOTE: No finally setSolutionLoading here — caller (handlePostAnswer) owns that state
   };
 
   // ── Generate buddy motivation ──────────────────────────────────────────────
@@ -802,29 +856,48 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
     correct: boolean, timeSpent: number, q: Question, optKey: string
   ) => {
     const coins = calcCoins(timeSpent, correct);
+
     if (correct) {
       addToast(coins > 0 ? `✓ Correct! +${coins} Coins earned` : '✓ Correct!', 'coin', 3500);
     } else {
       addToast(`✗ Not quite — keep going!`, 'error', 3000);
     }
-  
-    // Fire coins update in background — do NOT await it before motivation
-    if (correct && coins > 0) updateRookieCoins(coins);
-  
+
+    // Anti-cheat: only award coins if this question has NOT been answered correctly before
+    if (correct && coins > 0) {
+      const prev = loadSession(currentIndex);
+      const alreadyRewarded = prev?.isCorrect === true;
+      if (!alreadyRewarded) updateRookieCoins(coins);
+    }
+
     const currentBuddyId = buddyId;
     setSolutionBuddyId(currentBuddyId);
-  
-    const [, aiSol] = await Promise.all([generateMotivation(correct), generateAISolution(q)]);
-    setSolution(aiSol);
+
+    // Start motivation immediately
+    generateMotivation(correct).then((motText) => {
+      saveSession({ motivation: motText });
+    });
+
+    // Show solution box immediately (with spinner) — block stays mounted
     setSolutionRequested(true);
-    setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
-    saveSession({
-      selectedOption: optKey,
-      isCorrect: correct,
-      solution: aiSol,
-      solutionRequested: true,
-      solutionBuddyId: currentBuddyId,
-      hasTyped: true,
+    setSolutionLoading(true);
+
+    // Generate solution — returns as soon as AI responds, Supabase write is backgrounded
+    generateAISolution(q).then((aiSol) => {
+      setSolution(aiSol);
+      setSolutionLoading(false);
+      saveSession({
+        selectedOption: optKey,
+        isCorrect: correct,
+        solution: aiSol,
+        solutionRequested: true,
+        solutionBuddyId: currentBuddyId,
+        hasTyped: false,
+      });
+
+      setTimeout(() => {
+        scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 200);
     });
   };
 
@@ -856,7 +929,7 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
     console.log("Result:", correct);
   
     setIsCorrect(correct);
-    await handlePostAnswer(correct, timeSpent, q, opt);
+    handlePostAnswer(correct, timeSpent, q, opt);
   };
 
   // ── Integer submit ─────────────────────────────────────────────────────────
@@ -1180,7 +1253,7 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
                       }`}>
                         {opt}
                       </div>
-                      <div className="flex-1 text-sm leading-relaxed">
+                      <div className={`flex-1 text-sm leading-relaxed ${corr || sel ? 'text-white' : ''}`}>
                         {iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-20 rounded-lg" /> : renderLatex(tv)}
                       </div>
                       {corr && <CheckIcon />}
@@ -1232,7 +1305,7 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
                   </motion.div>
                 ) : null}
 
-{(solutionRequested || solution) && (
+{solutionRequested && (
 
 
   <div key="solution-card" className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
@@ -1257,10 +1330,8 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
                       </div>
                     ) : (
                       <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-                        {renderLatex(displayedText || solution)}
-                        {isTyping && (
-                          <span className="inline-block w-0.5 h-4 bg-indigo-400 animate-pulse ml-0.5 align-middle" />
-                        )}
+                      {renderLatex(displayedText.length ? displayedText : solution)}
+                      
                       </div>
                     )}
 
