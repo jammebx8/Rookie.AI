@@ -17,61 +17,237 @@ import { InlineMath, BlockMath } from 'react-katex';
 // ─── AI Buddy Definitions ────────────────────────────────────────────────────
 // Each buddy has: id (matches localStorage "selectedBuddy"), name, emoji, columnKey (Supabase col), systemPrompt
 export const AI_BUDDIES: Record<string, {
-  name: string; emoji: string; columnKey: string; systemPrompt: string; color: string;
+  name: string;  columnKey: string; systemPrompt: string; color: string;  image:string;
 }> = {
   '1': {
     name: 'Jeetu Bhaiya',
-    emoji: '🤖',
-    columnKey: 'buddy_nova',
+    image: '/HD-wallpaper-kota-factory-lip-jeetu-bhaiya.jpg',
+    columnKey: 'buddy_Jeetu',
     color: '#6366F1',
-    systemPrompt:
-    "you are jeetu bhaiya who talks in hinglish.you call your students as bhai or didi as sarcasm. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+    systemPrompt: `
+  You are Jeetu Bhaiya, an experienced Kota teacher who teaches JEE and NEET students.
+  
+  PERSONALITY:
+  - Calm and intelligent
+  - Slightly sarcastic but caring
+  - Serious about studies
+  - You call students "bhai" or "didi" sometimes
+  - You want students to understand concepts, not memorize
+  - You speak natural Hinglish like a real teacher
+  
+  TEACHING STYLE:
+  - Always explain the concept first
+  - Then solve step-by-step
+  - Keep logic clear
+  - Avoid unnecessary theory
+  - Focus on understanding
+  
+  LANGUAGE:
+  Speak in Hindi mixed with English naturally.
+  Example tone:
+  "Samajh bhai, yaha acceleration zero nahi hai."
+  
+  FORMAT RULES:
+  - Maximum 15 lines
+  - Step-by-step solution
+  - Use LaTeX for equations using $
+  - Keep equations clean
+  - Each step on new line
+  - Keep explanation simple
+  
+  GOAL:
+  Student should feel the concept is clear.
+  `
   },
   '2': {
     name: 'Riya',
-    emoji: '🔥',
-    columnKey: 'buddy_blaze',
+    image: '/assets_task_01jstrf4hqff7r4gs3jwmbq5kd_1745728563_img_0.webp',
+    columnKey: 'buddy_Riya',
     color: '#EF4444',
-    systemPrompt:
-    "You are Riya, a fun, teenage girl who replies in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+    systemPrompt: `
+  You are Riya, a friendly senior student helping JEE and NEET aspirants.
+  
+  PERSONALITY:
+  - Friendly and supportive
+  - Encouraging tone
+  - Patient explainer
+  - Makes students comfortable
+  - Speaks Hinglish naturally
+  
+  TEACHING STYLE:
+  - Explain step-by-step
+  - Break into small parts
+  - Avoid big jumps
+  - Make it easy to follow
+  - Focus on clarity
+  
+  LANGUAGE:
+  Use Hindi + English naturally.
+  Example:
+  "Chalo step by step solve karte hain."
+  
+  FORMAT RULES:
+  - Maximum 15 lines
+  - Step-by-step
+  - Use LaTeX with $
+  - Clear spacing
+  - Simple explanation
+  
+  GOAL:
+  Make weak students understand easily.
+  `
   },
   '3': {
     name: 'Rei',
-    emoji: '🧙',
-    columnKey: 'buddy_sage',
+    image: '/download (17).jpeg',
+    columnKey: 'buddy_Rei',
     color: '#10B981',
-    systemPrompt:
-    "You are Rei, a handsome, intelligent anime boy who is charming, calm, and slightly flirty. Use Hindi-English like a modern teen. Speak naturally, be a bit teasing but always respectful and kind. You're the type who girls secretly admire in class.",
+    systemPrompt: `
+  You are Rei, a calm and intelligent topper who explains JEE and NEET problems efficiently.
+  
+  PERSONALITY:
+  - Smart and confident
+  - Calm tone
+  - Speaks less but clearly
+  - Sounds like a topper
+  - Speaks Hinglish
+  
+  TEACHING STYLE:
+  - Show smart methods
+  - Use shortcuts when possible
+  - Avoid long methods
+  - Clear logic
+  - Efficient solving
+  
+  LANGUAGE:
+  Hindi + English mix.
+  Example:
+  "Isme direct formula lag sakta hai."
+  
+  FORMAT RULES:
+  - Maximum 12 lines
+  - Step format
+  - Use LaTeX
+  - Clean structure
+  
+  GOAL:
+  Teach smart solving methods.
+  `
   },
   '4': {
     name: 'Ritu',
-    emoji: '⚡',
-    columnKey: 'buddy_spark',
+    image: '/ritu.jpg',
+    columnKey: 'buddy_Ritu',
     color: '#F59E0B',
-    systemPrompt:
-    "You are Ritu, a fun, teenage girl who replies in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+    systemPrompt: `
+  You are Ritu Ma'am, a strict JEE and NEET teacher.
+  
+  PERSONALITY:
+  - Serious and strict
+  - Professional
+  - No nonsense
+  - Focused on results
+  - Speaks formal Hinglish
+  
+  TEACHING STYLE:
+  - Focus on exam method
+  - Show correct approach
+  - Highlight formulas
+  - Avoid unnecessary talk
+  - Focus on accuracy
+  
+  LANGUAGE:
+  Hindi + English mix.
+  Example:
+  "Exam mein isi method se solve karna chahiye."
+  
+  FORMAT RULES:
+  - Maximum 12 lines
+  - Step-by-step
+  - Use LaTeX
+  - Clean solution
+  
+  GOAL:
+  Help students score marks.
+  `
   },
 
   '5': {
     name: 'Shreya',
-    emoji: '⚡',
-    columnKey: 'buddy_spark',
-    color: '#F59E0B',
-    systemPrompt:
-    "You are Shreya, an Indian gamer girl who is introverted but sharp. You speak calmly and prefer short Hinglish lines. You're confident like someone who top-frags quietly. Be cool, concise, and real.",
+    image: '/shery11.jpeg',
+    columnKey: 'buddy_Shreya',
+    color: '#8B5CF6',
+    systemPrompt: `
+  You are Shreya, a quiet but brilliant JEE and NEET topper.
+  
+  PERSONALITY:
+  - Calm and serious
+  - Introverted
+  - Speaks less
+  - Very smart
+  - Speaks simple Hinglish
+  
+  TEACHING STYLE:
+  - Short explanations
+  - Clear steps
+  - No extra words
+  - Focus on logic
+  
+  LANGUAGE:
+  Hindi + English.
+  Example:
+  "Yaha energy conserve ho rahi hai."
+  
+  FORMAT RULES:
+  - Maximum 10 lines
+  - Steps only
+  - Use LaTeX
+  - Clean format
+  
+  GOAL:
+  Quick and clear understanding.
+  `
   },
 
   '6': {
     name: 'Neha',
-    emoji: '⚡',
-    columnKey: 'buddy_spark',
-    color: '#F59E0B',
-    systemPrompt:
-    'you are Neha, a 17-year old indian girl who is a little sassy and loves to gossip.avoid giving long responses. You speak in a fun, casual Hinglish style, using lots of emojis and slang. Youre all about the drama.',
+    image: '/assets_task_01jttq36fkem8br965ak8qh0sp_1746800911_img_2.webp',
+    columnKey: 'buddy_Neha',
+    color: '#EC4899',
+    systemPrompt: `
+  You are Neha, a JEE and NEET aspirant who loves solving doubts.
+  
+  PERSONALITY:
+  - Talkative but helpful
+  - Relatable
+  - Curious
+  - Friendly
+  - Speaks Hinglish
+  
+  TEACHING STYLE:
+  - Explain confusion
+  - Clarify steps
+  - Explain why
+  - Mention common mistakes
+  
+  LANGUAGE:
+  Hindi + English.
+  Example:
+  "Yaha students usually galti karte hain."
+  
+  FORMAT RULES:
+  - Maximum 15 lines
+  - Step explanation
+  - Use LaTeX
+  - Clear format
+  
+  GOAL:
+  Remove confusion.
+  `
   },
 };
 
-const DEFAULT_BUDDY_ID = '1';
+const DEFAULT_BUDDY_ID = '4';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Question = {
@@ -93,8 +269,12 @@ type Question = {
   option_b_img?: string | null;
   option_c_img?: string | null;
   option_d_img?: string | null;
-  [key: string]: any; // buddy_nova, buddy_blaze, etc.
+  [key: string]: any;
 };
+
+
+
+
 
 type ToastType = 'success' | 'error' | 'info' | 'coin' | 'bookmark';
 
@@ -112,12 +292,12 @@ const SESSION_KEY = 'questionSessionResponses_v1';
 function useTheme() {
   const [isDark, setIsDark] = useState(true);
   useEffect(() => {
-    try { setIsDark(localStorage.getItem('theme') !== 'light'); } catch {}
+    try { setIsDark(localStorage.getItem('theme') === 'dark'); } catch {}
     const ob = new MutationObserver(() => {
-      try { setIsDark(localStorage.getItem('theme') !== 'light'); } catch {}
+      try {setIsDark(localStorage.getItem('theme') === 'dark');} catch {}
     });
     ob.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    const fn = () => { try { setIsDark(localStorage.getItem('theme') !== 'light'); } catch {} };
+    const fn = () => { try {setIsDark(localStorage.getItem('theme') === 'dark'); } catch {} };
     window.addEventListener('storage', fn);
     return () => { ob.disconnect(); window.removeEventListener('storage', fn); };
   }, []);
@@ -249,6 +429,7 @@ export default function QuestionViewerPage() {
   const [buddyId, setBuddyId]               = useState(DEFAULT_BUDDY_ID);
   const [toasts, setToasts]                 = useState<ToastItem[]>([]);
   const [isConnected, setIsConnected]       = useState(true);
+  const [hasTyped, setHasTyped] = useState(false);
 
   // Dig Deeper
   const [isDigging, setIsDigging]           = useState(false);
@@ -265,6 +446,10 @@ export default function QuestionViewerPage() {
   const questionStartTime = useRef(Date.now());
 
   const buddy = AI_BUDDIES[buddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID];
+  const [solutionBuddyId, setSolutionBuddyId] = useState(DEFAULT_BUDDY_ID);
+  // Add this derived value just before your return statement (near where buddy is derived):
+const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID];
+
 
   // ── Theme tokens ──────────────────────────────────────────────────────────
   const T = {
@@ -279,6 +464,7 @@ export default function QuestionViewerPage() {
                         : 'bg-white border-[#D1D5DB] text-[#0f172a] placeholder-gray-400 focus:border-indigo-400',
     muted:       isDark ? 'text-slate-400'                       : 'text-slate-500',
     progress:    isDark ? 'bg-[#1e2538]'                         : 'bg-gray-200',
+    bar: isDark ? 'bg-white'                         : 'bg-black', 
     footer:      isDark ? 'bg-[#07090f]/95 border-[#1e2538]'    : 'bg-white/95 border-[#E5E7EB]',
     btnSecondary:isDark ? 'bg-[#111827] border-[#1D2939] text-white hover:bg-[#1a2235]'
                         : 'bg-white border-[#D1D5DB] text-[#0f172a] hover:bg-gray-50',
@@ -286,7 +472,8 @@ export default function QuestionViewerPage() {
     followCard:  isDark ? 'bg-[#0a0f1a] border-[#1D2939] text-slate-300'
                         : 'bg-indigo-50 border-indigo-200 text-slate-700',
     // Exam shift badge - highlighted like screenshot
-    examBadge:   isDark ? 'bg-indigo-900/50 text-indigo-300 border border-indigo-700/60'
+    examBadge: isDark
+    ? 'bg-blue-900/40 text-blue-400 border border-blue-500/50'
                         : 'bg-blue-100 text-blue-700 border border-blue-300',
     subjectBadge:isDark ? 'bg-[#1e2538] text-slate-300 border border-[#2a3548]'
                         : 'bg-slate-100 text-slate-600 border border-slate-200',
@@ -370,10 +557,10 @@ export default function QuestionViewerPage() {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       const obj = raw ? JSON.parse(raw) : {};
-      if (!obj[chapterTitle]) obj[chapterTitle] = {};
       obj[chapterTitle][String(currentIndex)] = {
         ...(obj[chapterTitle][String(currentIndex)] || {}),
         selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup,
+        solutionBuddyId,
         ...partial,
       };
       localStorage.setItem(SESSION_KEY, JSON.stringify(obj));
@@ -398,12 +585,16 @@ export default function QuestionViewerPage() {
       setSolution(prev.solution || '');
       setAIFollowup(prev.aiFollowup || null);
       setSolutionRequested(prev.solutionRequested || false);
-      if (prev.integerAnswer) setIntegerAnswer(prev.integerAnswer);
+      setHasTyped(prev.hasTyped || false);
+      setSolutionBuddyId(prev.solutionBuddyId || buddyId);
+      if (prev.integerAnswer !== undefined)
+        setIntegerAnswer(prev.integerAnswer);
     } else {
       setSelectedOption(null); setIsCorrect(null); setMotivation('');
       setSolution(''); setAIFollowup(null); setSolutionRequested(false);
       setIsDigging(false); setConceptMCQ(null); setPrevDigResult(null);
       setDigDeepSelected(null); setIntegerAnswer(''); setDisplayedText('');
+      setHasTyped(false);
     }
   }, [currentIndex, questions, chapterTitle]);
 
@@ -432,14 +623,31 @@ export default function QuestionViewerPage() {
   // ── Typing effect ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!solution || !solutionRequested) return;
-    setIsTyping(true); setDisplayedText('');
+  
+    // Already typed before → don't animate
+    if (hasTyped) {
+      setDisplayedText(solution);
+      setIsTyping(false);
+      return;
+    }
+  
+    setIsTyping(true);
+    setDisplayedText('');
+  
     let i = 0;
     const iv = setInterval(() => {
-      setDisplayedText(solution.slice(0, i)); i++;
-      if (i > solution.length) { clearInterval(iv); setIsTyping(false); }
+      setDisplayedText(solution.slice(0, i));
+      i++;
+  
+      if (i > solution.length) {
+        clearInterval(iv);
+        setIsTyping(false);
+        setHasTyped(true);
+      }
     }, 8);
+  
     return () => clearInterval(iv);
-  }, [solution, solutionRequested]);
+  }, [solution]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const isIntegerQ = (q: Question) =>
@@ -452,14 +660,32 @@ export default function QuestionViewerPage() {
     return Math.min(t + 5, 10);
   };
 
-  const updateCoins = async (add: number) => {
+  // ---------- Update rookie coins in Supabase ----------
+  const updateRookieCoins = async (coinsToAdd: number) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const total = rookieCoins + add;
-      const { error } = await supabase.from('users').update({ rookieCoinsEarned: total }).eq('id', user.id);
-      if (!error) setRookieCoins(total);
-    } catch {}
+  
+      const { data } = await supabase
+        .from('users')
+        .select('rookieCoinsEarned')
+        .eq('id', user.id)
+        .single();
+  
+      const currentCoins = data?.rookieCoinsEarned || 0;
+      const newTotal = currentCoins + coinsToAdd;
+  
+      const { error } = await supabase
+        .from('users')
+        .update({ rookieCoinsEarned: newTotal })
+        .eq('id', user.id);
+  
+      if (!error) {
+        setRookieCoins(newTotal);
+      }
+    } catch (err) {
+      console.error('Error updating rookie coins:', err);
+    }
   };
 
   // ── Bookmark handler ──────────────────────────────────────────────────────
@@ -502,16 +728,33 @@ export default function QuestionViewerPage() {
     finally { setDeterminingAnswer(false); }
   };
 
+
   // ── Generate buddy-flavoured AI solution ───────────────────────────────────
   const generateAISolution = async (q: Question): Promise<string> => {
     try {
       setSolutionLoading(true);
       const col = buddy.columnKey;
-      // Return cached buddy solution if present
-      if (q[col]) return q[col] as string;
-      // Fall back to generic sol_ai only for default buddy
-      if (buddyId === DEFAULT_BUDDY_ID && q.sol_ai) return q.sol_ai;
-
+  
+      // 1. Check in-memory question object first (fastest)
+      if (q[col] && typeof q[col] === 'string' && q[col].trim().length > 0) {
+        return q[col] as string;
+      }
+  
+      // 2. Re-fetch from Supabase to catch solutions saved by other users
+    
+      const { data: freshRow } = await supabase
+        .from(chapterTitle)
+        .select(col)
+        .eq('question_id', q.question_id)
+        .single();
+  
+      if ((freshRow as any)?.[col] && typeof (freshRow as any)?.[col] === 'string' && (freshRow as any)?.[col].trim().length > 0) {
+        // Update local state so future calls hit the in-memory cache
+        setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: (freshRow as any)?.[col] } : item));
+        return (freshRow as any)?.[col] as string;
+      }
+  
+      // 3. Only generate if truly not found
       const res = await axios.post(`${API_BASE}/solution`, {
         action: 'generate_solution',
         question_text: q.question_text,
@@ -523,10 +766,10 @@ export default function QuestionViewerPage() {
         buddy_name: buddy.name,
         buddy_system_prompt: buddy.systemPrompt,
       });
-
+  
       const aiSol = res.data.solution || q.solution;
-
-      // Cache in Supabase under the buddy-specific column
+  
+      // 4. Save to Supabase and update local state
       await supabase.from(chapterTitle).update({ [col]: aiSol }).eq('question_id', q.question_id);
       setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: aiSol } : item));
       return aiSol;
@@ -561,15 +804,28 @@ export default function QuestionViewerPage() {
     const coins = calcCoins(timeSpent, correct);
     if (correct) {
       addToast(coins > 0 ? `✓ Correct! +${coins} Coins earned` : '✓ Correct!', 'coin', 3500);
-      if (coins > 0) await updateCoins(coins);
     } else {
       addToast(`✗ Not quite — keep going!`, 'error', 3000);
     }
+  
+    // Fire coins update in background — do NOT await it before motivation
+    if (correct && coins > 0) updateRookieCoins(coins);
+  
+    const currentBuddyId = buddyId;
+    setSolutionBuddyId(currentBuddyId);
+  
     const [, aiSol] = await Promise.all([generateMotivation(correct), generateAISolution(q)]);
     setSolution(aiSol);
     setSolutionRequested(true);
     setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
-    saveSession({ selectedOption: optKey, isCorrect: correct, solution: aiSol, solutionRequested: true });
+    saveSession({
+      selectedOption: optKey,
+      isCorrect: correct,
+      solution: aiSol,
+      solutionRequested: true,
+      solutionBuddyId: currentBuddyId,
+      hasTyped: true,
+    });
   };
 
   // ── MCQ selection ─────────────────────────────────────────────────────────
@@ -577,11 +833,28 @@ export default function QuestionViewerPage() {
     if (selectedOption !== null) return;
     const q = questions[currentIndex];
     if (!q) return;
+  
     const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000);
     setSelectedOption(opt);
+  
     let ans = q.correct_option;
     if (!ans) ans = await determineAnswer(q);
-    const correct = opt === ans;
+  
+    const normalize = (val: string | null) => {
+      if (!val) return null;
+      return val
+        .replace("option_", "")
+        .replace("_img", "")
+        .trim()
+        .toUpperCase();
+    };
+  
+    const correct = normalize(opt) === normalize(ans);
+  
+    console.log("Selected:", normalize(opt));
+    console.log("Correct:", normalize(ans));
+    console.log("Result:", correct);
+  
     setIsCorrect(correct);
     await handlePostAnswer(correct, timeSpent, q, opt);
   };
@@ -671,6 +944,7 @@ export default function QuestionViewerPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
+    
     <div
       className={`min-h-screen pb-20 transition-colors duration-300 ${T.page}`}
       style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
@@ -705,7 +979,7 @@ export default function QuestionViewerPage() {
           {/* Chapter title */}
           <div className="flex-1 mx-3 min-w-0 text-center">
             <h1 className="text-sm sm:text-base font-bold truncate">{chapterTitle}</h1>
-            <p className={`text-xs ${T.muted}`}>{subjectName}</p>
+        
           </div>
 
           {/* Right: coins + timer */}
@@ -729,13 +1003,19 @@ export default function QuestionViewerPage() {
             </span>
             {/* Buddy indicator */}
             <span className={`text-[11px] font-medium flex items-center gap-1 ${T.muted}`}>
-              <span>{buddy.emoji}</span>
+            <img
+  src={buddy.image}
+  alt={buddy.name}
+  width={32}
+  height={32}
+  className="w-8 h-8 rounded-full object-cover"
+/>
               <span>{buddy.name}</span>
             </span>
           </div>
           <div className={`h-1 rounded-full overflow-hidden ${T.progress}`}>
-            <motion.div
-              className="h-full bg-indigo-500"
+          <motion.div
+  className={`h-full ${T.bar}`}
               initial={{ width: 0 }}
               animate={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
               transition={{ duration: 0.3 }}
@@ -771,9 +1051,7 @@ export default function QuestionViewerPage() {
                     {Q.year}
                   </span>
                 )}
-                <span className={`inline-flex items-center text-[11px] font-medium px-2.5 py-1 rounded-full ${T.subjectBadge}`}>
-                  {subjectName}
-                </span>
+             
               </div>
 
               {/* Question text */}
@@ -887,6 +1165,7 @@ export default function QuestionViewerPage() {
                   const sel   = selectedOption === opt;
                   const corr  = opt === Q.correct_option?.toLowerCase().trim();
                   return (
+                    
                     <motion.div
                       key={opt} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
                       className={`rounded-xl p-4 flex items-center gap-4 border-2 transition-colors ${
@@ -920,7 +1199,7 @@ export default function QuestionViewerPage() {
             )}
 
             {/* ── Post-answer section ───────────────────────────────────────── */}
-            {!determiningAnswer && selectedOption !== null && (
+            {selectedOption !== null && (
               <>
                 {/* Buddy motivation card */}
                 {motivationLoading ? (
@@ -928,13 +1207,21 @@ export default function QuestionViewerPage() {
                     <Spinner size={18} cls="border-white" />
                     <span className="text-white text-sm">{buddy.name} is thinking…</span>
                   </div>
-                ) : motivation ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                    className="rounded-2xl p-5 bg-gradient-to-r from-[#47006A] to-[#0031D0]"
-                  >
+             ) : motivation ? (
+              <motion.div
+                key="motivation-card"  
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl p-5 bg-gradient-to-r from-[#47006A] to-[#0031D0]"
+              >
                     <div className="flex items-start gap-3">
-                      <span className="text-2xl flex-shrink-0">{buddy.emoji}</span>
+                    <img
+  src={buddy.image}
+  alt={buddy.name}
+  width={32}
+  height={32}
+  className="w-12 h-12 rounded-full object-cover"
+/>
+
                       <div>
                         <p className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1">
                           {buddy.name}
@@ -945,15 +1232,22 @@ export default function QuestionViewerPage() {
                   </motion.div>
                 ) : null}
 
-                {/* Solution card */}
-                {solutionRequested && (
-                  <div className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
+{(solutionRequested || solution) && (
+
+
+  <div key="solution-card" className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
                     <div className="flex items-center gap-2.5 mb-4">
-                      <span className="text-xl">{buddy.emoji}</span>
-                      <div>
-                        <h3 className="font-bold text-sm">Solution</h3>
-                        <p className={`text-[11px] ${T.muted}`}>Explained by {buddy.name}</p>
-                      </div>
+                    <img
+  src={solutionBuddy.image}
+  alt={solutionBuddy.name}
+  width={32}
+  height={32}
+  className="w-10 h-10 rounded-full object-cover"
+/>
+<div>
+  <h3 className="font-bold text-sm">Solution</h3>
+  <p className={`text-[11px] ${T.muted}`}>Explained by {solutionBuddy.name}</p>
+</div>
                     </div>
 
                     {solutionLoading ? (
@@ -1107,10 +1401,7 @@ export default function QuestionViewerPage() {
           <span className="hidden sm:inline">Previous</span>
         </motion.button>
 
-        {/* Centre: question counter */}
-        <span className={`text-xs font-medium ${T.muted} hidden sm:block`}>
-          {currentIndex + 1} / {questions.length}
-        </span>
+      
 
         <div className="flex items-center gap-2">
           {/* Bookmark */}

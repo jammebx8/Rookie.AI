@@ -13,6 +13,8 @@ type UserRow = {
   email?: string | null;
 };
 
+
+
 // ─── Theme hook ──────────────────────────────────────────────────────────────
 function useTheme() {
   const [isDark, setIsDark] = useState(true);
@@ -37,6 +39,8 @@ function Avatar({ src, name, size = 48, className = "" }: {
   const initials = (name ?? "?").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
   const palette = ["#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6","#ef4444","#14b8a6"];
   const color = palette[(name?.charCodeAt(0) ?? 0) % palette.length];
+
+
 
   if (!src || errored) {
     return (
@@ -121,7 +125,9 @@ export default function LeaderboardPage() {
   const [filterExam, setFilterExam] = useState("All");
   const [examOptions, setExamOptions] = useState<string[]>(["All"]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const currentUserRowRef = React.useRef<HTMLDivElement | null>(null);
 
+  
   useEffect(() => {
     try {
       const raw = typeof window !== "undefined" ? localStorage.getItem("@user") : null;
@@ -352,18 +358,19 @@ export default function LeaderboardPage() {
                         <div className={`flex-1 h-px ${T.divider}`} />
                       </div>
                     )}
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity:0, y:5 }}
-                      animate={{ opacity:1, y:0 }}
-                      transition={{ duration:0.28, delay: Math.min(idx * 0.02, 0.25) }}
-                      whileHover={{ scale:1.004 }}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-xl border transition-all duration-200 ${
-                        isCurrent
-                          ? `${T.rowHighlight} ${rank <= 3 ? "ring-1 ring-yellow-400/60" : "ring-1 ring-yellow-400/60"}`
-                          : `${T.card} ${T.border}`
-                      }`}
-                    >
+<motion.div
+  key={item.id}
+  ref={isCurrent ? currentUserRowRef : null}
+  initial={{ opacity:0, y:5 }}
+  animate={{ opacity:1, y:0 }}
+  transition={{ duration:0.28, delay: Math.min(idx * 0.02, 0.25) }}
+  whileHover={{ scale:1.004 }}
+  className={`flex items-center gap-3 px-3 py-3 rounded-xl border transition-all duration-200 ${
+    isCurrent
+      ? `${T.rowHighlight} ${rank <= 3 ? "ring-1 ring-yellow-400/60" : "ring-1 ring-yellow-400/60"}`
+      : `${T.card} ${T.border}`
+  }`}
+>
                       {/* Rank / medal box */}
                       {isTop3 && medal ? (
                         <div
@@ -385,7 +392,7 @@ export default function LeaderboardPage() {
                       />
 
                       {/* Name + exam */}
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 mr-10 min-w-0">
                         <div className={`font-semibold text-sm truncate ${T.text} ${isCurrent ? "font-bold" : ""}`}>
                           {item.name ?? "-"}
                           {isCurrent && (
@@ -423,43 +430,26 @@ export default function LeaderboardPage() {
       </div>
 
       {/* ── Sticky current user bar ── */}
-      <AnimatePresence>
-        {currentUserEntry && currentUserEntry.rank > 3 && (
-          <motion.div
-            initial={{ opacity:0, y:24 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:24 }}
-            transition={{ duration:0.35 }}
-            className={`fixed left-4 right-4 bottom-20 lg:bottom-6 rounded-2xl px-4 py-3 flex items-center justify-between border shadow-2xl max-w-4xl mx-auto z-50 transition-colors duration-300 ${T.sticky}`}
-            style={{ boxShadow: isDark ? "0 0 40px rgba(245,158,11,0.1), 0 8px 32px rgba(0,0,0,0.5)" : "0 8px 32px rgba(0,0,0,0.12)" }}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold border flex-shrink-0 ${T.rankBox}`}>
-                {currentUserEntry.rank}
-              </div>
-              <Avatar src={currentUserEntry.user.avatar_url} name={currentUserEntry.user.name} size={40} />
-              <div className="min-w-0">
-                <div className={`font-bold truncate text-sm ${T.text}`}>
-                  {currentUserEntry.user.name ?? "-"}
-                  <span className="ml-1.5 text-[9px] font-extrabold text-yellow-500 uppercase tracking-wide">You</span>
-                </div>
-                {currentUserEntry.user.exam && (
-                  <span className={`text-[10px] ${T.muted}`}>{currentUserEntry.user.exam}</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-                         <img
-               src="coin (1).svg"
-               alt="Coins"
-               width={16}
-               height={16}
-             />
-              <span className={`font-extrabold text-base ${T.text}`}>
-                {(currentUserEntry.user.rookieCoinsEarned ?? 0).toLocaleString()}
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ── Scroll to me button ── */}
+<AnimatePresence>
+  {currentUserEntry && (
+    <motion.button
+      initial={{ opacity:0, scale:0.8 }}
+      animate={{ opacity:1, scale:1 }}
+      exit={{ opacity:0, scale:0.8 }}
+      transition={{ duration:0.25 }}
+      onClick={() => currentUserRowRef.current?.scrollIntoView({ behavior:"smooth", block:"center" })}
+      className={`fixed right-4 bottom-24 lg:bottom-8 z-50 flex items-center gap-2 px-3 py-2 rounded-full border shadow-xl transition-colors duration-200 ${T.sticky}`}
+      style={{ boxShadow: isDark ? "0 0 20px rgba(245,158,11,0.15), 0 4px 20px rgba(0,0,0,0.4)" : "0 4px 20px rgba(0,0,0,0.12)" }}
+    >
+      <span className="text-[11px] font-bold text-yellow-500 uppercase tracking-wide">Me</span>
+      <span className={`text-sm ${T.text}`}>#{currentUserEntry.rank}</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={T.text}>
+        <path d="M12 5v14M5 12l7 7 7-7"/>
+      </svg>
+    </motion.button>
+  )}
+</AnimatePresence>
     </main>
   );
 }

@@ -177,8 +177,8 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
   
 />
 <Image
-  src="/vector.svg"
-  alt="Rookie Logo"
+  src="/lg.png"
+  alt="Rookie"
   width={76}
   height={76}
   priority
