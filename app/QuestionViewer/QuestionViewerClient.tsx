@@ -832,74 +832,56 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
   };
 
   // ── Generate buddy motivation ──────────────────────────────────────────────
-  const generateMotivation = async (correct: boolean) => {
-    try {
-      setMotivationLoading(true);
-      const res = await axios.post(`${API_BASE}/motivation`, {
-        message: correct
-          ? `In the voice of ${buddy.name} (personality: ${buddy.systemPrompt}), give a very short 1-2 sentence encouraging message to a student who just got a JEE question CORRECT.`
-          : `In the voice of ${buddy.name} (personality: ${buddy.systemPrompt}), give a very short 1-2 sentence motivating message to a student who just got a JEE question WRONG. Encourage them to keep going.`,
-        buddy_id: buddyId,
-        buddy_name: buddy.name,
-      });
-      const text = res.data.choices?.[0]?.message?.content || (correct ? 'Great job!' : 'Keep going!');
-      setMotivation(text);
-      return text;
-    } catch {
-      const fb = correct ? 'Excellent!' : 'Keep practicing!';
-      setMotivation(fb); return fb;
-    } finally { setMotivationLoading(false); }
-  };
+ 
 
   // ── Post-answer: award coins + motivation + solution ───────────────────────
-  const handlePostAnswer = async (
-    correct: boolean, timeSpent: number, q: Question, optKey: string
-  ) => {
-    const coins = calcCoins(timeSpent, correct);
+  // ── Post-answer: award coins + motivation + solution ───────────────────────
+const handlePostAnswer = async (
+  correct: boolean, timeSpent: number, q: Question, optKey: string
+) => {
+  const coins = calcCoins(timeSpent, correct);
 
-    if (correct) {
-      addToast(coins > 0 ? `✓ Correct! +${coins} Coins earned` : '✓ Correct!', 'coin', 3500);
-    } else {
-      addToast(`✗ Not quite — keep going!`, 'error', 3000);
-    }
+  if (correct) {
+    addToast(coins > 0 ? `✓ Correct! +${coins} Coins earned` : '✓ Correct!', 'coin', 3500);
+  } else {
+    addToast(`✗ Not quite — keep going!`, 'error', 3000);
+  }
 
-    // Anti-cheat: only award coins if this question has NOT been answered correctly before
-    if (correct && coins > 0) {
-      const prev = loadSession(currentIndex);
-      const alreadyRewarded = prev?.isCorrect === true;
-      if (!alreadyRewarded) updateRookieCoins(coins);
-    }
+  // Anti-cheat: only award coins if this question has NOT been answered correctly before
+  if (correct && coins > 0) {
+    const prev = loadSession(currentIndex);
+    const alreadyRewarded = prev?.isCorrect === true;
+    if (!alreadyRewarded) updateRookieCoins(coins);
+  }
 
-    const currentBuddyId = buddyId;
-    setSolutionBuddyId(currentBuddyId);
+  // 🔥 ADD THIS LINE - Update streak after correct answer
+  updateStreakData(correct);
 
-    // Start motivation immediately
-    generateMotivation(correct).then((motText) => {
-      saveSession({ motivation: motText });
+  const currentBuddyId = buddyId;
+  setSolutionBuddyId(currentBuddyId);
+
+  // Show solution box immediately (with spinner) — block stays mounted
+  setSolutionRequested(true);
+  setSolutionLoading(true);
+
+  // Generate solution — returns as soon as AI responds, Supabase write is backgrounded
+  generateAISolution(q).then((aiSol) => {
+    setSolution(aiSol);
+    setSolutionLoading(false);
+    saveSession({
+      selectedOption: optKey,
+      isCorrect: correct,
+      solution: aiSol,
+      solutionRequested: true,
+      solutionBuddyId: currentBuddyId,
+      hasTyped: false,
     });
 
-    // Show solution box immediately (with spinner) — block stays mounted
-    setSolutionRequested(true);
-    setSolutionLoading(true);
-
-    // Generate solution — returns as soon as AI responds, Supabase write is backgrounded
-    generateAISolution(q).then((aiSol) => {
-      setSolution(aiSol);
-      setSolutionLoading(false);
-      saveSession({
-        selectedOption: optKey,
-        isCorrect: correct,
-        solution: aiSol,
-        solutionRequested: true,
-        solutionBuddyId: currentBuddyId,
-        hasTyped: false,
-      });
-
-      setTimeout(() => {
-        scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 200);
-    });
-  };
+    setTimeout(() => {
+      scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
+  });
+};
 
   // ── MCQ selection ─────────────────────────────────────────────────────────
   const handleOptionClick = async (opt: string) => {
@@ -998,6 +980,63 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
       : { status: 'incorrect', explanation: conceptMCQ.mcq.explanation, answer: conceptMCQ.mcq.correctAnswer });
   };
 
+
+  // ── Streak tracking helpers ───────────────────────────────────────────────
+const STREAK_KEY = 'rookie_streak_data';
+const DAILY_SOLVED_KEY = 'rookie_solved_';
+
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function getYesterdayKey() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Update streak data after solving a question
+const updateStreakData = (correct: boolean) => {
+  if (!correct) return; // Only update for correct answers
+
+  try {
+    const todayKey = getTodayKey();
+    
+    // 1. Mark question as solved today
+    const solvedCount = parseInt(localStorage.getItem(`${DAILY_SOLVED_KEY}${todayKey}`) || '0', 10);
+    localStorage.setItem(`${DAILY_SOLVED_KEY}${todayKey}`, String(solvedCount + 1));
+
+    // 2. Update streak data
+    const raw = localStorage.getItem(STREAK_KEY);
+    const streakData = raw ? JSON.parse(raw) : { current: 0, longest: 0, activeDays: [] };
+
+    const yesterday = getYesterdayKey();
+    const wasActiveYesterday = streakData.activeDays?.includes(yesterday);
+
+    // If this is the first solve today
+    if (!streakData.activeDays.includes(todayKey)) {
+      // Increment streak if yesterday was active, or reset to 1
+      const newCurrent = wasActiveYesterday ? streakData.current + 1 : 1;
+      
+      streakData.current = newCurrent;
+      streakData.longest = Math.max(streakData.longest, newCurrent);
+      streakData.activeDays = [...(streakData.activeDays || []), todayKey];
+
+      localStorage.setItem(STREAK_KEY, JSON.stringify(streakData));
+    }
+  } catch (err) {
+    console.error('Error updating streak:', err);
+  }
+};
+
+
+/////////////////////////////////////////////////////////////////////////////////////
   // ── Loading screen ────────────────────────────────────────────────────────
   if (loading) {
     return (

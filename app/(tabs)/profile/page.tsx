@@ -10,11 +10,6 @@ import { supabase } from '../../../public/src/utils/supabase';
 type ClassType = '12th' | '11th' | 'Dropper' | 'Other';
 type ExamType = 'JEE Mains' | 'JEE Advanced' | 'NEET' | 'CUET' | 'Other';
 
-
-
-
-
-
 interface AIBuddy {
   id: number;
   name: string;
@@ -162,14 +157,76 @@ const aiBuddies: AIBuddy[] = [
   },
 ];
 
+// ─── useTheme hook ────────────────────────────────────────────────────────────
+function useTheme() {
+  const [isDark, setIsDark] = useState(true);
+  
+  useEffect(() => {
+    try {
+      setIsDark(localStorage.getItem('theme') !== 'light');
+    } catch {}
+    
+    const observer = new MutationObserver(() => {
+      try {
+        setIsDark(localStorage.getItem('theme') !== 'light');
+      } catch {}
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    
+    const onStorage = () => {
+      try {
+        setIsDark(localStorage.getItem('theme') !== 'light');
+      } catch {}
+    };
+    window.addEventListener('storage', onStorage);
+    
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+  
+  return isDark;
+}
+
+// ─── Theme-aware color classes ────────────────────────────────────────────────
+function getThemeClasses(isDark: boolean) {
+  return {
+    page: isDark ? 'bg-[#000000] text-white' : 'bg-[#F9FAFB] text-[#0f172a]',
+    card: isDark ? 'bg-[#0C111D] border-[#1D2939]' : 'bg-white border-[#E5E7EB]',
+    input: isDark
+      ? 'bg-transparent border-[#344054] text-white placeholder-gray-600'
+      : 'bg-white border-[#D1D5DB] text-[#0f172a] placeholder-gray-400',
+    inputDisabled: isDark ? 'opacity-70 cursor-not-allowed' : 'opacity-60 cursor-not-allowed',
+    button: {
+      primary: isDark ? 'bg-white text-[#181f2b]' : 'bg-[#0f172a] text-white',
+      secondary: isDark ? 'bg-[#181f2b] text-white border-[#344054]' : 'bg-white text-[#0f172a] border-[#D1D5DB]',
+      selected: isDark ? 'bg-white text-[#181f2b]' : 'bg-[#0f172a] text-white',
+      unselected: isDark
+        ? 'bg-[#181f2b] text-white border-[#344054]'
+        : 'bg-white text-[#0f172a] border-[#D1D5DB]',
+    },
+    text: {
+      primary: isDark ? 'text-white' : 'text-[#0f172a]',
+      secondary: isDark ? 'text-gray-400' : 'text-gray-500',
+      muted: isDark ? 'text-gray-500' : 'text-gray-400',
+    },
+    modal: {
+      bg: isDark ? 'bg-black/75' : 'bg-white/75',
+      card: isDark ? 'bg-[#0C111D] border-[#1D2939]' : 'bg-white border-[#E5E7EB]',
+    },
+    progressTrack: isDark ? 'bg-[#1D2939]' : 'bg-gray-200',
+    border: isDark ? 'border-[#344054]' : 'border-[#E5E7EB]',
+    delete: isDark ? 'bg-[#101828] border-[#1D2939]' : 'bg-red-50 border-red-200',
+  };
+}
+
 // Animation variants
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
+    transition: { staggerChildren: 0.1 },
   },
 };
 
@@ -178,40 +235,26 @@ const itemVariants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: {
-      duration: 0.5,
-    },
+    transition: { duration: 0.5 },
   },
 };
 
 const buttonVariants = {
   rest: { scale: 1 },
-  hover: { 
-    scale: 1.02,
-    transition: {
-      duration: 0.2,
-    }
-  },
+  hover: { scale: 1.02, transition: { duration: 0.2 } },
   tap: { scale: 0.98 },
 };
 
 const cardVariants = {
   rest: { scale: 1 },
-  hover: { 
-    scale: 1.01,
-    transition: {
-      duration: 0.3,
-    }
-  },
+  hover: { scale: 1.01, transition: { duration: 0.3 } },
 };
 
 const progressBarVariants = {
   initial: { width: 0 },
   animate: (percentage: number) => ({
     width: `${percentage}%`,
-    transition: {
-      duration: 1,
-    },
+    transition: { duration: 1 },
   }),
 };
 
@@ -220,29 +263,28 @@ const modalVariants = {
   visible: {
     opacity: 1,
     scale: 1,
-    transition: {
-      duration: 0.3,
-    },
+    transition: { duration: 0.3 },
   },
   exit: {
     opacity: 0,
     scale: 0.9,
-    transition: {
-      duration: 0.2,
-    },
+    transition: { duration: 0.2 },
   },
 };
 
 export default function ProfilePage() {
   const router = useRouter();
+  const isDark = useTheme();
+  const themeClasses = getThemeClasses(isDark);
+  
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
 
-  // User data state (loaded from @user localStorage set during onboarding)
+  // User data state
   const [name, setName] = useState('');
-  const [email, setEmail] = useState(''); // Email is read-only, cannot be edited
+  const [email, setEmail] = useState('');
   const [selectedClass, setSelectedClass] = useState<ClassType>('12th');
   const [targetExam, setTargetExam] = useState<ExamType>('JEE Mains');
   const [selectedBuddy, setSelectedBuddy] = useState(1);
@@ -261,9 +303,7 @@ export default function ProfilePage() {
 
   const loadUserData = async () => {
     try {
-      // Load from @user localStorage (set during onboarding)
       const storedUser = localStorage.getItem('@user');
-      
       if (storedUser) {
         const userData = JSON.parse(storedUser);
         setName(userData.name || '');
@@ -272,11 +312,8 @@ export default function ProfilePage() {
         setTargetExam(userData.exam || 'JEE Mains');
       }
 
-      // Load other settings from individual localStorage keys
       const storedBuddy = parseInt(localStorage.getItem('selectedBuddy') || '1');
       const storedGoal = localStorage.getItem('goal') || '';
-
-      // Load stats
       const storedQuestionsToday = parseInt(localStorage.getItem('questionsToday') || '0');
       const storedQuestionsWeek = parseInt(localStorage.getItem('questionsWeek') || '0');
       const storedQuestionsMonth = parseInt(localStorage.getItem('questionsMonth') || '0');
@@ -285,7 +322,6 @@ export default function ProfilePage() {
 
       setSelectedBuddy(storedBuddy);
       setGoal(storedGoal);
-
       setQuestionsToday(storedQuestionsToday);
       setQuestionsWeek(storedQuestionsWeek);
       setQuestionsMonth(storedQuestionsMonth);
@@ -301,27 +337,24 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     try {
-      // Update @user localStorage with new values
       const storedUser = localStorage.getItem('@user');
       if (storedUser) {
         const userData = JSON.parse(storedUser);
         const updatedUser = {
           ...userData,
-          name: name,
+          name,
           class: selectedClass,
           exam: targetExam,
         };
         localStorage.setItem('@user', JSON.stringify(updatedUser));
       }
 
-      // Also save to individual keys for other settings
       localStorage.setItem('selectedClass', selectedClass);
       localStorage.setItem('targetExam', targetExam);
       localStorage.setItem('selectedBuddy', selectedBuddy.toString());
       localStorage.setItem('goal', goal);
 
       setEditing(false);
-      console.log('Profile saved successfully!');
     } catch (error) {
       console.error('Error saving profile:', error);
     }
@@ -334,7 +367,6 @@ export default function ProfilePage() {
 
   const handleDeleteAccount = async () => {
     if (deleteInput.trim().toLowerCase() !== 'delete') return;
-
     try {
       localStorage.clear();
       router.push('/auth/terms-agree');
@@ -348,10 +380,8 @@ export default function ProfilePage() {
     router.push('https://rookieai.vercel.app/');
   };
 
-
-
   return (
-    <div className="min-h-screen bg-[#000] text-white">
+    <div className={`min-h-screen transition-colors duration-300 ${themeClasses.page}`}>
       <motion.div
         initial="hidden"
         animate="visible"
@@ -367,7 +397,7 @@ export default function ProfilePage() {
             whileHover="hover"
             whileTap="tap"
             onClick={handleLogout}
-            className="bg-white text-[#E53935] px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-semibold text-sm sm:text-base"
+            className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-semibold text-sm sm:text-base transition-all ${themeClasses.button.primary}`}
           >
             Logout
           </motion.button>
@@ -376,9 +406,8 @@ export default function ProfilePage() {
         {/* Profile Card */}
         <motion.div
           variants={itemVariants}
-          className="bg-[#0C111D] border border-[#1D2939] rounded-2xl sm:rounded-3xl p-5 sm:p-7 mb-6 sm:mb-8"
+          className={`border rounded-2xl sm:rounded-3xl p-5 sm:p-7 mb-6 sm:mb-8 transition-all ${themeClasses.card}`}
         >
-          {/* Edit Button */}
           {!editing && (
             <motion.button
               variants={buttonVariants}
@@ -386,55 +415,57 @@ export default function ProfilePage() {
               whileHover="hover"
               whileTap="tap"
               onClick={() => setEditing(true)}
-              className="mb-4 sm:mb-6 bg-white text-[#181f2b] px-5 sm:px-6 py-2 sm:py-2.5 rounded-full font-semibold text-sm sm:text-base w-full sm:w-auto"
+              className={`mb-4 sm:mb-6 px-5 sm:px-6 py-2 sm:py-2.5 rounded-full font-semibold text-sm sm:text-base w-full sm:w-auto transition-all ${themeClasses.button.primary}`}
             >
               Edit Profile
             </motion.button>
           )}
 
-          {/* Name & Email */}
+          {/* Name */}
           <div className="mb-5 sm:mb-6">
-            <label className="block text-gray-400 text-xs sm:text-sm mb-2">Name</label>
+            <label className={`block text-xs sm:text-sm mb-2 ${themeClasses.text.secondary}`}>Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={!editing}
-              className={`w-full bg-transparent border border-[#344054] text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base ${
-                !editing && 'opacity-70 cursor-not-allowed'
-              }`}
+              className={`w-full border px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base transition-all ${
+                themeClasses.input
+              } ${!editing && themeClasses.inputDisabled}`}
             />
           </div>
 
+          {/* Email */}
           <div className="mb-5 sm:mb-6">
-            <label className="block text-gray-400 text-xs sm:text-sm mb-2">Email</label>
+            <label className={`block text-xs sm:text-sm mb-2 ${themeClasses.text.secondary}`}>Email</label>
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
               disabled={true}
-              className="w-full bg-transparent border border-[#344054] text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base opacity-70 cursor-not-allowed"
+              className={`w-full border px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base transition-all ${
+                themeClasses.input
+              } ${themeClasses.inputDisabled}`}
             />
           </div>
 
           {/* Goal */}
           <div className="mb-5 sm:mb-6">
-            <label className="block text-gray-400 text-xs sm:text-sm mb-2">Goal (Optional)</label>
+            <label className={`block text-xs sm:text-sm mb-2 ${themeClasses.text.secondary}`}>Goal (Optional)</label>
             <input
               type="text"
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
               disabled={!editing}
               placeholder="e.g., Get 99 percentile in JEE"
-              className={`w-full bg-transparent border border-[#344054] text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base placeholder-gray-600 ${
-                !editing && 'opacity-70 cursor-not-allowed'
-              }`}
+              className={`w-full border px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base transition-all ${
+                themeClasses.input
+              } ${!editing && themeClasses.inputDisabled}`}
             />
           </div>
 
           {/* Class Selection */}
           <div className="mb-5 sm:mb-6">
-            <label className="block text-white text-sm sm:text-base font-medium mb-3">
+            <label className={`block ${themeClasses.text.primary} text-sm sm:text-base font-medium mb-3`}>
               Which class are you in?
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
@@ -447,11 +478,11 @@ export default function ProfilePage() {
                   whileTap={editing ? "tap" : "rest"}
                   onClick={() => editing && setSelectedClass(cls)}
                   disabled={!editing}
-                  className={`py-2.5 sm:py-3 rounded-xl font-medium text-sm sm:text-base transition-all ${
+                  className={`py-2.5 sm:py-3 rounded-xl font-medium text-sm sm:text-base border transition-all ${
                     selectedClass === cls
-                      ? 'bg-white text-[#181f2b]'
-                      : 'bg-[#181f2b] text-white border border-[#344054]'
-                  } ${!editing && 'opacity-70 cursor-not-allowed'}`}
+                      ? themeClasses.button.selected
+                      : themeClasses.button.unselected
+                  } ${!editing && themeClasses.inputDisabled}`}
                 >
                   {cls}
                 </motion.button>
@@ -461,7 +492,7 @@ export default function ProfilePage() {
 
           {/* Exam Selection */}
           <div className="mb-6">
-            <label className="block text-white text-sm sm:text-base font-medium mb-3">
+            <label className={`block ${themeClasses.text.primary} text-sm sm:text-base font-medium mb-3`}>
               Goal exam
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
@@ -474,11 +505,11 @@ export default function ProfilePage() {
                   whileTap={editing ? "tap" : "rest"}
                   onClick={() => editing && setTargetExam(exam)}
                   disabled={!editing}
-                  className={`py-2.5 sm:py-3 rounded-xl font-medium text-xs sm:text-sm transition-all ${
+                  className={`py-2.5 sm:py-3 rounded-xl font-medium text-xs sm:text-sm border transition-all ${
                     targetExam === exam
-                      ? 'bg-white text-[#181f2b]'
-                      : 'bg-[#181f2b] text-white border border-[#344054]'
-                  } ${!editing && 'opacity-70 cursor-not-allowed'}`}
+                      ? themeClasses.button.selected
+                      : themeClasses.button.unselected
+                  } ${!editing && themeClasses.inputDisabled}`}
                 >
                   {exam}
                 </motion.button>
@@ -494,7 +525,7 @@ export default function ProfilePage() {
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
               >
-                <div className="border-t border-[#344054] my-5 sm:my-6" />
+                <div className={`border-t my-5 sm:my-6 transition-colors ${themeClasses.border}`} />
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   <motion.button
                     variants={buttonVariants}
@@ -502,7 +533,7 @@ export default function ProfilePage() {
                     whileHover="hover"
                     whileTap="tap"
                     onClick={() => setEditing(false)}
-                    className="flex-1 bg-[#181f2b] text-white py-3 rounded-full font-medium text-sm sm:text-base border border-[#344054]"
+                    className={`flex-1 py-3 rounded-full font-medium text-sm sm:text-base border transition-all ${themeClasses.button.secondary}`}
                   >
                     Cancel
                   </motion.button>
@@ -512,7 +543,7 @@ export default function ProfilePage() {
                     whileHover="hover"
                     whileTap="tap"
                     onClick={handleSave}
-                    className="flex-1 bg-white text-[#181f2b] py-3 rounded-full font-semibold text-sm sm:text-base"
+                    className={`flex-1 py-3 rounded-full font-semibold text-sm sm:text-base transition-all ${themeClasses.button.primary}`}
                   >
                     Save
                   </motion.button>
@@ -524,24 +555,24 @@ export default function ProfilePage() {
 
         {/* Stats Section */}
         <motion.div variants={itemVariants} className="mb-6 sm:mb-8">
-          <h2 className="text-lg sm:text-xl font-semibold mb-4">Your Progress</h2>
+          <h2 className={`text-lg sm:text-xl font-semibold mb-4 ${themeClasses.text.primary}`}>Your Progress</h2>
           
           {/* Questions Solved */}
           <motion.div
             variants={cardVariants}
             initial="rest"
             whileHover="hover"
-            className="bg-[#0C111D] border border-[#1D2939] rounded-2xl p-5 sm:p-6 mb-4"
+            className={`border rounded-2xl p-5 sm:p-6 mb-4 transition-all ${themeClasses.card}`}
           >
-            <h3 className="text-gray-400 text-xs sm:text-sm mb-4">Questions Solved</h3>
+            <h3 className={`text-xs sm:text-sm mb-4 ${themeClasses.text.secondary}`}>Questions Solved</h3>
             
             {/* Today */}
             <div className="mb-4 sm:mb-5">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-white text-sm sm:text-base">Today</span>
-                <span className="text-white font-semibold text-sm sm:text-base">{questionsToday}</span>
+                <span className={`text-sm sm:text-base ${themeClasses.text.primary}`}>Today</span>
+                <span className={`font-semibold text-sm sm:text-base ${themeClasses.text.primary}`}>{questionsToday}</span>
               </div>
-              <div className="h-2 bg-[#1D2939] rounded-full overflow-hidden">
+              <div className={`h-2 rounded-full overflow-hidden transition-colors ${themeClasses.progressTrack}`}>
                 <motion.div
                   custom={(questionsToday / 50) * 100}
                   variants={progressBarVariants}
@@ -555,10 +586,10 @@ export default function ProfilePage() {
             {/* This Week */}
             <div className="mb-4 sm:mb-5">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-white text-sm sm:text-base">This Week</span>
-                <span className="text-white font-semibold text-sm sm:text-base">{questionsWeek}</span>
+                <span className={`text-sm sm:text-base ${themeClasses.text.primary}`}>This Week</span>
+                <span className={`font-semibold text-sm sm:text-base ${themeClasses.text.primary}`}>{questionsWeek}</span>
               </div>
-              <div className="h-2 bg-[#1D2939] rounded-full overflow-hidden">
+              <div className={`h-2 rounded-full overflow-hidden transition-colors ${themeClasses.progressTrack}`}>
                 <motion.div
                   custom={(questionsWeek / 350) * 100}
                   variants={progressBarVariants}
@@ -572,10 +603,10 @@ export default function ProfilePage() {
             {/* This Month */}
             <div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-white text-sm sm:text-base">This Month</span>
-                <span className="text-white font-semibold text-sm sm:text-base">{questionsMonth}</span>
+                <span className={`text-sm sm:text-base ${themeClasses.text.primary}`}>This Month</span>
+                <span className={`font-semibold text-sm sm:text-base ${themeClasses.text.primary}`}>{questionsMonth}</span>
               </div>
-              <div className="h-2 bg-[#1D2939] rounded-full overflow-hidden">
+              <div className={`h-2 rounded-full overflow-hidden transition-colors ${themeClasses.progressTrack}`}>
                 <motion.div
                   custom={(questionsMonth / 1500) * 100}
                   variants={progressBarVariants}
@@ -593,29 +624,29 @@ export default function ProfilePage() {
               variants={cardVariants}
               initial="rest"
               whileHover="hover"
-              className="bg-[#0C111D] border border-[#1D2939] rounded-2xl p-4 sm:p-5"
+              className={`border rounded-2xl p-4 sm:p-5 transition-all ${themeClasses.card}`}
             >
               <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">🔥</div>
-              <div className="text-xl sm:text-2xl font-bold mb-1">{currentStreak}</div>
-              <div className="text-gray-400 text-xs sm:text-sm">Current Streak</div>
+              <div className={`text-xl sm:text-2xl font-bold mb-1 ${themeClasses.text.primary}`}>{currentStreak}</div>
+              <div className={`text-xs sm:text-sm ${themeClasses.text.secondary}`}>Current Streak</div>
             </motion.div>
             <motion.div
               variants={cardVariants}
               initial="rest"
               whileHover="hover"
-              className="bg-[#0C111D] border border-[#1D2939] rounded-2xl p-4 sm:p-5"
+              className={`border rounded-2xl p-4 sm:p-5 transition-all ${themeClasses.card}`}
             >
               <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">⭐</div>
-              <div className="text-xl sm:text-2xl font-bold mb-1">{longestStreak}</div>
-              <div className="text-gray-400 text-xs sm:text-sm">Longest Streak</div>
+              <div className={`text-xl sm:text-2xl font-bold mb-1 ${themeClasses.text.primary}`}>{longestStreak}</div>
+              <div className={`text-xs sm:text-sm ${themeClasses.text.secondary}`}>Longest Streak</div>
             </motion.div>
           </div>
         </motion.div>
 
         {/* Select Mentor */}
         <motion.div variants={itemVariants} className="mb-6 sm:mb-8">
-          <h2 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3">Select mentor</h2>
-          <p className="text-gray-400 text-xs sm:text-sm mb-4 sm:mb-5">
+          <h2 className={`text-lg sm:text-xl font-semibold mb-2 sm:mb-3 ${themeClasses.text.primary}`}>Select mentor</h2>
+          <p className={`text-xs sm:text-sm mb-4 sm:mb-5 ${themeClasses.text.secondary}`}>
             A mentor is that character who will guide through your practice journey.
           </p>
 
@@ -628,10 +659,12 @@ export default function ProfilePage() {
                 whileHover="hover"
                 whileTap="tap"
                 onClick={() => handleSelectBuddy(buddy.id)}
-                className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all ${
+                className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all border ${
                   selectedBuddy === buddy.id
-                    ? 'bg-[#102A56] border-2 border-[#1570EF]'
-                    : 'bg-[#0C111D] border border-[#1D2939]'
+                    ? isDark
+                      ? 'bg-[#102A56] border-2 border-[#1570EF]'
+                      : 'bg-blue-50 border-2 border-[#1570EF]'
+                    : themeClasses.card
                 }`}
               >
                 <div className="relative w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0">
@@ -643,8 +676,8 @@ export default function ProfilePage() {
                   />
                 </div>
                 <div className="flex-1 text-left">
-                  <h3 className="text-white font-medium text-sm sm:text-base">{buddy.name}</h3>
-                  <p className="text-gray-300 text-xs sm:text-sm line-clamp-2">{buddy.description}</p>
+                  <h3 className={`font-medium text-sm sm:text-base ${themeClasses.text.primary}`}>{buddy.name}</h3>
+                  <p className={`text-xs sm:text-sm line-clamp-2 ${themeClasses.text.secondary}`}>{buddy.description}</p>
                 </div>
                 <AnimatePresence>
                   {selectedBuddy === buddy.id && (
@@ -671,7 +704,11 @@ export default function ProfilePage() {
             whileHover="hover"
             whileTap="tap"
             onClick={() => setDeleteModalVisible(true)}
-            className="w-full bg-[#101828] border border-[#1D2939] text-white py-3 sm:py-4 rounded-full font-medium text-sm sm:text-base mb-4 sm:mb-6 flex items-center justify-center gap-2"
+            className={`w-full border py-3 sm:py-4 rounded-full font-medium text-sm sm:text-base mb-4 sm:mb-6 flex items-center justify-center gap-2 transition-all ${
+              isDark
+                ? 'bg-[#101828] border-[#1D2939] text-white'
+                : 'bg-red-50 border-red-200 text-red-600'
+            }`}
           >
             <div className="relative w-4 h-4 sm:w-5 sm:h-5">
               <Image src="/bin.png" alt="Delete" fill className="object-contain" />
@@ -679,8 +716,7 @@ export default function ProfilePage() {
             Delete Account
           </motion.button>
 
-          {/* Version */}
-          <p className="text-gray-500 text-center text-xs sm:text-sm">v2.3.1</p>
+          <p className={`text-center text-xs sm:text-sm ${themeClasses.text.muted}`}>v2.3.1</p>
         </motion.div>
       </motion.div>
 
@@ -691,7 +727,7 @@ export default function ProfilePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 px-4"
+            className={`fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 px-4 transition-all ${themeClasses.modal.bg}`}
             onClick={() => {
               setDeleteModalVisible(false);
               setDeleteInput('');
@@ -703,7 +739,7 @@ export default function ProfilePage() {
               animate="visible"
               exit="exit"
               onClick={(e) => e.stopPropagation()}
-              className="bg-[#0C111D] border border-[#1D2939] rounded-2xl sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full"
+              className={`border rounded-2xl sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full transition-all ${themeClasses.modal.card}`}
             >
               <motion.div
                 initial={{ scale: 0 }}
@@ -715,7 +751,7 @@ export default function ProfilePage() {
                   <Image src="/bin.png" alt="Delete" fill className="object-contain" />
                 </div>
               </motion.div>
-              <p className="text-white text-center mb-5 sm:mb-6 text-sm sm:text-base">
+              <p className={`text-center mb-5 sm:mb-6 text-sm sm:text-base ${themeClasses.text.primary}`}>
                 Enter <span className="font-bold">Delete</span> to delete your account.
               </p>
               <motion.input
@@ -726,7 +762,11 @@ export default function ProfilePage() {
                 value={deleteInput}
                 onChange={(e) => setDeleteInput(e.target.value)}
                 placeholder="Delete"
-                className="w-full bg-transparent border border-[#344054] text-[#F04438] text-center py-2.5 sm:py-3 rounded-xl mb-5 sm:mb-6 font-semibold placeholder-[#F04438]/50 text-sm sm:text-base"
+                className={`w-full border text-center py-2.5 sm:py-3 rounded-xl mb-5 sm:mb-6 font-semibold text-sm sm:text-base transition-all ${
+                  isDark
+                    ? 'bg-transparent border-[#344054] text-[#F04438] placeholder-[#F04438]/50'
+                    : 'bg-red-50 border-red-200 text-red-600 placeholder-red-400'
+                }`}
               />
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <motion.button
@@ -738,7 +778,7 @@ export default function ProfilePage() {
                     setDeleteModalVisible(false);
                     setDeleteInput('');
                   }}
-                  className="flex-1 bg-[#101828] border border-[#1D2939] text-white py-2.5 sm:py-3 rounded-full font-medium text-sm sm:text-base"
+                  className={`flex-1 border py-2.5 sm:py-3 rounded-full font-medium text-sm sm:text-base transition-all ${themeClasses.button.secondary}`}
                 >
                   Go Back
                 </motion.button>
@@ -749,9 +789,11 @@ export default function ProfilePage() {
                   whileTap={deleteInput.trim().toLowerCase() === 'delete' ? "tap" : "rest"}
                   onClick={handleDeleteAccount}
                   disabled={deleteInput.trim().toLowerCase() !== 'delete'}
-                  className={`flex-1 bg-[#FEE4E2] text-[#D92D20] py-2.5 sm:py-3 rounded-full font-bold text-sm sm:text-base ${
-                    deleteInput.trim().toLowerCase() !== 'delete' && 'opacity-60 cursor-not-allowed'
-                  }`}
+                  className={`flex-1 py-2.5 sm:py-3 rounded-full font-bold text-sm sm:text-base transition-all ${
+                    isDark
+                      ? 'bg-[#FEE4E2] text-[#D92D20]'
+                      : 'bg-[#FEE4E2] text-[#D92D20]'
+                  } ${deleteInput.trim().toLowerCase() !== 'delete' && 'opacity-60 cursor-not-allowed'}`}
                 >
                   Delete
                 </motion.button>
