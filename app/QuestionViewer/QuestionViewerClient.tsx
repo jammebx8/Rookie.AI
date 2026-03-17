@@ -14,6 +14,13 @@ import { supabase } from '../../public/src/utils/supabase';
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
 
+// ─── Razorpay type ────────────────────────────────────────────────────────────
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 // ─── AI Buddy Definitions ────────────────────────────────────────────────────
 // Each buddy has: id (matches localStorage "selectedBuddy"), name, emoji, columnKey (Supabase col), systemPrompt
 export const AI_BUDDIES: Record<string, {
@@ -287,6 +294,13 @@ interface ToastItem {
 const API_BASE = 'https://rookie-backend.vercel.app/api';
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
 const SESSION_KEY = 'questionSessionResponses_v1';
+
+// ─── Paywall constants ────────────────────────────────────────────────────────
+const FREE_SOLUTION_LIMIT = 5;
+const SOLUTIONS_USED_KEY  = 'rookieSolutionsUsed_v1';
+const PREMIUM_KEY         = 'rookieIsPremium_v1';
+const RAZORPAY_KEY        = 'rzp_live_S9oHpamGQcfu5m'; // 🔑 Replace with your key
+const PLAN_AMOUNT_PAISE   = 9900; // ₹99 in paise
 // Per-question AI solution cache (survives re-renders, cleared on tab close)
 const AI_SOL_CACHE_KEY = 'aiSolutionCache_v1';
 
@@ -398,6 +412,191 @@ function CheckIcon() {
   );
 }
 
+// ─── Paywall helpers ──────────────────────────────────────────────────────────
+function getSolutionsUsed(): number {
+  try { return parseInt(localStorage.getItem(SOLUTIONS_USED_KEY) || '0', 10); } catch { return 0; }
+}
+function incrementSolutionsUsed(): number {
+  try {
+    const n = getSolutionsUsed() + 1;
+    localStorage.setItem(SOLUTIONS_USED_KEY, String(n));
+    return n;
+  } catch { return 0; }
+}
+function getIsPremium(): boolean {
+  try { return localStorage.getItem(PREMIUM_KEY) === 'true'; } catch { return false; }
+}
+function setIsPremiumTrue(): void {
+  try { localStorage.setItem(PREMIUM_KEY, 'true'); } catch {}
+}
+
+// ─── PaywallModal ─────────────────────────────────────────────────────────────
+function PaywallModal({
+  isDark,
+  onSuccess,
+  onClose,
+}: {
+  isDark: boolean;
+  onSuccess: () => void;
+  onClose: () => void;
+}) {
+  const [paying, setPaying] = useState(false);
+
+  const loadRazorpayScript = () =>
+    new Promise<boolean>((resolve) => {
+      if (window.Razorpay) return resolve(true);
+      const s = document.createElement('script');
+      s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      s.onload  = () => resolve(true);
+      s.onerror = () => resolve(false);
+      document.body.appendChild(s);
+    });
+
+  const handlePay = async () => {
+    setPaying(true);
+    const ok = await loadRazorpayScript();
+    if (!ok) {
+      alert('Could not load payment gateway. Please check your internet connection.');
+      setPaying(false);
+      return;
+    }
+
+    const options = {
+      key: RAZORPAY_KEY,
+      amount: PLAN_AMOUNT_PAISE,
+      currency: 'INR',
+      name: 'Rookie',
+      description: 'Unlock Unlimited AI Solutions',
+      image: '/logo.png', // optional — update to your logo path
+      theme: { color: '#6366F1' },
+      handler: (_response: any) => {
+        // Payment successful — in production, verify signature server-side
+        setIsPremiumTrue();
+        onSuccess();
+      },
+      modal: {
+        ondismiss: () => setPaying(false),
+      },
+    };
+
+    const rz = new window.Razorpay(options);
+    rz.open();
+    setPaying(false);
+  };
+
+  const bg      = isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-gray-200';
+  const textMd  = isDark ? 'text-slate-300' : 'text-slate-600';
+  const pill    = isDark ? 'bg-indigo-900/40 text-indigo-300 border-indigo-500/40' : 'bg-indigo-50 text-indigo-700 border-indigo-200';
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 60, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0,  scale: 1   }}
+          exit   ={{ opacity: 0, y: 40, scale: 0.97 }}
+          transition={{ type: 'spring', damping: 22, stiffness: 300 }}
+          onClick={e => e.stopPropagation()}
+          className={`w-full max-w-sm rounded-3xl border p-6 shadow-2xl ${bg}`}
+        >
+          {/* Close */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+          >
+            <FiX size={14} className={isDark ? 'text-white' : 'text-gray-700'} />
+          </button>
+
+          {/* Icon */}
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2a5 5 0 0 1 5 5v2h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5zm0 11a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm0-9a3 3 0 0 0-3 3v2h6V7a3 3 0 0 0-3-3z" fill="white"/>
+              </svg>
+            </div>
+          </div>
+
+          <h2 className={`text-center text-xl font-bold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            You've used your 5 free solutions
+          </h2>
+          <p className={`text-center text-sm mb-5 ${textMd}`}>
+            Unlock unlimited AI solutions from all your AI buddies — forever.
+          </p>
+
+          {/* Feature list */}
+          <div className="space-y-2.5 mb-6">
+            {[
+              '♾️  Unlimited AI solutions',
+              '🧠  All 6 AI Buddy styles',
+              '🔍  Test Your Understanding (Dig Deeper)',
+              '💬  Simpler Explanation on demand',
+              '🪙  Keep earning Rookie Coins',
+            ].map((f, i) => (
+              <div key={i} className="flex items-center gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <FiCheck size={11} className="text-emerald-400" />
+                </div>
+                <span className={`text-sm ${textMd}`}>{f}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Price badge */}
+          <div className={`flex justify-center mb-4`}>
+            <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${pill}`}>
+              One-time payment · No subscription
+            </span>
+          </div>
+
+          {/* CTA */}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={handlePay}
+            disabled={paying}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-base shadow-lg disabled:opacity-60 transition-all flex items-center justify-center gap-2"
+          >
+            {paying ? <Spinner size={18} cls="border-white" /> : null}
+            {paying ? 'Opening payment…' : 'Unlock for ₹99'}
+          </motion.button>
+
+          <p className={`text-center text-xs mt-3 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+            Secured by Razorpay · UPI, Cards & NetBanking accepted
+          </p>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+// ─── LockedSolutionOverlay ────────────────────────────────────────────────────
+function LockedSolutionOverlay({ isDark, onUnlock }: { isDark: boolean; onUnlock: () => void }) {
+  const bg = isDark ? 'bg-[#0d1117]/90 border-[#1e2538]' : 'bg-white/90 border-gray-200';
+  return (
+    <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl border backdrop-blur-sm ${bg}`}>
+      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-3 shadow-lg">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2a5 5 0 0 1 5 5v2h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5zm0 11a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm0-9a3 3 0 0 0-3 3v2h6V7a3 3 0 0 0-3-3z" fill="white"/>
+        </svg>
+      </div>
+      <p className={`font-bold text-sm mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>Solution Locked</p>
+      <p className={`text-xs mb-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+        Free limit reached · Unlock to continue
+      </p>
+      <motion.button
+        whileTap={{ scale: 0.97 }}
+        onClick={onUnlock}
+        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-sm shadow hover:from-indigo-700 hover:to-purple-700 transition-all"
+      >
+        Unlock All Solutions — ₹99
+      </motion.button>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function QuestionViewerPage() {
   const isDark = useTheme();
@@ -432,6 +631,12 @@ export default function QuestionViewerPage() {
   const [toasts, setToasts]                 = useState<ToastItem[]>([]);
   const [isConnected, setIsConnected]       = useState(true);
   const [hasTyped, setHasTyped] = useState(false);
+
+  // ── Paywall state ─────────────────────────────────────────────────────────
+  const [isPremium, setIsPremium]           = useState(false);
+  const [showPaywall, setShowPaywall]       = useState(false);
+  const [solutionsUsedCount, setSolutionsUsedCount] = useState(0);
+  const solutionIsLocked = !isPremium && solutionRequested && solutionsUsedCount > FREE_SOLUTION_LIMIT;
 
   // Dig Deeper
   const [isDigging, setIsDigging]           = useState(false);
@@ -500,6 +705,12 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
       const s = localStorage.getItem('selectedBuddy');
       if (s && AI_BUDDIES[s]) setBuddyId(s);
     } catch {}
+  }, []);
+
+  // ── Load paywall state from localStorage ──────────────────────────────────
+  useEffect(() => {
+    setIsPremium(getIsPremium());
+    setSolutionsUsedCount(getSolutionsUsed());
   }, []);
 
   // ── Network detection ─────────────────────────────────────────────────────
@@ -836,7 +1047,7 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
 
   // ── Post-answer: award coins + motivation + solution ───────────────────────
   // ── Post-answer: award coins + motivation + solution ───────────────────────
-const handlePostAnswer = async (
+  const handlePostAnswer = async (
   correct: boolean, timeSpent: number, q: Question, optKey: string
 ) => {
   const coins = calcCoins(timeSpent, correct);
@@ -860,6 +1071,16 @@ const handlePostAnswer = async (
   const currentBuddyId = buddyId;
   setSolutionBuddyId(currentBuddyId);
 
+  // ── Paywall check ──────────────────────────────────────────────────────
+  // Only count if this question hasn't been answered before (avoid re-counting on revisit)
+  const prevSession = loadSession(currentIndex);
+  const alreadyAnswered = prevSession?.solutionRequested === true;
+  let newCount = solutionsUsedCount;
+  if (!alreadyAnswered && !getIsPremium()) {
+    newCount = incrementSolutionsUsed();
+    setSolutionsUsedCount(newCount);
+  }
+
   // Show solution box immediately (with spinner) — block stays mounted
   setSolutionRequested(true);
   setSolutionLoading(true);
@@ -880,6 +1101,11 @@ const handlePostAnswer = async (
     setTimeout(() => {
       scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 200);
+
+    // Show paywall AFTER solution loads if limit exceeded
+    if (!getIsPremium() && newCount > FREE_SOLUTION_LIMIT) {
+      setTimeout(() => setShowPaywall(true), 600);
+    }
   });
 };
 
@@ -1094,12 +1320,30 @@ const updateStreakData = (correct: boolean) => {
         
           </div>
 
-          {/* Right: coins + timer */}
+          {/* Right: coins + free counter + timer */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors ${T.coinBadge}`}>
               <Image src="coin (1).svg" alt="Coins" width={13} height={13} />
               <span>{rookieCoins}</span>
             </div>
+            {/* Free solutions counter — only show when not premium */}
+            {!isPremium && (
+              <button
+                onClick={() => setShowPaywall(true)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors ${
+                  solutionsUsedCount >= FREE_SOLUTION_LIMIT
+                    ? 'bg-rose-900/40 border-rose-500/50 text-rose-400'
+                    : 'bg-indigo-900/30 border-indigo-500/40 text-indigo-400'
+                }`}
+              >
+                🔓 {Math.max(0, FREE_SOLUTION_LIMIT - solutionsUsedCount)} left
+              </button>
+            )}
+            {isPremium && (
+              <div className="flex items-center gap-1 px-2.5 py-1.5 border border-emerald-500/40 bg-emerald-900/30 rounded-lg text-xs font-semibold text-emerald-400">
+                ✦ Pro
+              </div>
+            )}
             <div className={`flex items-center gap-1 px-2.5 py-1.5 border rounded-lg text-xs transition-colors ${T.btnSecondary}`}>
               <IoTimeOutline size={13} />
               <span>{Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')}</span>
@@ -1347,7 +1591,12 @@ const updateStreakData = (correct: boolean) => {
 {solutionRequested && (
 
 
-  <div key="solution-card" className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
+  <div key="solution-card" className={`relative rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
+    {/* Locked overlay */}
+    {solutionIsLocked && (
+      <LockedSolutionOverlay isDark={isDark} onUnlock={() => setShowPaywall(true)} />
+    )}
+    <div className={solutionIsLocked ? 'blur-sm pointer-events-none select-none' : ''}>
                     <div className="flex items-center gap-2.5 mb-4">
                     <img
   src={solutionBuddy.image}
@@ -1411,6 +1660,7 @@ const updateStreakData = (correct: boolean) => {
                         )}
                       </div>
                     )}
+    </div>{/* end blur wrapper */}
                   </div>
                 )}
 
@@ -1533,6 +1783,19 @@ const updateStreakData = (correct: boolean) => {
           </motion.button>
         </div>
       </div>
+
+      {/* ── Paywall Modal ─────────────────────────────────────────────────────── */}
+      {showPaywall && (
+        <PaywallModal
+          isDark={isDark}
+          onSuccess={() => {
+            setIsPremium(true);
+            setShowPaywall(false);
+            addToast('🎉 Unlocked! Enjoy unlimited solutions.', 'success', 4000);
+          }}
+          onClose={() => setShowPaywall(false)}
+        />
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../../public/src/utils/supabase';
 
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 type User = {
   id: string;
@@ -549,7 +550,7 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
                   >
                     {/* SVG icons – placeholders, user will replace from /public */}
                     {i === 0 && (
-                    <Image src= "standing-man.svg" alt="Coins" width={13} height={13}  className={reached ? 'text-orange-500' : subtext} />
+                    <Image src= "standing-man.svg" alt="Coins" width={13} height={13}  className={reached ? 'text-orange-500' : subtext }  />
                     )}
                     {i === 1 && (
                    <Image src= "athletics.svg" alt="Coins" width={16} height={16}  className={reached ? 'text-orange-500' : subtext} />
