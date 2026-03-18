@@ -299,7 +299,7 @@ const SESSION_KEY = 'questionSessionResponses_v1';
 const FREE_SOLUTION_LIMIT = 5;
 const SOLUTIONS_USED_KEY  = 'rookieSolutionsUsed_v1';
 const PREMIUM_KEY         = 'rookieIsPremium_v1';
-const RAZORPAY_KEY        = 'YOUR_RAZORPAY_KEY_ID'; // 🔑 Replace with your key
+const RAZORPAY_KEY        = 'rzp_live_SSd1hjPP0Paw5Q'; // 🔑 Replace with your key
 const PLAN_AMOUNT_PAISE   = 9900; // ₹99 in paise
 // Per-question AI solution cache (survives re-renders, cleared on tab close)
 const AI_SOL_CACHE_KEY = 'aiSolutionCache_v1';
