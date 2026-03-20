@@ -1079,7 +1079,7 @@ const updateStreakData = (correct: boolean) => {
 
       {/* ── Header ───────────────────────────────────────────────────────────── */}
       <div className={`sticky top-0 z-30 backdrop-blur-sm border-b transition-colors duration-300 ${T.header}`}>
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3">
+        <div className="flex items-center justify-between px-4 sm:px-3 py-3">
           {/* Back button */}
           <motion.button
             whileTap={{ scale: 0.95 }} onClick={() => router.back()}
@@ -1087,13 +1087,28 @@ const updateStreakData = (correct: boolean) => {
           >
             <FiChevronLeft size={18} />
           </motion.button>
+        
+          <span className={`text-[11px] ${T.muted} ml-2`}>
+              Q {currentIndex + 1} / {questions.length}
+            </span>
+        
 
           {/* Chapter title */}
           <div className="flex-1 mx-3 min-w-0 text-center">
             <h1 className="text-sm sm:text-base font-bold truncate">{chapterTitle}</h1>
         
           </div>
-
+          {/* Buddy indicator */}
+            <span className={`text-[11px] font-medium flex items-center gap-1 mr-3 ${T.muted}`}>
+            <img
+  src={buddy.image}
+  alt={buddy.name}
+  width={32}
+  height={32}
+  className="w-8 h-8 rounded-full object-cover"
+/>
+              <span>{buddy.name}</span>
+            </span>
           {/* Right: coins + timer */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors ${T.coinBadge}`}>
@@ -1108,22 +1123,10 @@ const updateStreakData = (correct: boolean) => {
         </div>
 
         {/* Progress bar */}
-        <div className="px-4 sm:px-6 pb-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className={`text-[11px] ${T.muted}`}>
-              Q {currentIndex + 1} / {questions.length}
-            </span>
-            {/* Buddy indicator */}
-            <span className={`text-[11px] font-medium flex items-center gap-1 ${T.muted}`}>
-            <img
-  src={buddy.image}
-  alt={buddy.name}
-  width={32}
-  height={32}
-  className="w-8 h-8 rounded-full object-cover"
-/>
-              <span>{buddy.name}</span>
-            </span>
+        <div className="">
+          <div className="flex items-center justify-between ">
+       
+      
           </div>
           <div className={`h-1 rounded-full overflow-hidden ${T.progress}`}>
           <motion.div
