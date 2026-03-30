@@ -50,32 +50,7 @@ const socialMediaLinks = [
   },
 ];
 
-const FEATURES = [
-  {
-    icon: '⚡',
-    title: 'AI-Powered Solutions',
-    desc: 'Get step-by-step explanations generated instantly for every question.',
-    color: '#3B82F6',
-  },
-  {
-    icon: '🎯',
-    title: 'Smart Practice',
-    desc: 'Questions curated from JEE & NEET papers with year-wise filters.',
-    color: '#10B981',
-  },
-  {
-    icon: '🏆',
-    title: 'Compete & Grow',
-    desc: 'Earn Rookie Coins for correct answers and climb the leaderboard.',
-    color: '#F59E0B',
-  },
-  {
-    icon: '🔖',
-    title: 'Bookmark & Revisit',
-    desc: 'Save tricky questions and come back to them any time.',
-    color: '#8B5CF6',
-  },
-];
+
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function openExternal(url?: string) {
@@ -265,7 +240,6 @@ function MonthlyCalendar({ activeDays, isDark }: { activeDays: string[]; isDark:
   );
 }
 
-// ─── Streak Card ──────────────────────────────────────────────────────────────
 // ─── Streak Card ──────────────────────────────────────────────────────────────
 function StreakCard({ isDark }: { isDark: boolean }) {
   const [streakData, setStreakData] = useState({ current: 0, longest: 0, activeDays: [] as string[] });
@@ -812,12 +786,14 @@ export default function HomePage() {
           <div className="flex items-start justify-between">
             <div>
               <p className={`${subtext} text-sm mb-1`}>
-                {getGreeting()}{firstName ? `, ${firstName}` : ''} 👋
+                {getGreeting()}{firstName ? `, ${firstName}` : ', learner'} 👋
               </p>
               <h1 className="text-3xl font-bold leading-tight tracking-tight">
                 Ready to crack
                 <br />
+               
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-500">
+                
                   {exam || 'your exam'}?
                 </span>
               </h1>
@@ -859,109 +835,7 @@ export default function HomePage() {
           <DailyGoalBar isDark={isDark} />
         </motion.section>
 
-        {/* ── Quick Actions ── */}
-        <motion.section
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          custom={2}
-          className="mt-7"
-        >
-          <h2 className={`text-xs font-bold ${subtext} uppercase tracking-widest mb-3`}>
-            Quick Actions
-          </h2>
-          <div className="grid grid-cols-2 gap-3">
 
-            {/* Practice */}
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => router.push('/explore')}
-              className="relative rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 p-5 text-left overflow-hidden group"
-            >
-              <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full bg-white/5 pointer-events-none group-hover:bg-white/8 transition-all" />
-              <div className="absolute right-2 -bottom-5 w-20 h-20 rounded-full bg-white/5 pointer-events-none" />
-              <p className="text-2xl mb-3">📚</p>
-              <p className="font-bold text-white text-sm">Practice</p>
-              <p className="text-blue-200/80 text-xs mt-0.5">Questions by chapter</p>
-            </motion.button>
-
-            {/* Leaderboard */}
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => router.push('/leaderboard')}
-              className="relative rounded-2xl bg-gradient-to-br from-yellow-600 to-orange-700 p-5 text-left overflow-hidden group"
-            >
-              <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full bg-white/5 pointer-events-none group-hover:bg-white/8 transition-all" />
-              <div className="absolute right-2 -bottom-5 w-20 h-20 rounded-full bg-white/5 pointer-events-none" />
-              <p className="text-2xl mb-3">🏆</p>
-              <p className="font-bold text-white text-sm">Leaderboard</p>
-              <p className="text-orange-200/80 text-xs mt-0.5">See top rankers</p>
-            </motion.button>
-
-            {/* Bookmarks */}
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => router.push('/bookmark')}
-              className={`relative rounded-2xl border p-5 text-left overflow-hidden group transition-all ${card}
-                ${isDark ? 'hover:border-gray-700' : 'hover:border-gray-300'}`}
-            >
-              <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full bg-white/3 pointer-events-none" />
-              <p className="text-2xl mb-3">🔖</p>
-              <p className={`font-bold ${text} text-sm`}>Bookmarks</p>
-              <p className={`${subtext} text-xs mt-0.5`}>Saved questions</p>
-            </motion.button>
-
-            {/* Settings */}
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => router.push('/profile')}
-              className={`relative rounded-2xl border p-5 text-left overflow-hidden group transition-all ${card}
-                ${isDark ? 'hover:border-gray-700' : 'hover:border-gray-300'}`}
-            >
-              <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full bg-white/3 pointer-events-none" />
-              <p className="text-2xl mb-3">⚙️</p>
-              <p className={`font-bold ${text} text-sm`}>Settings</p>
-              <p className={`${subtext} text-xs mt-0.5`}>Profile & preferences</p>
-            </motion.button>
-          </div>
-        </motion.section>
-
-        {/* ── Why Rookie ── */}
-        <motion.section
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          custom={3}
-          className="mt-8"
-        >
-          <h2 className={`text-xs font-bold ${subtext} uppercase tracking-widest mb-3`}>
-            Why Rookie?
-          </h2>
-          <div className="space-y-3">
-            {FEATURES.map((f, i) => (
-              <motion.div
-                key={f.title}
-                variants={fadeUp}
-                initial="hidden"
-                animate="visible"
-                custom={3.5 + i * 0.4}
-                className={`flex items-start gap-4 rounded-2xl border p-4 transition-all ${card}
-                  ${isDark ? 'hover:border-gray-700' : 'hover:border-gray-300'}`}
-              >
-                <div
-                  className="w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                  style={{ backgroundColor: `${f.color}18`, border: `1px solid ${f.color}30` }}
-                >
-                  {f.icon}
-                </div>
-                <div>
-                  <p className={`text-sm font-semibold ${text}`}>{f.title}</p>
-                  <p className={`text-xs ${subtext} mt-0.5 leading-relaxed`}>{f.desc}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.section>
 
         {/* ── Invite Friends ── */}
         <motion.section
@@ -972,26 +846,31 @@ export default function HomePage() {
           className="mt-8"
         >
           <div className="rounded-2xl relative overflow-hidden bg-gradient-to-r from-[#0F7E6B] to-[#2E5BFF] p-5 flex items-center gap-4">
-            <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
-            <div className="absolute right-12 -bottom-8 w-24 h-24 rounded-full bg-white/5 pointer-events-none" />
-
-            <div className="flex-1 min-w-0 z-10">
+          <div className="flex-1 min-w-0 z-10 pb-14">
               <h3 className="text-white font-bold text-base leading-snug">
                 Study with your friends!
               </h3>
               <p className="text-white/75 text-sm mt-1 leading-relaxed">
                 Invite friends to Rookie and learn together.
               </p>
+            <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
+
+            
+            <div className="absolute right-12 -bottom-8 w-24 h-24 rounded-full bg-white/5 pointer-events-none" />
+
+        
               <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={inviteFriends}
-                className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-full text-sm font-bold shadow-md"
-              >
-                Invite Now →
-              </motion.button>
+  whileTap={{ scale: 0.97 }}
+  onClick={inviteFriends}
+  className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-full text-sm font-bold shadow-md"
+>
+ 
+  Invite Now 
+  <img src="/arrow.png" alt="invite" className="w-4 h-4" />
+</motion.button>
             </div>
 
-            <div className="w-28 h-20 relative hidden sm:block flex-shrink-0 z-10">
+            <div className="w-58 h-40 relative hidden sm:block flex-shrink-0 z-10">
               <Image
                 src="/invite_friends.png"
                 alt="Invite friends"
@@ -1002,43 +881,66 @@ export default function HomePage() {
           </div>
         </motion.section>
 
-        {/* ── Social Media ── */}
         <motion.section
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          custom={7}
-          className="mt-5"
+  variants={fadeUp}
+  initial="hidden"
+  animate="visible"
+  custom={7}
+  className="mt-5"
+>
+  <div className="rounded-2xl p-5 bg-[#F05A24] relative overflow-hidden">
+
+    {/* Background circles */}
+    <div className="absolute -left-8 -bottom-8 w-36 h-36 rounded-full bg-white/5 pointer-events-none" />
+    <div className="absolute right-2 -top-8 w-28 h-28 rounded-full bg-white/5 pointer-events-none" />
+
+
+    <h3 className="text-white font-bold text-base text-center relative z-10">
+      We're on social media
+    </h3>
+
+    <p className="text-white/75 text-sm text-center mt-1 relative z-10">
+      Follow us and share with your friends.
+    </p>
+
+    {/* 🆕 Image BEFORE buttons */}
+    <div className="flex justify-center mt-6 relative z-10">
+      <Image
+        src="/social_illustration.png"   // your image path
+        alt="Social media"
+        width={240}
+        height={240}
+        className="object-contain"
+      />
+    </div>
+
+    {/* Buttons */}
+    <div className="flex flex-wrap justify-center gap-3 mt-4 relative z-10">
+      {socialMediaLinks.map((item) => (
+        <motion.button
+          key={item.label}
+          whileTap={{ scale: 0.96 }}
+          onClick={() => openExternal(item.url)}
+          className="flex items-center gap-2.5 bg-white rounded-xl px-4 py-2.5 w-[148px] justify-start shadow-sm hover:shadow-md transition-shadow"
+          aria-label={`Open ${item.label}`}
         >
-          <div className="rounded-2xl p-5 bg-[#F05A24] relative overflow-hidden">
-            <div className="absolute -left-8 -bottom-8 w-36 h-36 rounded-full bg-white/5 pointer-events-none" />
-            <div className="absolute right-2 -top-8 w-28 h-28 rounded-full bg-white/5 pointer-events-none" />
-
-            <h3 className="text-white font-bold text-base text-center relative z-10">
-              We're on social media
-            </h3>
-            <p className="text-white/75 text-sm text-center mt-1 relative z-10">
-              Follow us and share with your friends.
-            </p>
-
-            <div className="flex flex-wrap justify-center gap-3 mt-4 relative z-10">
-              {socialMediaLinks.map((item) => (
-                <motion.button
-                  key={item.label}
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => openExternal(item.url)}
-                  className="flex items-center gap-2.5 bg-white rounded-xl px-4 py-2.5 w-[148px] justify-start shadow-sm hover:shadow-md transition-shadow"
-                  aria-label={`Open ${item.label}`}
-                >
-                  <div className="w-5 h-5 relative flex-shrink-0">
-                    <Image src={item.icon} alt={item.label} fill style={{ objectFit: 'contain' }} />
-                  </div>
-                  <span className="text-sm font-semibold text-black">{item.label}</span>
-                </motion.button>
-              ))}
-            </div>
+          <div className="w-5 h-5 relative flex-shrink-0">
+            <Image
+              src={item.icon}
+              alt={item.label}
+              fill
+              style={{ objectFit: 'contain' }}
+            />
           </div>
-        </motion.section>
+          <span className="text-sm font-semibold text-black">
+            {item.label}
+          </span>
+        </motion.button>
+      ))}
+    </div>
+
+  </div>
+</motion.section>
 
         {/* ── Footer ── */}
         <motion.footer
@@ -1055,6 +957,7 @@ export default function HomePage() {
                 <Image src="/lg.png" alt="Rookie" fill style={{ objectFit: 'contain' }} />
               </div>
               <div>
+               
                 <p className={`font-bold text-sm leading-none ${text}`}>Rookie</p>
                 <p className={`text-xs mt-0.5 ${subtext}`}>AI-powered exam prep</p>
               </div>

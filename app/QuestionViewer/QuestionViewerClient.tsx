@@ -136,7 +136,7 @@ export const AI_BUDDIES: Record<string, {
   },
   '4': {
     name: 'Ritu',
-    image: '/ritu.jpg',
+    image: '/girlinchair.png',
     columnKey: 'buddy_Ritu',
     color: '#F59E0B',
     systemPrompt: `
@@ -1036,7 +1036,7 @@ const updateStreakData = (correct: boolean) => {
 };
 
 
-/////////////////////////////////////////////////////////////////////////////////////
+
   // ── Loading screen ────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -1170,7 +1170,7 @@ const updateStreakData = (correct: boolean) => {
               </div>
 
               {/* Question text */}
-              <div className="text-base sm:text-[17px] font-medium leading-relaxed">
+              <div className="question-body__text font-medium">
                 {renderLatex(Q.question_text)}
               </div>
 

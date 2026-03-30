@@ -5,7 +5,7 @@ const imagepath = {
     stark: "/Stark Wallpaper.jpeg",
     Rei: "/download (17).jpeg",
     arrow: "/arrow.png",
-    Ritu: "/ritu.jpg",
+    Ritu: "/girlinchair.png",
     Shreya: "/shery11.jpeg",
     Neha: "/assets_task_01jttq36fkem8br965ak8qh0sp_1746800911_img_2.webp",
     Jeetu: "/HD-wallpaper-kota-factory-lip-jeetu-bhaiya.jpg",
