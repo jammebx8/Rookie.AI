@@ -279,8 +279,11 @@ export default function ProfilePage() {
   
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
+  const [profileImageModalVisible, setProfileImageModalVisible] = useState<number | null>(null);
 
   // User data state
   const [name, setName] = useState('');
@@ -336,10 +339,15 @@ export default function ProfilePage() {
   };
 
   const handleSave = async () => {
+    setSaving(true);
+    setSaveError('');
     try {
+      // 1. Update localStorage
       const storedUser = localStorage.getItem('@user');
+      let userId: string | null = null;
       if (storedUser) {
         const userData = JSON.parse(storedUser);
+        userId = userData.id || userData.user_id || null;
         const updatedUser = {
           ...userData,
           name,
@@ -354,9 +362,35 @@ export default function ProfilePage() {
       localStorage.setItem('selectedBuddy', selectedBuddy.toString());
       localStorage.setItem('goal', goal);
 
+      // 2. Sync to Supabase users table
+      if (!userId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id ?? null;
+      }
+
+      if (userId) {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            name,
+            class: selectedClass,
+            exam: targetExam,
+           
+          })
+          .eq('id', userId);
+
+        if (error) {
+          console.error('Supabase update error:', error);
+          setSaveError('Saved locally, but failed to sync to server.');
+        }
+      }
+
       setEditing(false);
     } catch (error) {
       console.error('Error saving profile:', error);
+      setSaveError('Something went wrong while saving.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -526,13 +560,16 @@ export default function ProfilePage() {
                 exit={{ opacity: 0, height: 0 }}
               >
                 <div className={`border-t my-5 sm:my-6 transition-colors ${themeClasses.border}`} />
+                {saveError && (
+                  <p className="text-red-400 text-xs sm:text-sm mb-3 text-center">{saveError}</p>
+                )}
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   <motion.button
                     variants={buttonVariants}
                     initial="rest"
                     whileHover="hover"
                     whileTap="tap"
-                    onClick={() => setEditing(false)}
+                    onClick={() => { setEditing(false); setSaveError(''); }}
                     className={`flex-1 py-3 rounded-full font-medium text-sm sm:text-base border transition-all ${themeClasses.button.secondary}`}
                   >
                     Cancel
@@ -540,12 +577,13 @@ export default function ProfilePage() {
                   <motion.button
                     variants={buttonVariants}
                     initial="rest"
-                    whileHover="hover"
-                    whileTap="tap"
+                    whileHover={saving ? "rest" : "hover"}
+                    whileTap={saving ? "rest" : "tap"}
                     onClick={handleSave}
-                    className={`flex-1 py-3 rounded-full font-semibold text-sm sm:text-base transition-all ${themeClasses.button.primary}`}
+                    disabled={saving}
+                    className={`flex-1 py-3 rounded-full font-semibold text-sm sm:text-base transition-all ${themeClasses.button.primary} ${saving ? 'opacity-70 cursor-not-allowed' : ''}`}
                   >
-                    Save
+                    {saving ? 'Saving…' : 'Save'}
                   </motion.button>
                 </div>
               </motion.div>
@@ -579,14 +617,26 @@ export default function ProfilePage() {
                     : themeClasses.card
                 }`}
               >
-                <div className="relative w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0">
+                <motion.div
+                  className="relative w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0 group"
+                  whileTap={{ scale: 0.9 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setProfileImageModalVisible(buddy.id);
+                  }}
+                >
                   <Image
                     src={buddy.image}
                     alt={buddy.name}
                     fill
                     className="rounded-full object-cover border-2 border-white"
                   />
-                </div>
+                  <div className="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+                    </svg>
+                  </div>
+                </motion.div>
                 <div className="flex-1 text-left">
                   <h3 className={`font-medium text-sm sm:text-base ${themeClasses.text.primary}`}>{buddy.name}</h3>
                   <p className={`text-xs sm:text-sm line-clamp-2 ${themeClasses.text.secondary}`}>{buddy.description}</p>
@@ -631,6 +681,55 @@ export default function ProfilePage() {
           <p className={`text-center text-xs sm:text-sm ${themeClasses.text.muted}`}>v2.3.1</p>
         </motion.div>
       </motion.div>
+
+      {/* Profile Image Modal */}
+      <AnimatePresence>
+        {profileImageModalVisible !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={`fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 px-4 transition-all ${themeClasses.modal.bg}`}
+            onClick={() => setProfileImageModalVisible(null)}
+          >
+            <motion.div
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={(e) => e.stopPropagation()}
+              className={`border rounded-2xl sm:rounded-3xl p-6 sm:p-8 max-w-xs w-full flex flex-col items-center gap-4 transition-all ${themeClasses.modal.card}`}
+            >
+              <div className="relative w-48 h-48 sm:w-56 sm:h-56 rounded-2xl overflow-hidden shadow-xl">
+                <Image
+                  src={aiBuddies.find((b) => b.id === profileImageModalVisible)?.image || ''}
+                  alt="Profile"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+              <div className="text-center">
+                <h3 className={`font-semibold text-lg ${themeClasses.text.primary}`}>
+                  {aiBuddies.find((b) => b.id === profileImageModalVisible)?.name}
+                </h3>
+                <p className={`text-xs sm:text-sm mt-1 ${themeClasses.text.secondary}`}>
+                  {aiBuddies.find((b) => b.id === profileImageModalVisible)?.description}
+                </p>
+              </div>
+              <motion.button
+                variants={buttonVariants}
+                initial="rest"
+                whileHover="hover"
+                whileTap="tap"
+                onClick={() => setProfileImageModalVisible(null)}
+                className={`px-8 py-2.5 rounded-full font-medium text-sm transition-all border ${themeClasses.button.secondary}`}
+              >
+                Close
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Delete Modal */}
       <AnimatePresence>
