@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../../public/src/utils/supabase';
+import { syncStreakFromSupabase, readStreakFromLocal } from '../../../public/src/utils/streakUtils'; // adjust path
 
 
 
@@ -87,7 +88,6 @@ function countSolvedToday(): number {
   }
 }
 
-// Compute streak from stored streak data
 function computeStreak(): { current: number; longest: number; activeDays: string[] } {
   try {
     const raw = localStorage.getItem(STREAK_KEY);
@@ -248,36 +248,29 @@ function StreakCard({ isDark }: { isDark: boolean }) {
 
   const todayIndex = getDayOfWeek();
 
-  // ── Reload streak data ──
   const reloadStreak = () => {
-    setStreakData(computeStreak());
+    setStreakData(readStreakFromLocal());
   };
-
+  
   useEffect(() => {
-    reloadStreak();
-
-    // Listen for storage changes (from other tabs/QuestionViewer)
+    // First: sync from Supabase (universal source of truth), then reload
+    syncStreakFromSupabase().then(() => reloadStreak());
+  
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STREAK_KEY) {
-        reloadStreak();
-      }
+      if (e.key === 'rookie_streak_data') reloadStreak();
     };
     window.addEventListener('storage', handleStorageChange);
-
-    // Listen for page visibility (when user returns to this tab)
+  
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        reloadStreak();
-      }
+      if (!document.hidden) reloadStreak();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
+  
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
-
   const handleShare = async () => {
     const text = `🔥 I'm on a ${streakData.current}-day streak on Rookie! Join me at https://rookie-ai.vercel.app`;
     try {
@@ -327,9 +320,16 @@ function StreakCard({ isDark }: { isDark: boolean }) {
 
       {/* Day dots */}
       <div className="flex items-center gap-2 mb-4">
-        {DAYS.map((day, i) => {
-          const isActive = i < todayIndex || (i === todayIndex && streakData.current > 0);
-          const isCurrent = i === todayIndex;
+      {DAYS.map((day, i) => {
+  // Calculate actual calendar date for this dot (Mon=0 ... Sun=6)
+  const today = new Date();
+  const todayDow = today.getDay() === 0 ? 6 : today.getDay() - 1; // Mon=0
+  const diff = i - todayDow;
+  const dotDate = new Date(today);
+  dotDate.setDate(today.getDate() + diff);
+  const dotKey = `${dotDate.getFullYear()}-${dotDate.getMonth() + 1}-${dotDate.getDate()}`;
+  const isActive = streakData.activeDays.includes(dotKey);
+  const isCurrent = i === todayIndex;
           return (
             <div key={i} className="flex flex-col items-center gap-1.5 flex-1">
               <div

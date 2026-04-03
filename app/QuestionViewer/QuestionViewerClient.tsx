@@ -13,6 +13,7 @@ import { IoTimeOutline, IoBookmark } from 'react-icons/io5';
 import { supabase } from '../../public/src/utils/supabase';
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
+import { updateStreak } from '../../public/src/utils/streakUtils'; // adjust path
 
 // ─── AI Buddy Definitions ────────────────────────────────────────────────────
 // Each buddy has: id (matches localStorage "selectedBuddy"), name, emoji, columnKey (Supabase col), systemPrompt
@@ -1135,7 +1136,7 @@ const handlePostAnswer = async (
   }
 
   // 🔥 ADD THIS LINE - Update streak after correct answer
-  updateStreakData(correct);
+  updateStreak();
 
   const currentBuddyId = buddyId;
   setSolutionBuddyId(currentBuddyId);
@@ -1261,59 +1262,7 @@ const handlePostAnswer = async (
   };
 
 
-  // ── Streak tracking helpers ───────────────────────────────────────────────
-const STREAK_KEY = 'rookie_streak_data';
-const DAILY_SOLVED_KEY = 'rookie_solved_';
 
-function getTodayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
-function getYesterdayKey() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
-
-
-//////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Update streak data after solving a question
-const updateStreakData = (correct: boolean) => {
-  if (!correct) return; // Only update for correct answers
-
-  try {
-    const todayKey = getTodayKey();
-    
-    // 1. Mark question as solved today
-    const solvedCount = parseInt(localStorage.getItem(`${DAILY_SOLVED_KEY}${todayKey}`) || '0', 10);
-    localStorage.setItem(`${DAILY_SOLVED_KEY}${todayKey}`, String(solvedCount + 1));
-
-    // 2. Update streak data
-    const raw = localStorage.getItem(STREAK_KEY);
-    const streakData = raw ? JSON.parse(raw) : { current: 0, longest: 0, activeDays: [] };
-
-    const yesterday = getYesterdayKey();
-    const wasActiveYesterday = streakData.activeDays?.includes(yesterday);
-
-    // If this is the first solve today
-    if (!streakData.activeDays.includes(todayKey)) {
-      // Increment streak if yesterday was active, or reset to 1
-      const newCurrent = wasActiveYesterday ? streakData.current + 1 : 1;
-      
-      streakData.current = newCurrent;
-      streakData.longest = Math.max(streakData.longest, newCurrent);
-      streakData.activeDays = [...(streakData.activeDays || []), todayKey];
-
-      localStorage.setItem(STREAK_KEY, JSON.stringify(streakData));
-    }
-  } catch (err) {
-    console.error('Error updating streak:', err);
-  }
-};
 
 
 
