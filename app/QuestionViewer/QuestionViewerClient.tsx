@@ -849,38 +849,90 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
   }, []);
 
 
-  // ── Load userId + save recent session ─────────────────────────────────────
-useEffect(() => {
-  supabase.auth.getUser().then(({ data: { user } }) => {
-    if (!user) return;
-    setUserId(user.id);
-    // Save recent session
-    supabase.from('user_recent_session').upsert({
-      user_id: user.id,
-      chapter_title: chapterTitle,
-      subject_name: subjectName,
-      image_key: imageKey,
-      question_index: currentIndex,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' });
-  });
-}, [chapterTitle]);
-
-
-
-
-// Update recent question_index when user navigates
-useEffect(() => {
-  if (!userId || !chapterTitle) return;
-  supabase.from('user_recent_session').upsert({
-    user_id: userId,
-    chapter_title: chapterTitle,
-    subject_name: subjectName,
-    image_key: imageKey,
-    question_index: currentIndex,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id' });
-}, [currentIndex, userId]);
+  // ── Load userId + save recent session ─────────────────────────────────
+  useEffect(() => {
+    const saveSession = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        console.error('❌ Auth error:', authError?.message || 'No user');
+        return;
+      }
+  
+      if (!chapterTitle) {
+        console.warn('⚠️ No chapterTitle provided');
+        return;
+      }
+  
+      setUserId(user.id);
+  
+      // Verify user exists in users table
+      const { data: userExists, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+  
+      if (checkError || !userExists) {
+        console.warn('⚠️ User not in users table, creating...');
+        await supabase.from('users').upsert({
+          id: user.id,
+          email: user.email,
+          created_at: new Date().toISOString(),
+        }, { onConflict: 'id' });
+      }
+  
+      // Now save the session
+      const { error: upsertError } = await supabase
+        .from('user_recent_session')
+        .upsert({
+          user_id: user.id,
+          chapter_title: chapterTitle,
+          subject_name: subjectName,
+          image_key: imageKey,
+          question_index: currentIndex,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+  
+      if (upsertError) {
+        console.error('❌ Session save failed:', {
+          message: upsertError.message,
+          details: upsertError.details,
+          hint: upsertError.hint,
+        });
+      } else {
+        console.log('✅ Session saved successfully');
+      }
+    };
+  
+    saveSession();
+  }, [chapterTitle, subjectName, imageKey]);
+  
+  // Update recent question_index when user navigates
+  useEffect(() => {
+    if (!userId || !chapterTitle) return;
+  
+    const updateSession = async () => {
+      const { error } = await supabase
+        .from('user_recent_session')
+        .upsert({
+          user_id: userId,
+          chapter_title: chapterTitle,
+          subject_name: subjectName,
+          image_key: imageKey,
+          question_index: currentIndex,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+  
+      if (error) {
+        console.error('❌ Index update failed:', error.message);
+      } else {
+        console.log('✅ Question index updated:', currentIndex);
+      }
+    };
+  
+    updateSession();
+  }, [currentIndex, userId, chapterTitle, subjectName, imageKey]);
 
 
 
