@@ -134,14 +134,26 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
       iconUnfilled: '/book_unfilled.png',
     },
     {
-      name: 'Settings',
-      path: '/profile',
-      iconFilled: '/set_filled.png',
-      iconUnfilled: '/set_unfilled.png',
+      name: 'Bookmarks',
+      path: '/bookmark',
+      iconFilled: '/bookmark-simple-fill.png',
+      iconUnfilled: '/bookmark-simple.png',
     },
+   
 
+  
     
   ];
+
+  const settingsTab = {
+    name: 'Settings',
+    path: '/profile',
+    iconFilled: '/set_fill.png',
+    iconUnfilled: '/set_unfilled.png',
+  };
+
+ 
+  const isSettingsActive = pathname === '/profile';
 
   // Colors based on theme
   const bg = isDark ? 'bg-[#000000]' : 'bg-[#F8F9FF]';
@@ -291,21 +303,48 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          {/* Bookmark at bottom of sidebar */}
-          <div className={`px-3 pb-4 border-t ${borderColor} pt-4`}>
-            <button
-              onClick={() => router.push('/bookmark')}
-              className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-all duration-200 ${
-                isDark
-                  ? 'text-gray-400 hover:text-white hover:bg-white/5'
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
-              }`}
-              type="button"
-            >
-              <BookmarkIcon isDark={isDark} />
-              <span className="text-sm font-medium">Bookmarks</span>
-            </button>
-          </div>
+          {/* Settings at bottom of sidebar */}
+<div className={`px-3 pb-4 border-t ${borderColor} pt-4`}>
+  <button
+    onClick={() => router.push('/profile')}
+    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-all duration-200 ${
+      isDark
+        ? 'text-gray-400 hover:text-white hover:bg-white/5'
+        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+    }`}
+    type="button"
+  >
+  <Image
+  src={
+    isSettingsActive
+      ? settingsTab?.iconFilled || '/set_fill.png'
+      : settingsTab?.iconUnfilled || '/set_unfilled.png'
+  }
+  alt="Settings"
+  width={20}
+  height={20}
+  className={`object-contain ${
+    isSettingsActive
+      ? isDark
+        ? 'brightness-0 invert'
+        : ''
+      : isDark
+        ? 'brightness-0 invert opacity-50'
+        : 'brightness-0 opacity-40'
+  }`}
+  style={
+    isSettingsActive && !isDark
+      ? {
+          filter:
+            'invert(29%) sepia(89%) saturate(1000%) hue-rotate(228deg) brightness(90%)',
+        }
+      : undefined
+  }
+/>
+    
+    <span className="text-sm font-medium">Settings</span>
+  </button>
+</div>
         </motion.aside>
 
         {/* ─── MAIN CONTENT ─────────────────────────────────────── */}
@@ -371,15 +410,41 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
 
           {/* Bookmark as last tab on mobile */}
           <button
-            onClick={() => router.push('/bookmark')}
+            onClick={() => router.push('/profile')}
             className="flex flex-col items-center justify-center flex-1 py-2"
             type="button"
             aria-label="Bookmarks"
           >
             <div className="mb-1">
-              <BookmarkIcon isDark={isDark} />
+            <Image
+  src={
+    isSettingsActive
+      ? settingsTab?.iconFilled || '/set_fill.png'
+      : settingsTab?.iconUnfilled || '/set_unfilled.png'
+  }
+  alt="Settings"
+  width={20}
+  height={20}
+  className={`object-contain ${
+    isSettingsActive
+      ? isDark
+        ? 'brightness-0 invert'
+        : ''
+      : isDark
+        ? 'brightness-0 invert opacity-50'
+        : 'brightness-0 opacity-40'
+  }`}
+  style={
+    isSettingsActive && !isDark
+      ? {
+          filter:
+            'invert(29%) sepia(89%) saturate(1000%) hue-rotate(228deg) brightness(90%)',
+        }
+      : undefined
+  }
+/>
             </div>
-            <span className={`text-[10px] font-medium ${textMuted}`}>Saved Qs</span>
+            <span className={`text-[10px] font-medium ${textMuted}`}>Settings</span>
           </button>
         </div>
       </motion.nav>
