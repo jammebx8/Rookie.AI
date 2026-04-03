@@ -351,7 +351,7 @@ export default function ProfilePage() {
         const updatedUser = {
           ...userData,
           name,
-          class: selectedClass,
+          cl: selectedClass,
           exam: targetExam,
         };
         localStorage.setItem('@user', JSON.stringify(updatedUser));
@@ -373,7 +373,7 @@ export default function ProfilePage() {
           .from('users')
           .update({
             name,
-            class: selectedClass,
+            cl: selectedClass,
             exam: targetExam,
            
           })
