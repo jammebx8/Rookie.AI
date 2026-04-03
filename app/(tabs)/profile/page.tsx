@@ -300,13 +300,22 @@ export default function ProfilePage() {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
 
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
+ 
+ 
   const loadUserData = async () => {
+    // Reset daily count if it's a new day
+    const storedTodayDate = localStorage.getItem('questionsToday_date');
+    if (storedTodayDate !== new Date().toDateString()) {
+      localStorage.setItem('questionsToday', '0');
+      localStorage.setItem('questionsToday_date', new Date().toDateString());
+    }
     try {
       const storedUser = localStorage.getItem('@user');
+
+      useEffect(() => {
+        loadUserData();
+      }, []);
+
       if (storedUser) {
         const userData = JSON.parse(storedUser);
         setName(userData.name || '');
@@ -314,6 +323,11 @@ export default function ProfilePage() {
         setSelectedClass(userData.class || '12th');
         setTargetExam(userData.exam || 'JEE Mains');
       }
+
+
+      
+
+
 
       const storedBuddy = parseInt(localStorage.getItem('selectedBuddy') || '1');
       const storedGoal = localStorage.getItem('goal') || '';
@@ -337,6 +351,9 @@ export default function ProfilePage() {
       setLoading(false);
     }
   };
+
+
+
 
   const handleSave = async () => {
     setSaving(true);

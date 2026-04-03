@@ -546,6 +546,7 @@ type Question = {
   sol_ai?: string;
   year?: number | string;
   question_img_url?: string | null;
+  solution_image_url?: string | null;
   option_a_img?: string | null;
   option_b_img?: string | null;
   option_c_img?: string | null;
@@ -679,6 +680,65 @@ function CheckIcon() {
   );
 }
 
+
+
+// ─── Buddy Selector Modal ─────────────────────────────────────────────────
+function BuddySelectorModal({
+  currentBuddyId, onSelect, onClose, isDark
+}: {
+  currentBuddyId: string;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+  isDark: boolean;
+}) {
+  const buddyList = Object.entries(AI_BUDDIES);
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+        onClick={e => e.stopPropagation()}
+        className={`w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl border overflow-hidden ${isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'}`}
+        style={{ maxHeight: '80vh' }}
+      >
+        <div className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
+          <h3 className="font-bold text-base">Choose Your Buddy</h3>
+          <button onClick={onClose} className={`w-8 h-8 rounded-full flex items-center justify-center ${isDark ? 'bg-[#1e2538] text-white' : 'bg-gray-100 text-gray-700'}`}>
+            <FiX size={15} />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-4 space-y-2" style={{ maxHeight: 'calc(80vh - 64px)' }}>
+          {buddyList.map(([id, b]) => (
+            <motion.button
+              key={id} whileTap={{ scale: 0.98 }}
+              onClick={() => { onSelect(id); onClose(); }}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                currentBuddyId === id
+                  ? isDark ? 'bg-indigo-900/40 border-indigo-500' : 'bg-indigo-50 border-indigo-400'
+                  : isDark ? 'bg-[#111827] border-[#1e2538] hover:border-[#2a3548]' : 'bg-gray-50 border-[#E5E7EB] hover:border-gray-300'
+              }`}
+            >
+              <img src={b.image} alt={b.name} className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-white/20" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">{b.name}</p>
+                <div className="w-3 h-3 rounded-full mt-1" style={{ backgroundColor: b.color }} />
+              </div>
+              {currentBuddyId === id && (
+                <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0">
+                  <FiCheck size={13} className="text-white" />
+                </div>
+              )}
+            </motion.button>
+          ))}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function QuestionViewerPage() {
   const isDark = useTheme();
@@ -691,7 +751,8 @@ export default function QuestionViewerPage() {
   // ── Core state ────────────────────────────────────────────────────────────
   const [loading, setLoading]               = useState(true);
   const [questions, setQuestions]           = useState<Question[]>([]);
-  const [currentIndex, setCurrentIndex]     = useState(0);
+  const startIndexParam = parseInt(sp.get('startIndex') || '0');
+  const [currentIndex, setCurrentIndex] = useState(startIndexParam);
   const [rookieCoins, setRookieCoins]       = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isCorrect, setIsCorrect]           = useState<boolean | null>(null);
@@ -713,6 +774,10 @@ export default function QuestionViewerPage() {
   const [toasts, setToasts]                 = useState<ToastItem[]>([]);
   const [isConnected, setIsConnected]       = useState(true);
   const [hasTyped, setHasTyped] = useState(false);
+  // ── User activity tracking ─────────────────────────────────────────────────
+const [userId, setUserId] = useState<string | null>(null);
+const [buddyModalOpen, setBuddyModalOpen] = useState(false);
+const answeredThisSession = useRef<Set<string>>(new Set()); // track which q_ids answered THIS session
 
   // Dig Deeper
   const [isDigging, setIsDigging]           = useState(false);
@@ -782,6 +847,43 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
       if (s && AI_BUDDIES[s]) setBuddyId(s);
     } catch {}
   }, []);
+
+
+  // ── Load userId + save recent session ─────────────────────────────────────
+useEffect(() => {
+  supabase.auth.getUser().then(({ data: { user } }) => {
+    if (!user) return;
+    setUserId(user.id);
+    // Save recent session
+    supabase.from('user_recent_session').upsert({
+      user_id: user.id,
+      chapter_title: chapterTitle,
+      subject_name: subjectName,
+      image_key: imageKey,
+      question_index: currentIndex,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+  });
+}, [chapterTitle]);
+
+
+
+
+// Update recent question_index when user navigates
+useEffect(() => {
+  if (!userId || !chapterTitle) return;
+  supabase.from('user_recent_session').upsert({
+    user_id: userId,
+    chapter_title: chapterTitle,
+    subject_name: subjectName,
+    image_key: imageKey,
+    question_index: currentIndex,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' });
+}, [currentIndex, userId]);
+
+
+
 
   // ── Network detection ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -904,8 +1006,11 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
         // Solution was requested but not yet in cache — re-fetch silently
         setSolution('');
         setSolutionLoading(true);
+
         if (q) {
-          generateAISolution(q).then((aiSol) => {
+          const currentBuddyId = buddyId;
+          generateAISolution(q, currentBuddyId, AI_BUDDIES[currentBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]).then((aiSol) => {
+
             setSolution(aiSol);
             setSolutionLoading(false);
             saveSession({ solution: aiSol, solutionRequested: true, solutionBuddyId: savedBuddyId, hasTyped: true });
@@ -944,6 +1049,9 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [selectedOption, currentIndex, questions]);
+
+
+
 
   // ── Typing effect ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1014,6 +1122,31 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
     }
   };
 
+
+
+  // ── Save user activity to Supabase ────────────────────────────────────────
+const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('user_activity').upsert({
+      user_id: user.id,
+      chapter_title: chapterTitle,
+      subject_name: subjectName,
+      image_key: imageKey,
+      question_id: q.question_id,
+      question_index: currentIndex,
+      is_correct: correct,
+      time_spent_seconds: timeSpent,
+      buddy_id: buddyId,
+      answered_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,chapter_title,question_id' });
+    answeredThisSession.current.add(q.question_id);
+  } catch (err) {
+    console.error('saveUserActivity error:', err);
+  }
+};
+
   // ── Bookmark handler ──────────────────────────────────────────────────────
   const handleBookmark = () => {
     try {
@@ -1056,35 +1189,41 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
 
 
   // ── Generate buddy-flavoured AI solution ───────────────────────────────────
-  const generateAISolution = async (q: Question): Promise<string> => {
+  // REPLACE WITH THIS:
+  // ── buddyId and buddy are now passed as parameters to avoid stale closures ──
+  const generateAISolution = async (
+    q: Question,
+    activeBuddyId: string,
+    activeBuddy: typeof AI_BUDDIES[string]
+  ): Promise<string> => {
     try {
-      const col = buddy.columnKey;
-
-      // 0. Check sessionStorage cache first (survives re-renders within the same tab)
-      const cached = loadAISolFromCache(q.question_id, buddyId);
+      const col = activeBuddy.columnKey;
+  
+      // 0. Check sessionStorage cache first
+      const cached = loadAISolFromCache(q.question_id, activeBuddyId);
       if (cached) return cached;
-
-      // 1. Check in-memory question object first (fastest)
+  
+      // 1. Check in-memory question object
       if (q[col] && typeof q[col] === 'string' && q[col].trim().length > 0) {
-        saveAISolToCache(q.question_id, buddyId, q[col] as string);
+        saveAISolToCache(q.question_id, activeBuddyId, q[col] as string);
         return q[col] as string;
       }
-
+  
       // 2. Re-fetch from Supabase to catch solutions saved by other users
       const { data: freshRow } = await supabase
         .from(chapterTitle)
         .select(col)
         .eq('question_id', q.question_id)
         .single();
-
+  
       if ((freshRow as any)?.[col] && typeof (freshRow as any)?.[col] === 'string' && (freshRow as any)?.[col].trim().length > 0) {
         const dbSol = (freshRow as any)?.[col] as string;
-        saveAISolToCache(q.question_id, buddyId, dbSol);
+        saveAISolToCache(q.question_id, activeBuddyId, dbSol);
         setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: dbSol } : item));
         return dbSol;
       }
-
-      // 3. Only generate if truly not found
+  
+      // 3. Generate via API
       const res = await axios.post(`${API_BASE}/solution`, {
         action: 'generate_solution',
         question_text: q.question_text,
@@ -1092,77 +1231,141 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
         option_C: q.option_c, option_D: q.option_d,
         solution: q.solution,
         correct_option: q.correct_option,
-        buddy_id: buddyId,
-        buddy_name: buddy.name,
-        buddy_system_prompt: buddy.systemPrompt,
+        buddy_id: activeBuddyId,
+        buddy_name: activeBuddy.name,
+        buddy_system_prompt: activeBuddy.systemPrompt,
       });
-
+  
       const aiSol = res.data.solution || q.solution;
-
-      // 4. Save to sessionStorage cache IMMEDIATELY so re-renders find it
-      saveAISolToCache(q.question_id, buddyId, aiSol);
-
-      // 5. Fire Supabase write in background — do NOT await it, return immediately
+  
+      // 4. Cache immediately
+      saveAISolToCache(q.question_id, activeBuddyId, aiSol);
+  
+      // 5. Background Supabase write
       supabase.from(chapterTitle).update({ [col]: aiSol }).eq('question_id', q.question_id).then(() => {
         setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: aiSol } : item));
       });
-
+  
       return aiSol;
     } catch { return q.solution; }
-    // NOTE: No finally setSolutionLoading here — caller (handlePostAnswer) owns that state
   };
 
   // ── Generate buddy motivation ──────────────────────────────────────────────
  
 
   // ── Post-answer: award coins + motivation + solution ───────────────────────
-  // ── Post-answer: award coins + motivation + solution ───────────────────────
-const handlePostAnswer = async (
-  correct: boolean, timeSpent: number, q: Question, optKey: string
-) => {
-  const coins = calcCoins(timeSpent, correct);
-
-  if (correct) {
-    addToast(coins > 0 ? `✓ Correct! +${coins} Coins earned` : '✓ Correct!', 'coin', 3500);
-  } else {
-    addToast(`✗ Not quite — keep going!`, 'error', 3000);
-  }
-
-  // Anti-cheat: only award coins if this question has NOT been answered correctly before
-  if (correct && coins > 0) {
+  const handlePostAnswer = async (
+    correct: boolean, timeSpent: number, q: Question, optKey: string
+  ) => {
+    const coins = calcCoins(timeSpent, correct);
+  
+    if (correct) {
+      addToast(coins > 0 ? `✓ Correct! +${coins} Coins earned` : '✓ Correct!', 'coin', 3500);
+    } else {
+      addToast(`✗ Not quite — keep going!`, 'error', 3000);
+    }
+  
+    // Anti-cheat: only award coins if not already rewarded
+    if (correct && coins > 0) {
+      const prev = loadSession(currentIndex);
+      const alreadyRewarded = prev?.isCorrect === true;
+      if (!alreadyRewarded) updateRookieCoins(coins);
+    }
+  
+    updateStreak();
+  
+    // ✅ Save activity for ALL answered questions (not just correct)
+    // Also update localStorage daily count
     const prev = loadSession(currentIndex);
-    const alreadyRewarded = prev?.isCorrect === true;
-    if (!alreadyRewarded) updateRookieCoins(coins);
-  }
+    const alreadyAnswered = prev?.selectedOption != null;
+    if (!alreadyAnswered) {
+      // Increment questions solved today (regardless of correct/wrong)
+      const todayKey = `questionsToday_${new Date().toDateString()}`;
+      const todayCount = parseInt(localStorage.getItem(todayKey) || '0') + 1;
+      localStorage.setItem(todayKey, todayCount.toString());
+      localStorage.setItem('questionsToday', todayCount.toString());
+  
+      // Also increment week/month
+      const weekCount = parseInt(localStorage.getItem('questionsWeek') || '0') + 1;
+      localStorage.setItem('questionsWeek', weekCount.toString());
+      const monthCount = parseInt(localStorage.getItem('questionsMonth') || '0') + 1;
+      localStorage.setItem('questionsMonth', monthCount.toString());
+  
+      // Save to Supabase
+      saveUserActivity(q, correct, timeSpent);
+    }
+  
+    const currentBuddyId = buddyId;
+    setSolutionBuddyId(currentBuddyId);
+  
+    setSolutionRequested(true);
+    setSolutionLoading(true);
+    const savedBuddyId =  buddyId;
+    generateAISolution(q, savedBuddyId, AI_BUDDIES[savedBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]).then((aiSol) => {
 
-  // 🔥 ADD THIS LINE - Update streak after correct answer
-  updateStreak();
-
-  const currentBuddyId = buddyId;
-  setSolutionBuddyId(currentBuddyId);
-
-  // Show solution box immediately (with spinner) — block stays mounted
-  setSolutionRequested(true);
-  setSolutionLoading(true);
-
-  // Generate solution — returns as soon as AI responds, Supabase write is backgrounded
-  generateAISolution(q).then((aiSol) => {
-    setSolution(aiSol);
-    setSolutionLoading(false);
-    saveSession({
-      selectedOption: optKey,
-      isCorrect: correct,
-      solution: aiSol,
-      solutionRequested: true,
-      solutionBuddyId: currentBuddyId,
-      hasTyped: false,
+      setSolution(aiSol);
+      setSolutionLoading(false);
+      saveSession({
+        selectedOption: optKey,
+        isCorrect: correct,
+        solution: aiSol,
+        solutionRequested: true,
+        solutionBuddyId: currentBuddyId,
+        hasTyped: false,
+      });
+      setTimeout(() => {
+        scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 200);
     });
+  };
 
-    setTimeout(() => {
-      scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 200);
-  });
-};
+
+  // ── Regenerate solution ────────────────────────────────────────────────────
+  // REPLACE WITH THIS:
+  const handleRegenerateSolution = async () => {
+    const q = questions[currentIndex];
+    if (!q) return;
+  
+    // Use the buddy that generated the current solution, not the currently selected one
+    const regenBuddyId = solutionBuddyId;
+    const regenBuddy = AI_BUDDIES[regenBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID];
+  
+    // Clear BOTH possible cache keys so it truly regenerates
+    try {
+      sessionStorage.removeItem(getAISolCacheKey(q.question_id, regenBuddyId));
+      if (buddyId !== regenBuddyId) {
+        sessionStorage.removeItem(getAISolCacheKey(q.question_id, buddyId));
+      }
+    } catch {}
+  
+    setSolution('');
+    setDisplayedText('');
+    setHasTyped(false);
+    setAIFollowup(null);
+    setSolutionLoading(true);
+  
+    try {
+      const res = await axios.post(`${API_BASE}/solution`, {
+        action: 'generate_solution',
+        question_text: q.question_text,
+        option_A: q.option_a, option_B: q.option_b,
+        option_C: q.option_c, option_D: q.option_d,
+        solution: q.solution,
+        correct_option: q.correct_option,
+        buddy_id: regenBuddyId,
+        buddy_name: regenBuddy.name,
+        buddy_system_prompt: regenBuddy.systemPrompt,
+      });
+      const aiSol = res.data.solution || q.solution;
+      saveAISolToCache(q.question_id, regenBuddyId, aiSol);
+      setSolution(aiSol);
+      saveSession({ solution: aiSol, hasTyped: false, solutionBuddyId: regenBuddyId });
+    } catch {
+      addToast('Failed to regenerate. Try again.', 'error');
+    } finally {
+      setSolutionLoading(false);
+    }
+  };
 
   // ── MCQ selection ─────────────────────────────────────────────────────────
   const handleOptionClick = async (opt: string) => {
@@ -1306,6 +1509,22 @@ const handlePostAnswer = async (
         {imageModal && <ImageModal src={imageModal} onClose={() => setImageModal(null)} />}
       </AnimatePresence>
 
+      {/* ── Buddy selector modal ─────────────────────────────────────────────── */}
+<AnimatePresence>
+  {buddyModalOpen && (
+    <BuddySelectorModal
+      currentBuddyId={buddyId}
+      isDark={isDark}
+      onClose={() => setBuddyModalOpen(false)}
+      onSelect={(id) => {
+        setBuddyId(id);
+        try { localStorage.setItem('selectedBuddy', id); } catch {}
+        addToast(`Buddy changed to ${AI_BUDDIES[id]?.name}`, 'info', 2000);
+      }}
+    />
+  )}
+</AnimatePresence>
+
       {/* ── Header ───────────────────────────────────────────────────────────── */}
       <div className={`sticky top-0 z-30 backdrop-blur-sm border-b transition-colors duration-300 ${T.header}`}>
         <div className="flex items-center justify-between px-4 sm:px-3 py-3">
@@ -1328,16 +1547,25 @@ const handlePostAnswer = async (
         
           </div>
           {/* Buddy indicator */}
-            <span className={`text-[11px] font-medium flex items-center gap-1 mr-3 ${T.muted}`}>
-            <img
-  src={buddy.image}
-  alt={buddy.name}
-  width={32}
-  height={32}
-  className="w-8 h-8 rounded-full object-cover"
-/>
-              <span>{buddy.name}</span>
-            </span>
+          {/* Buddy indicator — clickable to open modal */}
+<button
+  onClick={() => setBuddyModalOpen(true)}
+  className="flex items-center gap-1.5 mr-2 group"
+>
+  <div className="relative">
+    <img
+      src={buddy.image}
+      alt={buddy.name}
+      width={32}
+      height={32}
+      className="w-8 h-8 rounded-full object-cover border-2 border-indigo-500/50 group-hover:border-indigo-400 transition-colors"
+    />
+    <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-indigo-500 border-2 border-[#07090f] flex items-center justify-center">
+      <svg width="7" height="7" viewBox="0 0 10 10" fill="white"><path d="M2 4h6M5 1v8" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
+    </div>
+  </div>
+  <span className={`text-[10px] font-medium hidden sm:block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{buddy.name}</span>
+</button>
           {/* Right: coins + timer */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors ${T.coinBadge}`}>
@@ -1577,37 +1805,72 @@ const handlePostAnswer = async (
                 ) : null}
 
 {solutionRequested && (
-
-
   <div key="solution-card" className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
-                    <div className="flex items-center gap-2.5 mb-4">
-                    <img
-  src={solutionBuddy.image}
-  alt={solutionBuddy.name}
-  width={32}
-  height={32}
-  className="w-10 h-10 rounded-full object-cover"
-/>
-<div>
-  <h3 className="font-bold text-sm">Solution</h3>
-  <p className={`text-[11px] ${T.muted}`}>Explained by {solutionBuddy.name}</p>
-</div>
-                    </div>
+    {/* Header row */}
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2.5">
+        <img
+          src={solutionBuddy.image}
+          alt={solutionBuddy.name}
+          width={32} height={32}
+          className="w-10 h-10 rounded-full object-cover"
+        />
+        <div>
+          <h3 className="font-bold text-sm">Solution</h3>
+          <p className={`text-[11px] ${T.muted}`}>Explained by {solutionBuddy.name}</p>
+        </div>
+      </div>
+      {/* Regenerate button */}
+      {!solutionLoading && (
+        <motion.button
+          whileTap={{ scale: 0.95 }}
+          onClick={handleRegenerateSolution}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${T.btnSecondary}`}
+          title="Regenerate solution"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M21 8h-4M3 16h4"/>
+          </svg>
+          Redo
+        </motion.button>
+      )}
+    </div>
 
-                    {solutionLoading ? (
-                      <div className="flex items-center gap-3 py-5">
-                        <Spinner size={20} />
-                        <span className={`text-sm ${T.muted}`}>Generating solution…</span>
-                      </div>
-                    ) : (
-                      <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-                      {renderLatex(displayedText.length ? displayedText : solution)}
-                      
-                      </div>
-                    )}
+    {solutionLoading ? (
+      <div className="flex items-center gap-3 py-5">
+        <Spinner size={20} />
+        <span className={`text-sm ${T.muted}`}>Generating solution…</span>
+      </div>
+    ) : (
+      <>
+        <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+          {renderLatex(displayedText.length ? displayedText : solution)}
+        </div>
 
-                    {/* AI Followup buttons */}
-                    {!solutionLoading && solution && (
+        {/* Solution image if exists */}
+        {Q?.solution_image_url && (
+          <div className="mt-4 relative group">
+            <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-64 ${T.imgWrapper}`}>
+              <img
+                src={Q.solution_image_url}
+                alt="Solution illustration"
+                className="max-h-56 max-w-full object-contain cursor-zoom-in select-none"
+                onClick={() => setImageModal(Q.solution_image_url!)}
+              />
+              <button
+                onClick={() => setImageModal(Q.solution_image_url!)}
+                className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/70 text-white flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity shadow"
+              >
+                <FiZoomIn size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+      </>
+    )}
+
+    {/* AI Followup buttons — keep existing code below unchanged */}
+    {!solutionLoading && solution && (
                       <div className="mt-5">
                         {!aiFollowup && !aiFollowupLoading && (
                           <div className="flex flex-wrap gap-2">

@@ -80,9 +80,13 @@ function getYesterdayKey() {
 // Count questions solved today from sessionResponses
 function countSolvedToday(): number {
   try {
-    const todayKey = getTodayKey();
-    const todayRaw = localStorage.getItem(`rookie_solved_${todayKey}`);
-    return todayRaw ? parseInt(todayRaw, 10) : 0;
+    // Primary: date-stamped key written by QuestionViewer
+    const todayKey = `questionsToday_${new Date().toDateString()}`;
+    const stamped = localStorage.getItem(todayKey);
+    if (stamped) return parseInt(stamped, 10);
+    // Fallback: generic key
+    const generic = localStorage.getItem('questionsToday');
+    return generic ? parseInt(generic, 10) : 0;
   } catch {
     return 0;
   }
@@ -287,7 +291,7 @@ function StreakCard({ isDark }: { isDark: boolean }) {
     };
   }, []);
 
-  
+
   const handleShare = async () => {
     const text = `🔥 I'm on a ${streakData.current}-day streak on Rookie! Join me at https://rookie-ai.vercel.app`;
     try {
@@ -425,11 +429,26 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
   const [tempGoal, setTempGoal] = useState(20);
 
   useEffect(() => {
-    try {
-      const savedGoal = localStorage.getItem(DAILY_GOAL_KEY);
-      if (savedGoal) setGoal(parseInt(savedGoal, 10));
-      setSolved(countSolvedToday());
-    } catch {}
+    const refresh = () => {
+      try {
+        const savedGoal = localStorage.getItem(DAILY_GOAL_KEY);
+        if (savedGoal) setGoal(parseInt(savedGoal, 10));
+        setSolved(countSolvedToday());
+      } catch {}
+    };
+    refresh();
+    // Re-read when the tab becomes visible again (user returns from QuestionViewer)
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    // Also re-read if another tab writes to localStorage
+    const onStorage = (e: StorageEvent) => {
+      if (e.key?.startsWith('questionsToday')) refresh();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   const saveGoal = (g: number) => {
@@ -439,6 +458,7 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
     setGoal(g);
     setShowGoalPicker(false);
   };
+
 
   const progress = goal ? Math.min(solved / goal, 1) : 0;
   const pct = Math.round(progress * 100);
@@ -582,6 +602,152 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
           <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Stay consistent, crack your exam.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ─── ContinueSection component (add to your home page file) ─────────────
+function ContinueSection({ isDark }: { isDark: boolean }) {
+  const [session, setSession] = useState<{
+    chapter_title: string; subject_name: string; image_key: string; question_index: number;
+  } | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase.from('user_recent_session')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
+        .then(({ data }) => { if (data) setSession(data); });
+    });
+  }, []);
+
+  if (!session) return null;
+
+  return (
+    <div className="mb-6">
+      <h2 className={`text-base font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+        Continue where you left off
+      </h2>
+      <button
+        onClick={() => router.push(
+          `/questionviewer?chapterTitle=${encodeURIComponent(session.chapter_title)}&subjectName=${encodeURIComponent(session.subject_name || '')}&imageKey=${encodeURIComponent(session.image_key || '')}&startIndex=${session.question_index}`
+        )}
+        className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all ${
+          isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/40' : 'bg-white border-[#E5E7EB] hover:border-indigo-300'
+        }`}
+      >
+        <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+        </div>
+        <div className="text-left flex-1 min-w-0">
+          <p className="font-semibold text-sm truncate">{session.chapter_title}</p>
+          <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            Question {session.question_index + 1} · {session.subject_name}
+          </p>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 opacity-40">
+          <path d="M9 18l6-6-6-6"/>
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+
+// ─── RecommendedSection component ─────────────────────────────────────────
+function RecommendedSection({ isDark }: { isDark: boolean }) {
+  const [recommended, setRecommended] = useState<any | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get topics the user has answered questions in
+      const { data: activity } = await supabase
+        .from('user_activity')
+        .select('chapter_title, subject_name, image_key, is_correct')
+        .eq('user_id', user.id)
+        .order('answered_at', { ascending: false })
+        .limit(50);
+
+      if (!activity?.length) return;
+
+      // Find chapter with most wrong answers (needs revision)
+      const chapterStats: Record<string, { total: number; wrong: number; subject: string; imageKey: string }> = {};
+      for (const row of activity) {
+        if (!chapterStats[row.chapter_title]) {
+          chapterStats[row.chapter_title] = { total: 0, wrong: 0, subject: row.subject_name || '', imageKey: row.image_key || '' };
+        }
+        chapterStats[row.chapter_title].total++;
+        if (!row.is_correct) chapterStats[row.chapter_title].wrong++;
+      }
+
+      // Pick chapter with highest wrong rate (min 3 questions answered)
+      let best = null, bestRate = -1;
+      for (const [title, stats] of Object.entries(chapterStats)) {
+        if (stats.total < 3) continue;
+        const rate = stats.wrong / stats.total;
+        if (rate > bestRate) { bestRate = rate; best = { title, ...stats }; }
+      }
+
+      if (best) setRecommended(best);
+    }
+    load();
+  }, []);
+
+  if (!recommended) return null;
+
+  const wrongPct = Math.round((recommended.wrong / recommended.total) * 100);
+
+  return (
+    <div className="mb-6">
+      <h2 className={`text-base font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+        Recommended for you
+      </h2>
+      <p className={`text-xs mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+        Based on your recent activity
+      </p>
+      <button
+        onClick={() => router.push(
+          `/questionviewer?chapterTitle=${encodeURIComponent(recommended.title)}&subjectName=${encodeURIComponent(recommended.subject)}&imageKey=${encodeURIComponent(recommended.imageKey)}`
+        )}
+        className={`w-full p-4 rounded-2xl border text-left transition-all ${
+          isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-amber-500/40' : 'bg-white border-[#E5E7EB] hover:border-amber-300'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 font-medium">
+                Needs Revision
+              </span>
+              <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{recommended.subject}</span>
+            </div>
+            <p className="font-semibold text-sm leading-snug">{recommended.title}</p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="text-2xl font-bold text-amber-500">{wrongPct}%</p>
+            <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>error rate</p>
+          </div>
+        </div>
+        <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-[#1e2538]' : 'bg-gray-100'}`}>
+          <div
+            className="h-full rounded-full bg-amber-500 transition-all"
+            style={{ width: `${wrongPct}%` }}
+          />
+        </div>
+        <p className={`text-xs mt-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+          {recommended.wrong} wrong out of {recommended.total} attempted
+        </p>
+      </button>
     </div>
   );
 }
@@ -852,7 +1018,29 @@ export default function HomePage() {
           <DailyGoalBar isDark={isDark} />
         </motion.section>
 
+        {/* ── Continue Where You Left Off ── */}
+        <motion.section
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={2}
+          className="mt-6"
+        >
+          <ContinueSection isDark={isDark} />
+        </motion.section>
 
+        {/* ── Recommended For You ── */}
+        <motion.section
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={3}
+          className="mt-2"
+        >
+          <RecommendedSection isDark={isDark} />
+        </motion.section>
+
+        {/* ── Invite Friends ── */}
 
         {/* ── Invite Friends ── */}
         <motion.section
