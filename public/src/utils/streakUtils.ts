@@ -108,10 +108,19 @@ export async function updateStreak() {
 }
 
 /**
- * Load streak from Supabase into localStorage on app boot.
- * Call once on home page mount.
+ * Load streak from Supabase into localStorage in the background.
+ * Returns immediately, syncs in background (fire and forget).
+ * This ensures instant UI with local data while keeping Supabase in sync.
  */
 export async function syncStreakFromSupabase() {
+  // Fire the sync in background without awaiting
+  syncStreakInBackground();
+}
+
+/**
+ * Internal function that actually performs the background sync.
+ */
+async function syncStreakInBackground() {
   let userId: string | null = null;
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -125,18 +134,34 @@ export async function syncStreakFromSupabase() {
   }
   if (!userId) return;
 
-  const { data } = await supabase
-    .from('user_streaks')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
+  try {
+    const { data } = await supabase
+      .from('user_streaks')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
 
-  if (data) {
-    saveStreakToLocal({
-      current_streak: data.current_streak,
-      longest_streak: data.longest_streak,
-      last_attempt_date: data.last_attempt_date,
-      streak_days: data.streak_days ?? [],
-    });
+    if (data) {
+      const remoteData: StreakData = {
+        current_streak: data.current_streak,
+        longest_streak: data.longest_streak,
+        last_attempt_date: data.last_attempt_date,
+        streak_days: data.streak_days ?? [],
+      };
+
+      // Only update if remote has newer/different data
+      const local = readStreakFromLocal();
+      if (
+        local.current !== remoteData.current_streak ||
+        local.longest !== remoteData.longest_streak ||
+        JSON.stringify(local.activeDays) !== JSON.stringify(remoteData.streak_days)
+      ) {
+        saveStreakToLocal(remoteData);
+        // Dispatch custom event so StreakCard can re-render if needed
+        window.dispatchEvent(new CustomEvent('streakUpdated', { detail: remoteData }));
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to sync streak from Supabase:', err);
   }
 }

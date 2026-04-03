@@ -253,24 +253,41 @@ function StreakCard({ isDark }: { isDark: boolean }) {
   };
   
   useEffect(() => {
-    // First: sync from Supabase (universal source of truth), then reload
-    syncStreakFromSupabase().then(() => reloadStreak());
+    // Instant load from localStorage
+    reloadStreak();
+    
+    // Background sync from Supabase (doesn't block UI)
+    syncStreakFromSupabase();
   
+    // Listen for storage changes from other tabs
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'rookie_streak_data') reloadStreak();
     };
     window.addEventListener('storage', handleStorageChange);
   
+    // Listen for visibility changes (refresh when tab becomes active)
     const handleVisibilityChange = () => {
-      if (!document.hidden) reloadStreak();
+      if (!document.hidden) {
+        reloadStreak();
+        syncStreakFromSupabase();
+      }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Listen for custom streak update event from background sync
+    const handleStreakUpdated = (e: Event) => {
+      reloadStreak();
+    };
+    window.addEventListener('streakUpdated', handleStreakUpdated);
   
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('streakUpdated', handleStreakUpdated);
     };
   }, []);
+
+  
   const handleShare = async () => {
     const text = `🔥 I'm on a ${streakData.current}-day streak on Rookie! Join me at https://rookie-ai.vercel.app`;
     try {
