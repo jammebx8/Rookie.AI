@@ -1168,33 +1168,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Social icons */}
-            <div className="flex items-center gap-2">
-              {socialMediaLinks.map((item) => (
-                <motion.button
-                  key={item.label}
-                  whileTap={{ scale: 0.9 }}
-                  whileHover={{ y: -2 }}
-                  onClick={() => openExternal(item.url)}
-                  aria-label={item.label}
-                  className={`w-8 h-8 flex items-center justify-center rounded-xl border transition-all
-                    ${isDark
-                      ? 'border-[#1D2939] hover:border-gray-600 bg-[#0A0E17]'
-                      : 'border-gray-200 hover:border-gray-300 bg-white shadow-sm'
-                    }`}
-                >
-                  <div className="w-4 h-4 relative">
-                    <Image
-                      src={item.icon}
-                      alt={item.label}
-                      fill
-                      style={{ objectFit: 'contain' }}
-                      className={isDark ? 'brightness-0 invert opacity-60' : 'opacity-70'}
-                    />
-                  </div>
-                </motion.button>
-              ))}
-            </div>
+          
           </div>
 
           {/* Nav links */}

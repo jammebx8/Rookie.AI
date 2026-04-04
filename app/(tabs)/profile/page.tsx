@@ -278,6 +278,12 @@ export default function ProfilePage() {
   const themeClasses = getThemeClasses(isDark);
   
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -312,9 +318,7 @@ export default function ProfilePage() {
     try {
       const storedUser = localStorage.getItem('@user');
 
-      useEffect(() => {
-        loadUserData();
-      }, []);
+
 
       if (storedUser) {
         const userData = JSON.parse(storedUser);
