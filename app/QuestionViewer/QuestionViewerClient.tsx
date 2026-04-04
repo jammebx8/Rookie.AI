@@ -1613,7 +1613,7 @@ const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number
       className="w-8 h-8 rounded-full object-cover border-2 border-indigo-500/50 group-hover:border-indigo-400 transition-colors"
     />
     <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-indigo-500 border-2 border-[#07090f] flex items-center justify-center">
-      <svg width="7" height="7" viewBox="0 0 10 10" fill="white"><path d="M2 4h6M5 1v8" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
+    
     </div>
   </div>
   <span className={`text-[10px] font-medium hidden sm:block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{buddy.name}</span>

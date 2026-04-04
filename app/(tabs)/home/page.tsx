@@ -608,22 +608,62 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
 
 
 // ─── ContinueSection component (add to your home page file) ─────────────
+// ─── ContinueSection component (updated) ─────────────────────────────
 function ContinueSection({ isDark }: { isDark: boolean }) {
   const [session, setSession] = useState<{
     chapter_title: string; subject_name: string; image_key: string; question_index: number;
   } | null>(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      supabase.from('user_recent_session')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-        .then(({ data }) => { if (data) setSession(data); });
-    });
+    const fetchSession = async () => {
+      setLoading(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setLoading(false);
+          return;
+        }
+        
+        const { data, error } = await supabase
+          .from('user_recent_session')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (data && !error) {
+          setSession(data);
+        }
+      } catch (err) {
+        console.error('Error fetching session:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSession();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="mb-6">
+        <h2 className={`text-base font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          Continue where you left off
+        </h2>
+        {/* Skeleton loader */}
+        <div className={`w-full p-4 rounded-2xl border animate-pulse ${isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'}`}>
+          <div className="flex items-center gap-4">
+            <div className={`w-10 h-10 rounded-xl flex-shrink-0 ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} />
+            <div className="flex-1 space-y-2">
+              <div className={`h-4 rounded-lg ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: '70%' }} />
+              <div className={`h-3 rounded-lg ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: '50%' }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!session) return null;
 
@@ -633,9 +673,17 @@ function ContinueSection({ isDark }: { isDark: boolean }) {
         Continue where you left off
       </h2>
       <button
-        onClick={() => router.push(
-          `/questionviewer?chapterTitle=${encodeURIComponent(session.chapter_title)}&subjectName=${encodeURIComponent(session.subject_name || '')}&imageKey=${encodeURIComponent(session.image_key || '')}&startIndex=${session.question_index}`
-        )}
+        onClick={() => {
+          // Fix: Route to the correct path with proper parameters
+          if (!session.chapter_title) return;
+          const params = new URLSearchParams({
+            chapterTitle: session.chapter_title,
+            subjectName: session.subject_name || '',
+            imageKey: session.image_key || '',
+            startIndex: String(session.question_index || 0),
+          });
+          router.push(`/questionviewer?${params.toString()}`);
+        }}
         className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all ${
           isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/40' : 'bg-white border-[#E5E7EB] hover:border-indigo-300'
         }`}
@@ -659,49 +707,89 @@ function ContinueSection({ isDark }: { isDark: boolean }) {
   );
 }
 
-
-// ─── RecommendedSection component ─────────────────────────────────────────
+// ─── RecommendedSection component (updated) ─────────────────────────────────
 function RecommendedSection({ isDark }: { isDark: boolean }) {
   const [recommended, setRecommended] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Get topics the user has answered questions in
-      const { data: activity } = await supabase
-        .from('user_activity')
-        .select('chapter_title, subject_name, image_key, is_correct')
-        .eq('user_id', user.id)
-        .order('answered_at', { ascending: false })
-        .limit(50);
-
-      if (!activity?.length) return;
-
-      // Find chapter with most wrong answers (needs revision)
-      const chapterStats: Record<string, { total: number; wrong: number; subject: string; imageKey: string }> = {};
-      for (const row of activity) {
-        if (!chapterStats[row.chapter_title]) {
-          chapterStats[row.chapter_title] = { total: 0, wrong: 0, subject: row.subject_name || '', imageKey: row.image_key || '' };
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setLoading(false);
+          return;
         }
-        chapterStats[row.chapter_title].total++;
-        if (!row.is_correct) chapterStats[row.chapter_title].wrong++;
-      }
 
-      // Pick chapter with highest wrong rate (min 3 questions answered)
-      let best = null, bestRate = -1;
-      for (const [title, stats] of Object.entries(chapterStats)) {
-        if (stats.total < 3) continue;
-        const rate = stats.wrong / stats.total;
-        if (rate > bestRate) { bestRate = rate; best = { title, ...stats }; }
-      }
+        // Get topics the user has answered questions in
+        const { data: activity } = await supabase
+          .from('user_activity')
+          .select('chapter_title, subject_name, image_key, is_correct')
+          .eq('user_id', user.id)
+          .order('answered_at', { ascending: false })
+          .limit(50);
 
-      if (best) setRecommended(best);
-    }
+        if (!activity?.length) {
+          setLoading(false);
+          return;
+        }
+
+        // Find chapter with most wrong answers (needs revision)
+        const chapterStats: Record<string, { total: number; wrong: number; subject: string; imageKey: string }> = {};
+        for (const row of activity) {
+          if (!chapterStats[row.chapter_title]) {
+            chapterStats[row.chapter_title] = { total: 0, wrong: 0, subject: row.subject_name || '', imageKey: row.image_key || '' };
+          }
+          chapterStats[row.chapter_title].total++;
+          if (!row.is_correct) chapterStats[row.chapter_title].wrong++;
+        }
+
+        // Pick chapter with highest wrong rate (min 3 questions answered)
+        let best = null, bestRate = -1;
+        for (const [title, stats] of Object.entries(chapterStats)) {
+          if (stats.total < 3) continue;
+          const rate = stats.wrong / stats.total;
+          if (rate > bestRate) { bestRate = rate; best = { title, ...stats }; }
+        }
+
+        if (best) setRecommended(best);
+      } catch (err) {
+        console.error('Error loading recommendations:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     load();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="mb-6">
+        <h2 className={`text-base font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          Recommended for you
+        </h2>
+        <p className={`text-xs mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          Based on your recent activity
+        </p>
+        {/* Skeleton loader */}
+        <div className={`w-full p-4 rounded-2xl border animate-pulse ${isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'}`}>
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 space-y-2">
+                <div className={`h-4 rounded-lg ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: '60%' }} />
+                <div className={`h-3 rounded-lg ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: '80%' }} />
+              </div>
+              <div className={`w-12 h-8 rounded-lg flex-shrink-0 ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} />
+            </div>
+            <div className={`h-2 rounded-full ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!recommended) return null;
 
@@ -716,9 +804,16 @@ function RecommendedSection({ isDark }: { isDark: boolean }) {
         Based on your recent activity
       </p>
       <button
-        onClick={() => router.push(
-          `/questionviewer?chapterTitle=${encodeURIComponent(recommended.title)}&subjectName=${encodeURIComponent(recommended.subject)}&imageKey=${encodeURIComponent(recommended.imageKey)}`
-        )}
+        onClick={() => {
+          // Fix: Route properly with all parameters
+          const params = new URLSearchParams({
+            chapterTitle: recommended.title,
+            subjectName: recommended.subject || '',
+            imageKey: recommended.imageKey || '',
+            startIndex: '0',
+          });
+          router.push(`/questionviewer?${params.toString()}`);
+        }}
         className={`w-full p-4 rounded-2xl border text-left transition-all ${
           isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-amber-500/40' : 'bg-white border-[#E5E7EB] hover:border-amber-300'
         }`}
