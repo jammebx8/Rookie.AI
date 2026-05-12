@@ -385,7 +385,7 @@ export default function AIChat() {
 
     try {
       abortControllerRef.current = new AbortController();
-      const response = await fetch('/api/ai/chat', {
+      const response = await fetch('https://rookie-backend.vercel.app/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -501,7 +501,7 @@ export default function AIChat() {
     }
     try {
       setIsSpeaking(true);
-      const response = await fetch('/api/ai/tts', {
+      const response = await fetch('https://rookie-backend.vercel.app/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voiceStyle: selectedPersona.voiceStyle }),
