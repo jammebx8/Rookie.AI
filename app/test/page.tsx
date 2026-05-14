@@ -367,6 +367,7 @@ export default function AIChat() {
   // ─── CHAT SEND ────────────────────────────────────────────────────────────
 
   const handleSend = useCallback(async (overrideText?: string) => {
+   
     const trimmed = (overrideText || input).trim();
     if (!trimmed || isLoading) return;
 
@@ -407,7 +408,7 @@ export default function AIChat() {
     try {
       abortControllerRef.current = new AbortController();
 
-      const response = await fetch('https://rookie-backend.vercel.app/api/chat', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
