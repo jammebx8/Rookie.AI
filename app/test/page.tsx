@@ -164,7 +164,7 @@ export default function FridayPage() {
   const updateMemorySummary = async (convId: string, allMessages: Message[], newContent: string) => {
     // Build rolling memory summary via API
     try {
-      const response = await fetch('/api/friday/memory', {
+      const response = await fetch('https://rookieai.vercel.app/api/friday/memory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -226,7 +226,7 @@ export default function FridayPage() {
 
     try {
       abortControllerRef.current = new AbortController();
-      const response = await fetch('/api/friday/chat', {
+      const response = await fetch('https://rookieai.vercel.app/api/friday/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -325,7 +325,7 @@ export default function FridayPage() {
     }
     try {
       setIsSpeaking(true);
-      const response = await fetch('/api/friday/tts', {
+      const response = await fetch('https://rookieai.vercel.app/api/friday/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
