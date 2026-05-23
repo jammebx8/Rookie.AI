@@ -1,19 +1,23 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/public/src/utils/supabase';
 import FridaySidebar from '../components/friday/FridaySidebar';
 import VoiceModal from '../components/friday/VoiceModal';
 import MessageList from '../components/friday/MessageList';
 
-// ─── TYPES ───────────────────────────────────────────────────────────[...]
+// ── Component Imports ─────────────────────────────────────────────────────────
+import Sidebar from '../components/ai/Sidebar';
 
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  persona?: string;
+  audioUrl?: string; // blob URL for TTS audio
 }
 
 export interface Conversation {
@@ -45,12 +49,23 @@ const SendIcon = () => (
   </svg>
 );
 
-const MicIcon = ({ active }: { active?: boolean }) => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-    <line x1="12" y1="19" x2="12" y2="23" />
-    <line x1="8" y1="23" x2="16" y2="23" />
+const MicIcon = ({ active, recording }: { active?: boolean; recording?: boolean }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill={active || recording ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+  </svg>
+);
+
+const VolumeIcon = ({ muted }: { muted?: boolean }) => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+    {!muted && <><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></>}
+    {muted && <line x1="23" y1="9" x2="17" y2="15"/>}
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
   </svg>
 );
 
@@ -62,7 +77,10 @@ const StopIcon = () => (
 
 // ─── MAIN PAGE ─────────────────────────────────────────────────────────…
 
-export default function FridayPage() {
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+
+export default function AIChat() {
+  // Core state
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -76,10 +94,24 @@ export default function FridayPage() {
   const [memorySummary, setMemorySummary] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
+  // UI state
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [showPersonaModal, setShowPersonaModal] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(true);
+
+  // Voice / recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [mutedMessages, setMutedMessages] = useState<Set<string>>(new Set());
+
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   // ─── INIT ──────────────────────────────────────────────────────────…
 
@@ -96,11 +128,22 @@ export default function FridayPage() {
 
   const loadUserProfile = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from('users').select('id, email, name, avatar_url').eq('id', user.id).single();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!user) { console.warn('No authenticated user found'); return; }
+
+      const { data, error } = await supabase
+        .from('users')
+        .select("id, email, name, avatar_url")
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
       if (data) setUserProfile(data);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error('Error loading user profile:', err);
+      setError('Failed to load user profile');
+    }
   };
 
   const loadConversations = async () => {
@@ -232,9 +275,11 @@ export default function FridayPage() {
         body: JSON.stringify({
           message: trimmed,
           conversationId: convId,
-          memorySummary,
-          history: updatedMessages.slice(-8).map(m => ({ role: m.role, content: m.content })),
-          userName: getUserDisplayName(userProfile),
+          personaId: selectedPersona.id,
+          personaName: selectedPersona.name,
+          personaSystemPrompt: selectedPersona.systemPrompt,
+          history: messages.slice(-12).map(m => ({ role: m.role, content: m.content })),
+          userName: userProfile?.name || null,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -258,7 +303,10 @@ export default function FridayPage() {
             if (data === '[DONE]') break;
             try {
               const parsed = JSON.parse(data);
-              if (parsed.content) {
+              if (parsed.type === 'content' && parsed.content) {
+                accumulated += parsed.content;
+                setStreamingContent(accumulated);
+              } else if (parsed.content) {
                 accumulated += parsed.content;
                 setStreamingContent(accumulated);
               }
@@ -267,28 +315,49 @@ export default function FridayPage() {
         }
       }
 
+      // Fetch TTS audio for AI response
+      let audioUrl: string | undefined;
+      try {
+        const ttsRes = await fetch('https://rookie-backend.vercel.app/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: accumulated }),
+        });
+        if (ttsRes.ok) {
+          const audioBlob = await ttsRes.blob();
+          audioUrl = URL.createObjectURL(audioBlob);
+        }
+      } catch (ttsErr) {
+        console.error('TTS error:', ttsErr);
+      }
+
+      const aiMsgId = crypto.randomUUID();
       const aiMsg: Message = {
-        id: crypto.randomUUID(),
+        id: aiMsgId,
         role: 'assistant',
         content: accumulated,
         timestamp: new Date(),
+        persona: selectedPersona.name,
+        audioUrl,
       };
 
       const finalMessages = [...updatedMessages, aiMsg];
       setMessages(finalMessages);
       setStreamingContent('');
 
-      if (convId) {
-        await saveMessage(convId, 'assistant', accumulated);
-        await supabase.from('ai_conversations').update({ updated_at: new Date().toISOString() }).eq('id', convId);
-        // Update memory every 4 exchanges
-        if (finalMessages.length % 8 === 0 || finalMessages.length <= 4) {
-          await updateMemorySummary(convId, finalMessages, accumulated);
-        }
+      // Auto-play AI audio
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        audioElementsRef.current.set(aiMsgId, audio);
+        audio.play().catch(() => {});
       }
 
-      // Auto-speak Friday's response if voice mode was active
-      await handleSpeak(accumulated);
+      if (convId && accumulated) {
+        await saveMessage(convId, 'assistant', accumulated);
+        await supabase.from('ai_conversations')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', convId);
+      }
 
     } catch (err: any) {
       if (err.name !== 'AbortError') {
@@ -299,7 +368,7 @@ export default function FridayPage() {
       setIsLoading(false);
       setStreamingContent('');
     }
-  }, [input, isLoading, activeConversationId, messages, memorySummary, userProfile]);
+  }, [input, isLoading, activeConversationId, messages, selectedPersona, userProfile]);
 
   const handleStop = () => {
     abortControllerRef.current?.abort();
@@ -315,41 +384,111 @@ export default function FridayPage() {
     setIsLoading(false);
   };
 
-  // ─── TTS ──────────────────────────────────────────────────────────…
+  // ─── VOICE RECORDING ──────────────────────────────────────────────────────
 
-  const handleSpeak = async (text: string) => {
-    if (isSpeaking) {
-      audioRef.current?.pause();
-      setIsSpeaking(false);
+  /**
+   * Toggle recording:
+   * - First press  → request mic permission → start MediaRecorder
+   * - Second press → stop recording → send blob to /api/transcribe → setInput with transcript
+   */
+  const handleVoiceInput = useCallback(async () => {
+    // ── Stop recording ────────────────────────────────────────────────────
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
       return;
     }
-    try {
-      setIsSpeaking(true);
-      const response = await fetch('/api/friday/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      if (!response.ok) throw new Error('TTS failed');
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      audioRef.current = new Audio(url);
-      audioRef.current.onended = () => setIsSpeaking(false);
-      audioRef.current.play();
-    } catch (err) {
-      console.error('TTS error:', err);
-      setIsSpeaking(false);
-    }
-  };
 
-  const handleVoiceSubmit = async (transcript: string) => {
-    setVoiceModalOpen(false);
-    await handleSend(transcript);
-  };
+    // ── Start recording ───────────────────────────────────────────────────
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/mp4';
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        // Stop all mic tracks
+        stream.getTracks().forEach(t => t.stop());
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        audioChunksRef.current = [];
+
+        setIsTranscribing(true);
+        try {
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'recording.webm');
+
+          const res = await fetch('https://rookie-backend.vercel.app/api/transcribe', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!res.ok) throw new Error(`Transcription failed: ${res.status}`);
+          const { text } = await res.json();
+
+          if (text?.trim()) {
+            // Directly send the transcribed message
+            handleSend(text.trim());
+          }
+        } catch (err: any) {
+          console.error('Transcription error:', err);
+          setError('Could not transcribe audio. Please try again.');
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      recorder.start();
+      setIsRecording(true);
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') {
+        setError('Microphone permission denied. Please allow mic access in your browser.');
+      } else {
+        setError('Could not access microphone.');
+      }
+      console.error('Mic error:', err);
+    }
+  }, [isRecording, handleSend]);
+
+  // ─── AUDIO MUTE TOGGLE ────────────────────────────────────────────────────
+
+  const handleToggleMute = useCallback((msgId: string) => {
+    const audio = audioElementsRef.current.get(msgId);
+    setMutedMessages(prev => {
+      const next = new Set(prev);
+      if (next.has(msgId)) {
+        next.delete(msgId);
+        if (audio) {
+          audio.muted = false;
+          // Resume if paused due to mute
+          audio.play().catch(() => {});
+        }
+      } else {
+        next.add(msgId);
+        if (audio) audio.muted = true;
+      }
+      return next;
+    });
+  }, []);
+
+  // ─── COPY ─────────────────────────────────────────────────────────────────
 
   // ─── UI ───────────────────────────────────────────────────────────[...]
 
-  const handleNewChat = () => {
+  // ─── MISC ─────────────────────────────────────────────────────────────────
+
+  const handleNewChat = useCallback(() => {
     setMessages([]);
     setActiveConversationId(null);
     setInput('');
@@ -365,79 +504,142 @@ export default function FridayPage() {
     e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  const handleLoadConversation = useCallback(loadConversation, [conversations]);
+  const handleToggleHistory = useCallback(() => setHistoryOpen(o => !o), []);
+  const handleOpenPersonaModal = useCallback(() => setShowPersonaModal(true), []);
+  const handleSidebarCollapse = useCallback(() => {
+    setSidebarOpen(false);
+    setMobileSidebarOpen(false);
+  }, []);
 
   const userName = getUserDisplayName(userProfile);
   const isEmptyState = messages.length === 0 && !streamingContent;
 
   return (
-    <div className="friday-root">
-      {/* Sidebar */}
-      <FridaySidebar
-        open={sidebarOpen}
-        onToggle={() => setSidebarOpen(o => !o)}
-        conversations={conversations}
-        activeConversationId={activeConversationId}
-        onSelectConversation={loadConversation}
-        onDeleteConversation={deleteConversation}
-        onNewChat={handleNewChat}
-        userProfile={userProfile}
-        userName={userName}
-      />
+    <div className="flex h-screen bg-[#000000] text-white overflow-hidden font-['Inter',sans-serif]">
 
-      {/* Main */}
-      <div className={`friday-main ${sidebarOpen ? 'friday-main--sidebar' : ''}`}>
+      {/* DESKTOP SIDEBAR */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.aside
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 260, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="hidden md:block flex-shrink-0 bg-[#000000] border-r border-white/5 overflow-hidden"
+          >
+            <Sidebar
+              conversations={conversations}
+              activeConversationId={activeConversationId}
+              selectedPersona={selectedPersona}
+              userProfile={userProfile}
+              historyOpen={historyOpen}
+              showPersonaModal={showPersonaModal}
+              onNewChat={handleNewChat}
+              onLoadConversation={handleLoadConversation}
+              onDeleteConversation={deleteConversation}
+              onToggleHistory={handleToggleHistory}
+              onOpenPersonaModal={handleOpenPersonaModal}
+              onCollapse={handleSidebarCollapse}
+            />
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
-        {/* Header */}
-        <header className="friday-header">
-          <button className="friday-header__menu" onClick={() => setSidebarOpen(o => !o)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-          <div className="friday-header__brand">
-            <span className="friday-header__dot" />
-            <span className="friday-header__name">F.R.I.D.A.Y</span>
+      {/* MOBILE SIDEBAR */}
+      <AnimatePresence>
+        {mobileSidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="md:hidden fixed inset-0 bg-black z-40"
+              onClick={() => setMobileSidebarOpen(false)}
+            />
+            <motion.aside
+              initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="md:hidden fixed left-0 top-0 bottom-0 w-[260px] bg-[#000000] border-r border-white/5 z-50"
+            >
+              <Sidebar
+                conversations={conversations}
+                activeConversationId={activeConversationId}
+                selectedPersona={selectedPersona}
+                userProfile={userProfile}
+                historyOpen={historyOpen}
+                showPersonaModal={showPersonaModal}
+                onNewChat={handleNewChat}
+                onLoadConversation={handleLoadConversation}
+                onDeleteConversation={deleteConversation}
+                onToggleHistory={handleToggleHistory}
+                onOpenPersonaModal={handleOpenPersonaModal}
+                onCollapse={handleSidebarCollapse}
+              />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* MAIN AREA */}
+      <div className="flex-1 flex flex-col min-w-0 bg-[#000000]">
+
+        {/* Top bar */}
+        <header className="flex items-center justify-between px-4 h-12 border-b border-white/5 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setSidebarOpen(o => !o); setMobileSidebarOpen(o => !o); }}
+              className="text-[#666] hover:text-white transition-colors p-1"
+            >
+              {sidebarOpen ? <CollapseIcon /> : <MenuIcon />}
+            </button>
           </div>
-          <div className="friday-header__status">
-            {isSpeaking && (
+
+          <div className="flex items-center gap-2">
+            {/* Recording status indicator */}
+            {isRecording && (
               <motion.div
-                className="friday-speaking-pill"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs"
+                animate={{ opacity: [1, 0.5, 1] }}
+                transition={{ duration: 1, repeat: Infinity }}
               >
-                <span className="friday-speaking-dot" />
-                Speaking
+                <div className="w-2 h-2 rounded-full bg-red-500" />
+                Recording…
               </motion.div>
+            )}
+            {isTranscribing && (
+              <span className="text-xs text-[#666] px-3">Transcribing…</span>
             )}
           </div>
         </header>
 
-        {/* Messages area */}
-        <div className="friday-messages-area">
-          {isEmptyState ? (
-            <motion.div
-              className="friday-empty"
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <div className="friday-empty__orb" />
-              <h1 className="friday-empty__greeting">
-                Good {getTimeOfDay()}, {userName}.
-              </h1>
-              <p className="friday-empty__sub">I'm Friday. How can I assist you today?</p>
-              <div className="friday-empty__suggestions">
-                {SUGGESTIONS.map((s, i) => (
-                  <motion.button
-                    key={i}
-                    className="friday-suggestion"
+        {/* Error */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+            className="px-4 py-3 bg-red-500/10 border-t border-b border-red-500/20 text-red-300 text-sm flex items-center justify-between"
+          >
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300 ml-4">✕</button>
+          </motion.div>
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6" style={{ scrollbarWidth: 'none' }}>
+          {messages.length === 0 && !isLoading && (
+            <div ref={logoRef} className="flex flex-col items-center justify-center h-full gap-6 opacity-0">
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
+                style={{ background: `${accentColor}22`, border: `1px solid ${accentColor}44` }}
+              >
+                {selectedPersona.avatar}
+              </div>
+              <div className="text-center max-w-xs">
+                <p className="text-white font-semibold text-lg mb-1">{selectedPersona.name}</p>
+                <p className="text-[#555] text-sm">{selectedPersona.greeting}</p>
+              </div>
+              <div className="flex gap-2 flex-wrap justify-center">
+                {['What can you help me with?', 'Tell me about yourself', "Let's chat"].map(s => (
+                  <button
+                    key={s}
                     onClick={() => handleSend(s)}
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -471,8 +673,93 @@ export default function FridayPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
             >
-              <span>{error}</span>
-              <button onClick={() => setError(null)}>✕</button>
+              <div className="flex-shrink-0 mt-1">
+                {msg.role === 'assistant' ? (
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-sm"
+                    style={{ background: `${accentColor}22`, border: `1px solid ${accentColor}33` }}
+                  >
+                    {selectedPersona.avatar}
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-xl bg-white/10 overflow-hidden">
+                    {userProfile?.avatar_url ? (
+                      <Image src={userProfile.avatar_url} alt="You" width={32} height={32} className="object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
+                        {getAvatarInitial()}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className={`flex flex-col gap-1 max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                {msg.role === 'assistant' && (
+                  <span className="text-[10px] text-[#444] px-1">{msg.persona || selectedPersona.name}</span>
+                )}
+                <div
+                  className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                    msg.role === 'user'
+                      ? 'bg-white/10 text-white rounded-tr-sm border border-white/10'
+                      : 'bg-[#161616] text-[#e0e0e0] rounded-tl-sm border border-white/5'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+                <div className={`flex items-center gap-2 px-1 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                  <span className="text-[10px] text-[#333]">{formatTime(msg.timestamp)}</span>
+                  {msg.role === 'assistant' && (
+                    <>
+                      {/* Mute toggle — shown only when this message has audio */}
+                      {msg.audioUrl && (
+                        <button
+                          onClick={() => handleToggleMute(msg.id)}
+                          className={`transition-colors p-0.5 ${
+                            mutedMessages.has(msg.id)
+                              ? 'text-[#666] hover:text-[#999]'
+                              : 'text-[#FF6B35] hover:text-[#FF8C5A]'
+                          }`}
+                          title={mutedMessages.has(msg.id) ? 'Unmute' : 'Mute'}
+                        >
+                          <VolumeIcon muted={mutedMessages.has(msg.id)} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleCopy(msg.id, msg.content)}
+                        className="text-[#444] hover:text-[#999] transition-colors p-0.5"
+                      >
+                        {copiedId === msg.id ? <span className="text-[10px] text-green-400">Copied!</span> : <CopyIcon />}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+
+          {(isLoading || streamingContent) && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3">
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-sm flex-shrink-0 mt-1"
+                style={{ background: `${accentColor}22`, border: `1px solid ${accentColor}33` }}
+              >
+                {selectedPersona.avatar}
+              </div>
+              <div className="max-w-[80%]">
+                <span className="text-[10px] text-[#444] px-1 block mb-1">{selectedPersona.name}</span>
+                <div className="bg-[#161616] border border-white/5 px-4 py-3 rounded-2xl rounded-tl-sm text-sm text-[#e0e0e0] leading-relaxed whitespace-pre-wrap">
+                  {streamingContent || <TypingIndicator color={accentColor} />}
+                  {streamingContent && (
+                    <motion.span
+                      className="inline-block w-0.5 h-4 ml-0.5 align-middle"
+                      style={{ background: accentColor }}
+                      animate={{ opacity: [1, 0] }}
+                      transition={{ duration: 0.6, repeat: Infinity }}
+                    />
+                  )}
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -498,21 +785,75 @@ export default function FridayPage() {
                 <MicIcon />
               </button>
 
-              {isLoading ? (
-                <button className="friday-btn friday-btn--stop" onClick={handleStop}>
-                  <StopIcon />
-                </button>
-              ) : (
-                <motion.button
-                  className="friday-btn friday-btn--send"
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => handleSend()}
-                  disabled={!input.trim()}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input area */}
+        <div className="px-4 py-4 border-t border-white/5 flex-shrink-0">
+          <div className="max-w-3xl mx-auto">
+            <div
+              className="flex items-end gap-2 px-4 py-3 rounded-2xl bg-[#111] border border-white/10 focus-within:border-white/20 transition-all"
+              style={{ boxShadow: `0 0 0 1px ${accentColor}00` }}
+            >
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                }}
+                placeholder={
+                  isRecording
+                    ? 'Recording… tap mic to stop'
+                    : isTranscribing
+                    ? 'Transcribing…'
+                    : `Message ${selectedPersona.name}...`
+                }
+                rows={1}
+                className="flex-1 bg-transparent text-white text-sm placeholder-[#444] resize-none outline-none leading-relaxed"
+                style={{ minHeight: '24px', maxHeight: '160px' }}
+              />
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {/* Mic button — red when recording */}
+                <button
+                  onClick={handleVoiceInput}
+                  disabled={isTranscribing}
+                  className={`p-1.5 transition-colors ${
+                    isRecording
+                      ? 'text-red-400 hover:text-red-300'
+                      : 'text-[#555] hover:text-[#999]'
+                  } disabled:opacity-40`}
+                  title={isRecording ? 'Stop recording' : 'Record voice message'}
                 >
-                  <SendIcon />
-                </motion.button>
-              )}
+                  <MicIcon recording={isRecording} />
+                </button>
+
+                {isLoading ? (
+                  <button
+                    onClick={handleStop}
+                    className="p-2 rounded-xl text-[#999] hover:text-white hover:bg-white/10 transition-all"
+                  >
+                    <StopIcon />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleSend()}
+                    disabled={!input.trim()}
+                    className="p-2 rounded-xl text-white transition-all disabled:opacity-30"
+                    style={{ background: input.trim() ? accentColor : 'transparent' }}
+                  >
+                    <SendIcon />
+                  </button>
+                )}
+              </div>
             </div>
+            <p className="text-center text-[#2a2a2a] text-[10px] mt-2">
+              {selectedPersona.name} remembers your conversations · Tap mic to speak
+            </p>
           </div>
           <p className="friday-input-hint">Friday may make mistakes. Verify important info.</p>
         </div>
