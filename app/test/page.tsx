@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/public/src/utils/supabase';
@@ -8,9 +8,6 @@ import { gsap } from 'gsap';
 
 // ── Component Imports ─────────────────────────────────────────────────────────
 import Sidebar from '../components/ai/Sidebar';
-import VoiceModeOverlay from '../components/ai/VoiceModeOverlay';
-import { detectUserMood, computeAIEmotion, EmotionProfile, getVoiceProsody } from '../components/ai/emotionEngine';
-import { SpeechRecognitionEngine, voiceEngine } from '../components/ai/voiceEngine';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +17,7 @@ interface Message {
   content: string;
   timestamp: Date;
   persona?: string;
+  audioUrl?: string; // blob URL for TTS audio
 }
 
 interface Conversation {
@@ -102,17 +100,17 @@ const SendIcon = () => (
   </svg>
 );
 
-const MicIcon = ({ active }: { active?: boolean }) => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const MicIcon = ({ active, recording }: { active?: boolean; recording?: boolean }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill={active || recording ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
   </svg>
 );
 
-const VolumeIcon = ({ active }: { active?: boolean }) => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const VolumeIcon = ({ muted }: { muted?: boolean }) => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-    {active && <><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></>}
-    {!active && <line x1="23" y1="9" x2="17" y2="15"/>}
+    {!muted && <><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></>}
+    {muted && <line x1="23" y1="9" x2="17" y2="15"/>}
   </svg>
 );
 
@@ -162,28 +160,6 @@ const TypingIndicator = ({ color }: { color: string }) => (
   </div>
 );
 
-// ─── EMOTION INDICATOR ────────────────────────────────────────────────────────
-
-const EmotionDot = ({ emotion, color }: { emotion: string; color: string }) => {
-  const emotionEmoji: Record<string, string> = {
-    neutral: '😐', warm: '🤗', excited: '✨', concerned: '🤔',
-    playful: '😄', focused: '🎯', empathetic: '💙', curious: '🔍',
-    proud: '🌟', gentle: '🌸',
-  };
-  return (
-    <motion.div
-      className="flex items-center gap-1.5 px-2 py-1 rounded-full border text-[10px]"
-      style={{ borderColor: color + '44', background: color + '11', color: color }}
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      key={emotion}
-    >
-      <span>{emotionEmoji[emotion] || '😐'}</span>
-      <span className="capitalize">{emotion}</span>
-    </motion.div>
-  );
-};
-
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function AIChat() {
@@ -205,30 +181,19 @@ export default function AIChat() {
   const [showPersonaModal, setShowPersonaModal] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
 
-  // Emotion state (persisted across turns)
-  const [emotionProfile, setEmotionProfile] = useState<EmotionProfile>({
-    current: 'neutral',
-    intensity: 0.5,
-    valence: 0,
-    energy: 0.3,
-    history: [],
-  });
-
-  // Voice state
-  const [voiceMode, setVoiceMode] = useState(false);
-  const [isAISpeaking, setIsAISpeaking] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
-  const [voiceLevel, setVoiceLevel] = useState(0);
-  const [liveTranscript, setLiveTranscript] = useState('');
-  const [lastAIMessage, setLastAIMessage] = useState('');
+  // Voice / recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [mutedMessages, setMutedMessages] = useState<Set<string>>(new Set());
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const sttRef = useRef<SpeechRecognitionEngine | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   // ─── EFFECTS ──────────────────────────────────────────────────────────────
 
@@ -256,16 +221,21 @@ export default function AIChat() {
 
   const loadUserProfile = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!user) { console.warn('No authenticated user found'); return; }
+
+      const { data, error } = await supabase
         .from('users')
-        .select('id, email, name, avatar_url')
+        .select("id, email, name, avatar_url")
         .eq('id', user.id)
         .single();
+
+      if (error) throw error;
       if (data) setUserProfile(data);
     } catch (err) {
       console.error('Error loading user profile:', err);
+      setError('Failed to load user profile');
     }
   };
 
@@ -384,16 +354,6 @@ export default function AIChat() {
     setIsLoading(true);
     setStreamingContent('');
 
-    // Detect mood for immediate emotion update
-    const { detectedEmotion, mood } = detectUserMood(trimmed);
-    const newEmotion = computeAIEmotion(
-      detectedEmotion,
-      selectedPersona.id,
-      emotionProfile.history,
-      emotionProfile.current
-    );
-    setEmotionProfile(newEmotion);
-
     let convId = activeConversationId;
     if (!convId) {
       convId = await createNewConversation(trimmed, selectedPersona.id);
@@ -401,8 +361,6 @@ export default function AIChat() {
     }
 
     if (convId) await saveMessage(convId, 'user', trimmed);
-
-    const { data: { user } } = await supabase.auth.getUser();
 
     try {
       abortControllerRef.current = new AbortController();
@@ -415,14 +373,9 @@ export default function AIChat() {
           conversationId: convId,
           personaId: selectedPersona.id,
           personaName: selectedPersona.name,
-          personaBasePrompt: selectedPersona.systemPrompt,
-          personaVoiceStyle: selectedPersona.voiceStyle,
+          personaSystemPrompt: selectedPersona.systemPrompt,
           history: messages.slice(-12).map(m => ({ role: m.role, content: m.content })),
-          userId: user?.id,
-          userName: userProfile?.name,
-          isVoiceMode: voiceMode,
-          emotionHistory: emotionProfile.history,
-          currentEmotion: emotionProfile.current,
+          userName: userProfile?.name || null,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -446,14 +399,10 @@ export default function AIChat() {
             if (data === '[DONE]') break;
             try {
               const parsed = JSON.parse(data);
-              if (parsed.type === 'meta' && parsed.emotionProfile) {
-                // Update emotion from server-confirmed state
-                setEmotionProfile(parsed.emotionProfile);
-              } else if (parsed.type === 'content' && parsed.content) {
+              if (parsed.type === 'content' && parsed.content) {
                 accumulated += parsed.content;
                 setStreamingContent(accumulated);
               } else if (parsed.content) {
-                // backwards compat
                 accumulated += parsed.content;
                 setStreamingContent(accumulated);
               }
@@ -462,40 +411,47 @@ export default function AIChat() {
         }
       }
 
+      // Fetch TTS audio for AI response
+      let audioUrl: string | undefined;
+      try {
+        const ttsRes = await fetch('https://rookie-backend.vercel.app/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: accumulated }),
+        });
+        if (ttsRes.ok) {
+          const audioBlob = await ttsRes.blob();
+          audioUrl = URL.createObjectURL(audioBlob);
+        }
+      } catch (ttsErr) {
+        console.error('TTS error:', ttsErr);
+      }
+
+      const aiMsgId = crypto.randomUUID();
       const aiMsg: Message = {
-        id: crypto.randomUUID(),
+        id: aiMsgId,
         role: 'assistant',
         content: accumulated,
         timestamp: new Date(),
         persona: selectedPersona.name,
+        audioUrl,
       };
 
       setMessages(prev => [...prev, aiMsg]);
       setStreamingContent('');
-      setLastAIMessage(accumulated);
 
-      if (convId) await saveMessage(convId, 'assistant', accumulated);
-      if (convId) {
+      // Auto-play AI audio
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        audioElementsRef.current.set(aiMsgId, audio);
+        audio.play().catch(() => {});
+      }
+
+      if (convId && accumulated) {
+        await saveMessage(convId, 'assistant', accumulated);
         await supabase.from('ai_conversations')
           .update({ updated_at: new Date().toISOString() })
           .eq('id', convId);
-      }
-
-      // Auto-speak in voice mode
-      if (voiceMode && accumulated) {
-        const prosody = getVoiceProsody(newEmotion, selectedPersona.voiceStyle);
-        setIsAISpeaking(true);
-        voiceEngine.speak(
-          accumulated,
-          prosody,
-          selectedPersona.voiceStyle,
-          () => setIsAISpeaking(true),
-          () => {
-            setIsAISpeaking(false);
-            // Auto-restart listening after AI finishes speaking
-            if (voiceMode) startListening();
-          }
-        );
       }
 
     } catch (err: any) {
@@ -514,7 +470,7 @@ export default function AIChat() {
       setIsLoading(false);
       setStreamingContent('');
     }
-  }, [input, isLoading, activeConversationId, messages, selectedPersona, emotionProfile, voiceMode, userProfile]);
+  }, [input, isLoading, activeConversationId, messages, selectedPersona, userProfile]);
 
   const handleStop = () => {
     abortControllerRef.current?.abort();
@@ -531,88 +487,113 @@ export default function AIChat() {
     setIsLoading(false);
   };
 
-  // ─── VOICE ────────────────────────────────────────────────────────────────
+  // ─── VOICE RECORDING ──────────────────────────────────────────────────────
 
-  const startListening = useCallback(() => {
-    if (!SpeechRecognitionEngine.isSupported()) {
-      setError('Voice not supported in this browser');
+  /**
+   * Toggle recording:
+   * - First press  → request mic permission → start MediaRecorder
+   * - Second press → stop recording → send blob to /api/transcribe → setInput with transcript
+   */
+  const handleVoiceInput = useCallback(async () => {
+    // ── Stop recording ────────────────────────────────────────────────────
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
       return;
     }
 
-    sttRef.current?.stop();
+    // ── Start recording ───────────────────────────────────────────────────
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
 
-    sttRef.current = new SpeechRecognitionEngine(
-      (result) => {
-        setLiveTranscript(result.transcript);
-        if (result.isFinal && result.transcript.trim()) {
-          setLiveTranscript('');
-          handleSend(result.transcript.trim());
-          sttRef.current?.stop();
-          setIsListening(false);
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/mp4';
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        // Stop all mic tracks
+        stream.getTracks().forEach(t => t.stop());
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        audioChunksRef.current = [];
+
+        setIsTranscribing(true);
+        try {
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'recording.webm');
+
+          const res = await fetch('https://rookie-backend.vercel.app/api/transcribe', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!res.ok) throw new Error(`Transcription failed: ${res.status}`);
+          const { text } = await res.json();
+
+          if (text?.trim()) {
+            // Directly send the transcribed message
+            handleSend(text.trim());
+          }
+        } catch (err: any) {
+          console.error('Transcription error:', err);
+          setError('Could not transcribe audio. Please try again.');
+        } finally {
+          setIsTranscribing(false);
         }
-      },
-      () => setIsListening(false),
-      (err) => { setError(`Voice error: ${err}`); setIsListening(false); }
-    );
+      };
 
-    sttRef.current.start();
-    setIsListening(true);
-  }, [handleSend]);
+      recorder.start();
+      setIsRecording(true);
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') {
+        setError('Microphone permission denied. Please allow mic access in your browser.');
+      } else {
+        setError('Could not access microphone.');
+      }
+      console.error('Mic error:', err);
+    }
+  }, [isRecording, handleSend]);
 
-  const stopListening = useCallback(() => {
-    sttRef.current?.stop();
-    setIsListening(false);
-    setLiveTranscript('');
+  // ─── AUDIO MUTE TOGGLE ────────────────────────────────────────────────────
+
+  const handleToggleMute = useCallback((msgId: string) => {
+    const audio = audioElementsRef.current.get(msgId);
+    setMutedMessages(prev => {
+      const next = new Set(prev);
+      if (next.has(msgId)) {
+        next.delete(msgId);
+        if (audio) {
+          audio.muted = false;
+          // Resume if paused due to mute
+          audio.play().catch(() => {});
+        }
+      } else {
+        next.add(msgId);
+        if (audio) audio.muted = true;
+      }
+      return next;
+    });
   }, []);
 
-  const toggleVoiceMode = () => {
-    if (voiceMode) {
-      voiceEngine.stop();
-      stopListening();
-      setVoiceMode(false);
-      setIsAISpeaking(false);
-    } else {
-      setVoiceMode(true);
-    }
-  };
-
-  // Text-to-speech for individual messages
-  const handleSpeak = useCallback((text: string) => {
-    if (isAISpeaking) {
-      voiceEngine.stop();
-      setIsAISpeaking(false);
-      return;
-    }
-    const prosody = getVoiceProsody(emotionProfile, selectedPersona.voiceStyle);
-    setIsAISpeaking(true);
-    voiceEngine.speak(text, prosody, selectedPersona.voiceStyle,
-      () => setIsAISpeaking(true),
-      () => setIsAISpeaking(false)
-    );
-  }, [isAISpeaking, emotionProfile, selectedPersona]);
-
-  // ─── TEXT INPUT ───────────────────────────────────────────────────────────
-
-  const handleVoiceInput = () => {
-    if (!SpeechRecognitionEngine.isSupported()) {
-      setError('Speech recognition not supported');
-      return;
-    }
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SR();
-    recognition.lang = 'en-IN';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.onresult = (e: any) => setInput(e.results[0][0].transcript);
-    recognition.onerror = () => {};
-    recognition.start();
-  };
+  // ─── COPY ─────────────────────────────────────────────────────────────────
 
   const handleCopy = async (id: string, text: string) => {
     await navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  // ─── MISC ─────────────────────────────────────────────────────────────────
 
   const handleNewChat = useCallback(() => {
     setMessages([]);
@@ -630,7 +611,6 @@ export default function AIChat() {
   const getAvatarInitial = () =>
     (userProfile?.name?.[0] || userProfile?.email?.[0] || 'U').toUpperCase();
 
-  // Stable sidebar callbacks — prevent sidebar re-renders when chat state changes
   const handleLoadConversation = useCallback(loadConversation, [conversations]);
   const handleToggleHistory = useCallback(() => setHistoryOpen(o => !o), []);
   const handleOpenPersonaModal = useCallback(() => setShowPersonaModal(true), []);
@@ -643,23 +623,6 @@ export default function AIChat() {
 
   return (
     <div className="flex h-screen bg-[#000000] text-white overflow-hidden font-['Inter',sans-serif]">
-
-      {/* VOICE MODE OVERLAY */}
-      <VoiceModeOverlay
-        isOpen={voiceMode}
-        personaName={selectedPersona.name}
-        personaAvatar={selectedPersona.avatar}
-        accentColor={accentColor}
-        isAISpeaking={isAISpeaking}
-        isUserSpeaking={isUserSpeaking}
-        voiceLevel={voiceLevel}
-        liveTranscript={liveTranscript}
-        lastAIMessage={lastAIMessage}
-        onClose={toggleVoiceMode}
-        onStartListening={startListening}
-        onStopListening={stopListening}
-        isListening={isListening}
-      />
 
       {/* DESKTOP SIDEBAR */}
       <AnimatePresence>
@@ -734,32 +697,23 @@ export default function AIChat() {
             >
               {sidebarOpen ? <CollapseIcon /> : <MenuIcon />}
             </button>
-            <button
-              onClick={() => setShowPersonaModal(true)}
-              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/8 transition-all border border-white/8"
-            >
-              <span className="text-sm">{selectedPersona.avatar}</span>
-              <span className="text-xs font-medium text-[#ccc]">{selectedPersona.name}</span>
-              <ChevronIcon open={showPersonaModal} />
-            </button>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Emotion indicator */}
-            <EmotionDot emotion={emotionProfile.current} color={accentColor} />
-
-            {/* Voice mode toggle */}
-            <button
-              onClick={toggleVoiceMode}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs transition-all ${
-                voiceMode
-                  ? 'bg-white/10 border-white/20 text-white'
-                  : 'bg-white/5 border-white/8 text-[#999] hover:text-white'
-              }`}
-            >
-              <MicIcon active={voiceMode} />
-              <span className="hidden sm:inline">{voiceMode ? 'Voice On' : 'Voice'}</span>
-            </button>
+            {/* Recording status indicator */}
+            {isRecording && (
+              <motion.div
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs"
+                animate={{ opacity: [1, 0.5, 1] }}
+                transition={{ duration: 1, repeat: Infinity }}
+              >
+                <div className="w-2 h-2 rounded-full bg-red-500" />
+                Recording…
+              </motion.div>
+            )}
+            {isTranscribing && (
+              <span className="text-xs text-[#666] px-3">Transcribing…</span>
+            )}
           </div>
         </header>
 
@@ -767,7 +721,7 @@ export default function AIChat() {
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-            className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 text-red-300 text-sm flex items-center justify-between"
+            className="px-4 py-3 bg-red-500/10 border-t border-b border-red-500/20 text-red-300 text-sm flex items-center justify-between"
           >
             <span>{error}</span>
             <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300 ml-4">✕</button>
@@ -789,7 +743,7 @@ export default function AIChat() {
                 <p className="text-[#555] text-sm">{selectedPersona.greeting}</p>
               </div>
               <div className="flex gap-2 flex-wrap justify-center">
-                {['What can you help me with?', 'Tell me about yourself', 'Let\'s chat'].map(s => (
+                {['What can you help me with?', 'Tell me about yourself', "Let's chat"].map(s => (
                   <button
                     key={s}
                     onClick={() => handleSend(s)}
@@ -848,11 +802,25 @@ export default function AIChat() {
                   <span className="text-[10px] text-[#333]">{formatTime(msg.timestamp)}</span>
                   {msg.role === 'assistant' && (
                     <>
-                      <button onClick={() => handleCopy(msg.id, msg.content)} className="text-[#444] hover:text-[#999] transition-colors p-0.5">
+                      {/* Mute toggle — shown only when this message has audio */}
+                      {msg.audioUrl && (
+                        <button
+                          onClick={() => handleToggleMute(msg.id)}
+                          className={`transition-colors p-0.5 ${
+                            mutedMessages.has(msg.id)
+                              ? 'text-[#666] hover:text-[#999]'
+                              : 'text-[#FF6B35] hover:text-[#FF8C5A]'
+                          }`}
+                          title={mutedMessages.has(msg.id) ? 'Unmute' : 'Mute'}
+                        >
+                          <VolumeIcon muted={mutedMessages.has(msg.id)} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleCopy(msg.id, msg.content)}
+                        className="text-[#444] hover:text-[#999] transition-colors p-0.5"
+                      >
                         {copiedId === msg.id ? <span className="text-[10px] text-green-400">Copied!</span> : <CopyIcon />}
-                      </button>
-                      <button onClick={() => handleSpeak(msg.content)} className={`transition-colors p-0.5 ${isAISpeaking ? 'text-[#FF6B35]' : 'text-[#444] hover:text-[#999]'}`}>
-                        <VolumeIcon active={isAISpeaking} />
                       </button>
                     </>
                   )}
@@ -907,18 +875,32 @@ export default function AIChat() {
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
                 }}
-                placeholder={`Message ${selectedPersona.name}...`}
+                placeholder={
+                  isRecording
+                    ? 'Recording… tap mic to stop'
+                    : isTranscribing
+                    ? 'Transcribing…'
+                    : `Message ${selectedPersona.name}...`
+                }
                 rows={1}
                 className="flex-1 bg-transparent text-white text-sm placeholder-[#444] resize-none outline-none leading-relaxed"
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
               <div className="flex items-center gap-1 flex-shrink-0">
+                {/* Mic button — red when recording */}
                 <button
                   onClick={handleVoiceInput}
-                  className="p-1.5 text-[#555] hover:text-[#999] transition-colors"
+                  disabled={isTranscribing}
+                  className={`p-1.5 transition-colors ${
+                    isRecording
+                      ? 'text-red-400 hover:text-red-300'
+                      : 'text-[#555] hover:text-[#999]'
+                  } disabled:opacity-40`}
+                  title={isRecording ? 'Stop recording' : 'Record voice message'}
                 >
-                  <MicIcon />
+                  <MicIcon recording={isRecording} />
                 </button>
+
                 {isLoading ? (
                   <button
                     onClick={handleStop}
@@ -939,7 +921,7 @@ export default function AIChat() {
               </div>
             </div>
             <p className="text-center text-[#2a2a2a] text-[10px] mt-2">
-              {selectedPersona.name} remembers your conversations · Voice mode available
+              {selectedPersona.name} remembers your conversations · Tap mic to speak
             </p>
           </div>
         </div>
