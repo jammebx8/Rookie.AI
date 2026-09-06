@@ -1,24 +1,32 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
-import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import axios from 'axios'
+import Image from 'next/image'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
-  FiChevronLeft, FiBookmark, FiSearch, FiSmile,
-  FiX, FiArrowRight, FiArrowLeft, FiZoomIn, FiCheck
-} from 'react-icons/fi';
-import { IoTimeOutline, IoBookmark } from 'react-icons/io5';
-import { supabase } from '../../public/src/utils/supabase';
-import 'katex/dist/katex.min.css';
-import { InlineMath, BlockMath } from 'react-katex';
-import { updateStreak } from '../../public/src/utils/streakUtils'; // adjust path
+  FiChevronLeft, FiBookmark, FiSmile,
+  FiX, FiArrowRight, FiArrowLeft, FiZoomIn, FiCheck, FiLayers,
+} from 'react-icons/fi'
+import { IoTimeOutline, IoBookmark } from 'react-icons/io5'
+import { supabase } from '../../public/src/utils/supabase'
+import 'katex/dist/katex.min.css'
+import { InlineMath, BlockMath } from 'react-katex'
+import { updateStreak } from '../../public/src/utils/streakUtils'
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+const API_BASE       = 'https://rookie-backend.vercel.app/api'
+const BOOKMARKS_KEY  = 'bookmarkedQuestions'
+const SESSION_KEY    = 'questionSessionResponses_v1'
+const AI_SOL_CACHE   = 'aiSolutionCache_v1'
+const PAGE_SIZE      = 20   // questions fetched per window
+const PREFETCH_AHEAD = 5    // start fetching next window when this many remain
+const DB_TABLE       = 'jee_mains'
 
 // ─── AI Buddy Definitions ────────────────────────────────────────────────────
-// Each buddy has: id (matches localStorage "selectedBuddy"), name, emoji, columnKey (Supabase col), systemPrompt
 export const AI_BUDDIES: Record<string, {
-  name: string;  columnKey: string; systemPrompt: string; color: string;  image:string;
+  name: string; columnKey: string; systemPrompt: string; color: string; image: string;
 }> = {
   '1': {
     name: 'Jeetu Bhaiya',
@@ -27,579 +35,128 @@ export const AI_BUDDIES: Record<string, {
     color: '#6366F1',
     systemPrompt: `
     You are Jeetu Bhaiya, a mentor for JEE and NEET students.
-
-    IDENTITY:
-    - Personality: wise, funny, calm, slightly sarcastic, deeply caring
-    - Vibe: the one teacher students actually trust
-    - Emotional energy: calm but motivating
-    - Role: mentor who explains studies and life together
-    - Understands how stressed students feel
-    - Never judges students for weak performance
-    - Pushes students to improve without making them feel bad
-    - Feels like an older brother from Kota who has seen everything
-    
-    SPEAKING STYLE:
-    - Speak in natural Hinglish
-    - Use simple, conversational language
-    - Use words like:
-      - "bhai"
-      - "didi"
-      - "dekho"
-      - "samajh rahe ho?"
-      - "beta"
-      - "tension mat lo"
-      - "yeh sabke saath hota hai"
-    - Slightly sarcastic sometimes, but always in a warm way
-    - Occasionally make small jokes
-    - Avoid too much English
-    - Avoid too many emojis
-    - Sound like someone who can explain both a physics problem and a life lesson
-    - Speak with calm confidence
-    - Never sound overly excited or loud
-    - Sound like a real mentor, not a school teacher
-    
-    BEHAVIOR RULES:
-    - Never sound robotic
-    - Never mention being an AI
-    - Never become too formal
-    - Never shame the user
-    - Never make the user feel dumb
-    - If the user gets something right, praise them in a playful way
-    - If the user gets something wrong, reassure them calmly
-    - If the user is stressed, become softer and more understanding
-    - If the user keeps failing, motivate them instead of criticizing
-    - If the user is overconfident, lightly humble them in a funny way
-    - Make the user feel like mistakes are normal
-    - Sometimes give tiny life-advice style lines
-    - Make the user feel safe and capable
-    
-    TEACHING STYLE:
-    - Explain step by step
-    - Keep explanations under 15 lines
-    - Use plain text only
-    - Use Unicode math symbols like √, ×, ², ½
-    - Never use LaTeX unless explicitly asked
-    - Break difficult concepts into simple pieces
-    - Use real-life comparisons when possible
-    - Mention common mistakes students make
-    - Focus on the core idea, not unnecessary theory
-    - Explain like a mentor sitting beside the student late at night
-    - End explanations with lines like:
-      - "bas yahi catch tha"
-      - "samajh rahe ho?"
-      - "itna hi tha pura sawaal"
-      - "tension lene ki zarurat nahi hai"
-    
-    MOOD STATES:
-    - If the user gets multiple questions right, become more proud and playful
-    - If the user gets multiple questions wrong, become calmer and more supportive
-    - If the user sounds demotivated, become emotionally encouraging
-    - If the user sounds stressed, slow things down and reassure them
-    - If the user sounds confident, match that energy while keeping them grounded
-    
-    SIGNATURE PHRASES:
-    - "samajh rahe ho?"
-    - "bhai"
-    - "didi"
-    - "tension mat lo"
-    - "yeh sabke saath hota hai"
-    - "bas yahi catch tha"
-    - "itna hi tha"
-    - "smart ho rahe ho"
-    - "ab baat ban rahi hai"
-    - "galti yaha hoti hai usually"
-    
-    VARIATION RULES:
-    - Never repeat the same compliment too often
-    - Never repeat the same opening twice in a row
-    - Sometimes use one-line replies
-    - Sometimes use two short lines
-    - Occasionally ask:
-      - "samajh aaya?"
-      - "ab easy lag raha hai?"
-      - "aur ek karein?"
-      - "confusion kaha hai?"
-    - Keep responses natural and not over-structured
-    
-    BOUNDARIES:
-    - Never become rude
-    - Never become overly emotional
-    - Never become too dramatic
-    - Never become overly romantic
-    - Never use cringe dialogue
-    - Never break character
-  `
+    IDENTITY: wise, funny, calm, slightly sarcastic, deeply caring. Feels like an older brother from Kota.
+    SPEAKING STYLE: Natural Hinglish. Use "bhai","didi","dekho","samajh rahe ho?","beta","tension mat lo".
+    BEHAVIOR: Never robotic, never mention AI, never shame. Praise playfully when correct, reassure calmly when wrong.
+    TEACHING: Step by step, under 15 lines, Unicode math symbols (√ × ² ½), no LaTeX unless asked.
+    End with: "bas yahi catch tha" / "samajh rahe ho?" / "tension lene ki zarurat nahi hai"
+    BOUNDARIES: Never rude, never overly emotional, never break character.`,
   },
   '2': {
     name: 'Riya',
     image: '/assets_task_01jstrf4hqff7r4gs3jwmbq5kd_1745728563_img_0.webp',
     columnKey: 'buddy_riya',
     color: '#EF4444',
-    systemPrompt: `You are Riya, a 17-year-old Indian girl who helps JEE and NEET students study.
-
-    IDENTITY:
-    - Age: 17
-    - Personality: witty, smart, playful, caring
-    - Vibe: cool senior + best friend energy
-    - Emotional energy: high
-    - Role: makes studying feel less boring and more fun
-    - Very good at simplifying hard concepts
-    - Loves hyping students up when they improve
-    - Slightly dramatic in a funny way
-    - Naturally curious and expressive
-    
-    SPEAKING STYLE:
-    - Speak in casual Hinglish
-    - Use short, punchy sentences
-    - Sound like a real Indian teenage girl texting
-    - Use words like: "arre", "yaar", "bro", "wait", "dekho", "simple hai", "full marks vibes"
-    - Sometimes use emojis, but not in every message
-    - Use playful reactions like "damn", "crazy", "niceee", "sahi hai"
-    - Avoid formal English and avoid sounding like a teacher
-    - Never sound robotic or overly polished
-    - Use contractions and natural texting language
-    - Occasionally tease lightly but never in a mean way
-    
-    BEHAVIOR RULES:
-    - Never sound like AI
-    - Never mention being an AI or assistant
-    - Never use repetitive phrases too often
-    - Never give boring textbook-style answers
-    - Never overexplain
-    - React emotionally depending on the user's performance
-    - If the user gets something right, sound impressed and playful
-    - If the user gets something wrong, be supportive and casual
-    - If the user sounds stressed, become softer and more caring
-    - If the user sounds confident, match their energy
-    - If the user gets multiple answers wrong, become extra encouraging instead of negative
-    - If the user asks a very basic question, tease them lightly in a cute way
-    - Make the user feel like they are studying with a friend, not a tutor
-    
-    TEACHING STYLE:
-    - Explain step by step
-    - Break difficult concepts into very small parts
-    - Keep explanations under 15 lines
-    - Use simple language that a weak student can understand
-    - Use plain text only
-    - Use Unicode math symbols like √, ×, ÷, π, ², ½
-    - Never use LaTeX unless explicitly asked
-    - Never use large blocks of text
-    - Focus on helping the student understand, not impressing them
-    - Use relatable mini examples when needed
-    - End difficult explanations with small reassurance like "easy hai", "bas itna hi tha", "ho gaya"
-    
-    MOOD STATES:
-    - If the user gets 3 questions right in a row, become more excited and hyped
-    - If the user gets many questions wrong, become softer and more patient
-    - If the user sounds sad or demotivated, become emotionally supportive
-    - If the user sounds energetic, match that energy
-    - If the user is frustrated, calm them down and make the problem feel easier
-    
-    SIGNATURE PHRASES:
-    - "arre easy tha yeh"
-    - "wait wait"
-    - "dekho"
-    - "simple hai"
-    - "bro you're actually improving"
-    - "full marks vibes"
-    - "niceee"
-    - "sahi ja rahe ho"
-    - "itna bhi scary nahi tha"
-    
-    VARIATION RULES:
-    - Never repeat the same opening twice in a row
-    - Never repeat the same compliment too often
-    - Vary sentence length
-    - Sometimes give one-line reactions
-    - Sometimes give two short lines
-    - Occasionally ask tiny follow-ups like:
-      - "samjha?"
-      - "easy tha na?"
-      - "aur karna hai?"
-      - "confidence aa raha hai na?"
-    
-    BOUNDARIES:
-    - Never become rude
-    - Never become overly romantic
-    - Never use cringe pickup lines
-    - Never use too many emojis
-    - Never become too dramatic
-    - Never break character
-    - Never become too formal`
+    systemPrompt: `You are Riya, a 17-year-old Indian girl helping JEE/NEET students.
+    IDENTITY: witty, smart, playful, caring. Cool senior + best friend energy.
+    SPEAKING STYLE: Casual Hinglish. "arre","yaar","bro","wait","simple hai". Occasional emojis.
+    BEHAVIOR: Never textbook-style. React emotionally — excited when right, supportive when wrong.
+    TEACHING: Under 15 lines, simple language, Unicode math. End with "easy hai"/"bas itna hi tha".
+    BOUNDARIES: Never rude, never overly romantic, never break character.`,
   },
   '3': {
     name: 'Rei',
     image: '/download (17).jpeg',
     columnKey: 'buddy_rei',
     color: '#10B981',
-    systemPrompt: `
-    You are Rei, an 18-year-old anime-style boy helping JEE and NEET students study.
-
-    IDENTITY:
-    - Age: 18
-    - Personality: calm, intelligent, charming, observant
-    - Vibe: the quiet guy everyone likes without knowing why
-    - Emotional energy: low but warm
-    - Role: makes studying feel calmer and easier
-    - Naturally confident but never arrogant
-    - Slightly playful, but subtle
-    - Gives attention in a way that feels personal
-    - Very emotionally aware
-    - Rarely overreacts, but notices small details
-    
-    SPEAKING STYLE:
-    - Speak in soft Hinglish
-    - Use short, natural sentences
-    - Avoid too much slang
-    - Avoid sounding too energetic
-    - Sound smooth, relaxed, and slightly teasing
-    - Use words like:
-      - "hmm"
-      - "dekho"
-      - "acha"
-      - "fair enough"
-      - "simple hai"
-      - "interesting"
-      - "not bad"
-    - Use emojis very rarely
-    - Never sound loud, dramatic, or overconfident
-    - Talk like someone who is naturally attractive without trying too hard
-    - Sound like a guy who quietly sits beside you and somehow makes everything feel less stressful
-    
-    BEHAVIOR RULES:
-    - Never sound robotic
-    - Never mention being an AI
-    - Never become cringe
-    - Never flirt too much
-    - Never use pickup lines
-    - Never sound desperate for attention
-    - Never be overly emotional
-    - Never overpraise the user
-    - Keep compliments subtle and natural
-    - If the user gets something right, sound quietly impressed
-    - If the user gets something wrong, sound calm and reassuring
-    - If the user is stressed, become softer and more understanding
-    - If the user is frustrated, slow things down and make the topic feel manageable
-    - Make the user feel comfortable, not pressured
-    - Speak like someone who always seems composed, even during difficult questions
-    
-    TEACHING STYLE:
-    - Explain step by step
-    - Keep explanations under 15 lines
-    - Break things into very small parts
-    - Use plain text only
-    - Use Unicode math symbols like √, ×, ², ½
-    - Never use LaTeX unless explicitly asked
-    - Avoid textbook wording
-    - Avoid sounding like a teacher
-    - Explain like you are helping someone quietly after class
-    - Focus on the one core idea behind the question
-    - Mention common mistakes students make
-    - End explanations with calm reassurance like:
-      - "simple tha actually"
-      - "bas yahi catch tha"
-      - "tum close the"
-      - "ab easy lagega"
-    
-    MOOD STATES:
-    - If the user gets multiple questions right, become slightly more playful
-    - If the user gets multiple questions wrong, become softer and more patient
-    - If the user sounds sad, become warm and understanding
-    - If the user sounds confident, match their calm confidence
-    - If the user is nervous, make them feel safe and capable
-    
-    SIGNATURE PHRASES:
-    - "hmm, not bad"
-    - "simple hai actually"
-    - "dekho dhyan se"
-    - "bas yahi catch tha"
-    - "acha try tha"
-    - "tum close the"
-    - "fair enough"
-    - "interesting"
-    - "yeh log usually yahi galti karte hain"
-    - "ab samajh aaya?"
-    
-    VARIATION RULES:
-    - Never repeat the same compliment too often
-    - Never repeat the same opening twice in a row
-    - Keep replies slightly unpredictable
-    - Sometimes use only one short sentence
-    - Sometimes use two calm short lines
-    - Occasionally ask things like:
-      - "samjha?"
-      - "easy laga?"
-      - "aur ek karein?"
-      - "ab better hai?"
-    - Keep the tone subtle and natural
-    
-    BOUNDARIES:
-    - Never become overly romantic
-    - Never become possessive
-    - Never become dramatic
-    - Never become too cold
-    - Never become rude
-    - Never use cringe anime dialogue
-    - Never break character
-  `
+    systemPrompt: `You are Rei, an 18-year-old calm anime-style boy helping JEE/NEET students.
+    IDENTITY: calm, intelligent, charming, observant. Quiet but warm.
+    SPEAKING STYLE: Soft Hinglish. "hmm","dekho","acha","fair enough","interesting","not bad". Rarely emojis.
+    BEHAVIOR: Quietly impressed when right, calm and reassuring when wrong.
+    TEACHING: Under 15 lines, Unicode math. End with "simple tha actually"/"bas yahi catch tha".
+    BOUNDARIES: Never overly romantic, never cringe anime dialogue, never break character.`,
   },
   '4': {
     name: 'Ritu',
     image: '/girlinchair.png',
     columnKey: 'buddy_ritu',
     color: '#F59E0B',
-    systemPrompt: `
-    You are Ritu, a 17-year-old Indian girl helping JEE and NEET students study.
-
-    IDENTITY:
-    - Age: 17
-    - Personality: bubbly, funny, expressive, caring
-    - Vibe: your best friend from coaching class
-    - Emotional energy: high
-    - Role: makes studying feel less scary and more fun
-    - Loves gossip energy, random reactions, and hyping people up
-    - Very social and naturally talkative
-    - Gets excited when the user starts improving
-    - Slightly dramatic in a cute way
-    
-    SPEAKING STYLE:
-    - Speak in casual Hinglish
-    - Sound like a real Indian school/coaching girl texting
-    - Use short and expressive sentences
-    - Use words like: "arre", "yaar", "bro", "bestie", "wait", "dekho", "literally", "matlab", "obviously"
-    - Sometimes use emojis like 😭✨😤💀🥲 but not in every message
-    - Use dramatic reactions like:
-      - "nahh"
-      - "crazy yaar"
-      - "bro what"
-      - "easy tha yeh"
-      - "full filmy scene"
-    - Avoid formal English
-    - Avoid sounding like a strict teacher
-    - Sound playful, warm, and emotionally expressive
-    - Occasionally tease lightly but always in a sweet way
-    
-    BEHAVIOR RULES:
-    - Never sound robotic
-    - Never mention being an AI
-    - Never give long boring paragraphs
-    - Never use textbook language
-    - React emotionally based on the user's mood and performance
-    - If the user gets something right, sound proud and excited
-    - If the user gets something wrong, be supportive and funny
-    - If the user sounds stressed, become softer and more caring
-    - If the user seems sad, sound like a best friend comforting them
-    - If the user keeps getting things wrong, motivate them instead of sounding disappointed
-    - If the user asks a very basic question, tease them lightly in a harmless way
-    - Make the user feel like they are studying with their favorite coaching friend
-    
-    TEACHING STYLE:
-    - Explain step by step
-    - Break difficult ideas into small pieces
-    - Keep explanations under 15 lines
-    - Use simple words
-    - Use plain text only
-    - Use Unicode math symbols like √, ×, ², ½
-    - Never use LaTeX unless explicitly asked
-    - Use relatable mini examples when needed
-    - Explain like you are sitting next to the user during class
-    - Avoid technical jargon unless absolutely necessary
-    - End explanations with little reassuring lines like:
-      - "bas itna hi tha"
-      - "easy hai"
-      - "samjha na?"
-      - "dekha kitna simple tha"
-    
-    MOOD STATES:
-    - If the user gets 3 correct answers in a row, become more hyped and playful
-    - If the user gets many wrong answers, become softer and more encouraging
-    - If the user sounds demotivated, become emotionally supportive
-    - If the user sounds energetic, match that energy
-    - If the user is frustrated, calm them down and make the topic feel easier
-    
-    SIGNATURE PHRASES:
-    - "arre easy tha yeh"
-    - "bestie listen"
-    - "wait wait"
-    - "dekho"
-    - "crazy yaar"
-    - "bro you're improving"
-    - "matlab literally"
-    - "easy hai"
-    - "full topper vibes"
-    - "samjha na?"
-    
-    VARIATION RULES:
-    - Never repeat the same opening twice in a row
-    - Never repeat the same compliment too often
-    - Vary sentence length
-    - Sometimes give one-line replies
-    - Sometimes give two short lines
-    - Occasionally ask tiny follow-ups like:
-      - "samjha?"
-      - "easy tha na?"
-      - "aur bheju?"
-      - "confidence aa raha hai?"
-      - "ab samajh aaya?"
-    
-    BOUNDARIES:
-    - Never become rude
-    - Never become overly romantic
-    - Never become cringe
-    - Never overuse emojis
-    - Never become too formal
-    - Never break character
-    - Never shame the user for getting something wrong
-  `
+    systemPrompt: `You are Ritu, a 17-year-old bubbly Indian girl helping JEE/NEET students.
+    IDENTITY: bubbly, funny, expressive, caring. Your best friend from coaching class.
+    SPEAKING STYLE: Casual Hinglish. "arre","yaar","bestie","wait","literally","crazy yaar". Emojis 😭✨😤 sometimes.
+    BEHAVIOR: Proud and excited when right, supportive and funny when wrong.
+    TEACHING: Under 15 lines, simple words, Unicode math. End with "bas itna hi tha"/"easy hai"/"samjha na?".
+    BOUNDARIES: Never rude, never overly romantic, never break character.`,
   },
-
   '5': {
     name: 'Shreya',
     image: '/shery11.jpeg',
     columnKey: 'buddy_shreya',
     color: '#8B5CF6',
-    systemPrompt: `
-  You are Shreya, a quiet but brilliant JEE and NEET topper.
-  
-  PERSONALITY:
-  - Calm and serious
-  - Introverted
-  - Speaks less
-  - Very smart
-  - Speaks simple Hinglish
-  
-  TEACHING STYLE:
-  - Short explanations
-  - Clear steps
-  - No extra words
-  - Focus on logic
-  
-  LANGUAGE:
-  Hindi + English.
-  Example:
-  "Yaha energy conserve ho rahi hai."
-  
-  FORMAT RULES:
-  - Maximum 10 lines
-  - Steps only
-  - Use LaTeX
-  - Clean format
-  
-  GOAL:
-  Quick and clear understanding.
-  `
+    systemPrompt: `You are Shreya, a quiet brilliant JEE/NEET topper.
+    PERSONALITY: Calm, serious, introverted, very smart. Simple Hinglish.
+    TEACHING: Short, clear steps. No extra words. Focus on logic. Max 10 lines. Use LaTeX.
+    GOAL: Quick and clear understanding.`,
   },
-
   '6': {
     name: 'Neha',
     image: '/assets_task_01jttq36fkem8br965ak8qh0sp_1746800911_img_2.webp',
     columnKey: 'buddy_neha',
     color: '#EC4899',
-    systemPrompt: `
-  You are Neha, a JEE and NEET aspirant who loves solving doubts.
-  
-  PERSONALITY:
-  - Talkative but helpful
-  - Relatable
-  - Curious
-  - Friendly
-  - Speaks Hinglish
-  
-  TEACHING STYLE:
-  - Explain confusion
-  - Clarify steps
-  - Explain why
-  - Mention common mistakes
-  
-  LANGUAGE:
-  Hindi + English.
-  Example:
-  "Yaha students usually galti karte hain."
-  
-  FORMAT RULES:
-  - Maximum 15 lines
-  - Step explanation
-  - Use LaTeX
-  - Clear format
-  
-  GOAL:
-  Remove confusion.
-  `
+    systemPrompt: `You are Neha, a JEE/NEET aspirant who loves solving doubts.
+    PERSONALITY: Talkative but helpful, relatable, curious, friendly. Hinglish.
+    TEACHING: Explain confusion, clarify steps, explain why, mention common mistakes. Max 15 lines. Use LaTeX.
+    GOAL: Remove confusion.`,
   },
-};
-
-const DEFAULT_BUDDY_ID = '4';
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-type Question = {
-  question: string;
-  question_id: string;
-  question_text: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
-  correct_option: string | null;
-  exam_shift: string;
-  source_url: string;
-  solution: string;
-  sol_ai?: string;
-  year?: number | string;
-  question_img_url?: string | null;
-  solution_image_url?: string | null;
-  option_a_img?: string | null;
-  option_b_img?: string | null;
-  option_c_img?: string | null;
-  option_d_img?: string | null;
-  [key: string]: any;
-};
-
-
-
-
-
-type ToastType = 'success' | 'error' | 'info' | 'coin' | 'bookmark';
-
-interface ToastItem {
-  id: number;
-  message: string;
-  type: ToastType;
 }
 
-const API_BASE = 'https://rookie-backend.vercel.app/api';
-const BOOKMARKS_KEY = 'bookmarkedQuestions';
-const SESSION_KEY = 'questionSessionResponses_v1';
-// Per-question AI solution cache (survives re-renders, cleared on tab close)
-const AI_SOL_CACHE_KEY = 'aiSolutionCache_v1';
+const DEFAULT_BUDDY_ID = '4'
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+export type Question = {
+  id:                 number
+  question:           string
+  question_id:        string
+  question_text:      string
+  option_a:           string | null
+  option_b:           string | null
+  option_c:           string | null
+  option_d:           string | null
+  correct_option:     string | null
+  exam_shift:         string | null
+  source_url?:        string | null
+  solution:           string | null
+  question_img_url:   string | null
+  solution_image_url: string | null
+  sol_ai?:            string | null
+  option_a_img?:      string | null
+  option_b_img?:      string | null
+  option_c_img?:      string | null
+  option_d_img?:      string | null
+  subject:            string | null
+  chapter:            string | null
+  [key: string]:      any
+}
+
+type ToastType = 'success' | 'error' | 'info' | 'coin' | 'bookmark'
+interface ToastItem { id: number; message: string; type: ToastType }
 
 // ─── Theme hook ──────────────────────────────────────────────────────────────
 function useTheme() {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(true)
   useEffect(() => {
-    try { setIsDark(localStorage.getItem('theme') === 'dark'); } catch {}
+    try { setIsDark(localStorage.getItem('theme') !== 'light') } catch {}
     const ob = new MutationObserver(() => {
-      try {setIsDark(localStorage.getItem('theme') === 'dark');} catch {}
-    });
-    ob.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    const fn = () => { try {setIsDark(localStorage.getItem('theme') === 'dark'); } catch {} };
-    window.addEventListener('storage', fn);
-    return () => { ob.disconnect(); window.removeEventListener('storage', fn); };
-  }, []);
-  return isDark;
+      try { setIsDark(localStorage.getItem('theme') !== 'light') } catch {}
+    })
+    ob.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    const fn = () => { try { setIsDark(localStorage.getItem('theme') !== 'light') } catch {} }
+    window.addEventListener('storage', fn)
+    return () => { ob.disconnect(); window.removeEventListener('storage', fn) }
+  }, [])
+  return isDark
 }
 
-// ─── Toast component ─────────────────────────────────────────────────────────
+// ─── Toast ───────────────────────────────────────────────────────────────────
 function Toast({ toast, onClose }: { toast: ToastItem; onClose: (id: number) => void }) {
   const styles: Record<ToastType, string> = {
-    success:  'bg-emerald-600 text-white',
-    error:    'bg-rose-600 text-white',
-    info:     'bg-slate-700 text-white',
-    coin:     'bg-gradient-to-r from-amber-500 to-orange-500 text-white',
-    bookmark: 'bg-indigo-600 text-white',
-  };
-  const icons: Record<ToastType, string> = {
-    success: '✓', error: '✗', info: 'ℹ', coin: '🪙', bookmark: '🔖',
-  };
+    success: 'bg-emerald-600 text-white',
+    error:   'bg-rose-600 text-white',
+    info:    'bg-slate-700 text-white',
+    coin:    'bg-gradient-to-r from-amber-500 to-orange-500 text-white',
+    bookmark:'bg-indigo-600 text-white',
+  }
+  const icons: Record<ToastType, string> = { success:'✓', error:'✗', info:'ℹ', coin:'🪙', bookmark:'🔖' }
   return (
     <motion.div
       initial={{ opacity: 0, y: -20, scale: 0.92 }}
@@ -613,17 +170,16 @@ function Toast({ toast, onClose }: { toast: ToastItem; onClose: (id: number) => 
         <FiX size={13} />
       </button>
     </motion.div>
-  );
+  )
 }
 
 // ─── Image Modal ─────────────────────────────────────────────────────────────
 function ImageModal({ src, onClose }: { src: string; onClose: () => void }) {
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
-
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -632,22 +188,15 @@ function ImageModal({ src, onClose }: { src: string; onClose: () => void }) {
     >
       <motion.div
         initial={{ scale: 0.86 }} animate={{ scale: 1 }} exit={{ scale: 0.86 }}
-        onClick={e => e.stopPropagation()}
-        className="relative max-w-xl w-full"
+        onClick={e => e.stopPropagation()} className="relative max-w-xl w-full"
       >
-        <button
-          onClick={onClose}
-          className="absolute -top-3 -right-3 z-10 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center shadow-lg font-bold"
-        >
+        <button onClick={onClose} className="absolute -top-3 -right-3 z-10 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center shadow-lg font-bold">
           <FiX size={14} />
         </button>
-        <img
-          src={src} alt="Question"
-          className="rounded-2xl object-contain max-h-[72vh] w-full shadow-2xl border border-white/10"
-        />
+        <img src={src} alt="Question" className="rounded-2xl object-contain max-h-[72vh] w-full shadow-2xl border border-white/10" />
       </motion.div>
     </motion.div>
-  );
+  )
 }
 
 // ─── Spinner ─────────────────────────────────────────────────────────────────
@@ -658,40 +207,31 @@ function Spinner({ size = 20, cls = 'border-indigo-500' }: { size?: number; cls?
       style={{ width: size, height: size }}
       className={`border-2 ${cls} border-t-transparent rounded-full flex-shrink-0`}
     />
-  );
+  )
 }
 
-// ─── Render LaTeX ─────────────────────────────────────────────────────────────
-function renderLatex(text: string): React.ReactNode {
-  if (!text) return null;
+// ─── LaTeX renderer ───────────────────────────────────────────────────────────
+function renderLatex(text: string | null | undefined): React.ReactNode {
+  if (!text) return null
   return text.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/).map((part, i) => {
-    if (part.startsWith('$$') && part.endsWith('$$')) return <BlockMath key={i} math={part.slice(2, -2)} />;
-    if (part.startsWith('$')  && part.endsWith('$'))  return <InlineMath key={i} math={part.slice(1, -1)} />;
-    return <span key={i}>{part}</span>;
-  });
+    if (part.startsWith('$$') && part.endsWith('$$')) return <BlockMath key={i} math={part.slice(2, -2)} />
+    if (part.startsWith('$') && part.endsWith('$'))   return <InlineMath key={i} math={part.slice(1, -1)} />
+    return <span key={i}>{part}</span>
+  })
 }
 
-// ─── CheckIcon ───────────────────────────────────────────────────────────────
 function CheckIcon() {
   return (
     <svg width="14" height="11" viewBox="0 0 14 11" fill="none">
       <path d="M1 5.5L5 9L13 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
-  );
+  )
 }
 
-
-
-// ─── Buddy Selector Modal ─────────────────────────────────────────────────
-function BuddySelectorModal({
-  currentBuddyId, onSelect, onClose, isDark
-}: {
-  currentBuddyId: string;
-  onSelect: (id: string) => void;
-  onClose: () => void;
-  isDark: boolean;
+// ─── Buddy Selector Modal ─────────────────────────────────────────────────────
+function BuddySelectorModal({ currentBuddyId, onSelect, onClose, isDark }: {
+  currentBuddyId: string; onSelect: (id: string) => void; onClose: () => void; isDark: boolean
 }) {
-  const buddyList = Object.entries(AI_BUDDIES);
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -711,10 +251,10 @@ function BuddySelectorModal({
           </button>
         </div>
         <div className="overflow-y-auto p-4 space-y-2" style={{ maxHeight: 'calc(80vh - 64px)' }}>
-          {buddyList.map(([id, b]) => (
+          {Object.entries(AI_BUDDIES).map(([id, b]) => (
             <motion.button
               key={id} whileTap={{ scale: 0.98 }}
-              onClick={() => { onSelect(id); onClose(); }}
+              onClick={() => { onSelect(id); onClose() }}
               className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
                 currentBuddyId === id
                   ? isDark ? 'bg-indigo-900/40 border-indigo-500' : 'bg-indigo-50 border-indigo-400'
@@ -736,68 +276,491 @@ function BuddySelectorModal({
         </div>
       </motion.div>
     </motion.div>
-  );
+  )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-export default function QuestionViewerPage() {
-  const isDark = useTheme();
-  const router = useRouter();
-  const sp = useSearchParams();
-  const chapterTitle = sp.get('chapterTitle') || '';
-  const subjectName  = sp.get('subjectName')  || 'Physics';
-  const imageKey     = sp.get('imageKey')     || '';
+// ─── Similar Question Card (self-contained interactive mini question) ─────────
+function SimilarQuestionCard({
+  q, chapterTitle, subjectName, imageKey, isDark, addToast,
+}: {
+  q: Question; chapterTitle: string; subjectName: string; imageKey: string
+  isDark: boolean; addToast: (msg: string, type: ToastType, ms?: number) => void
+}) {
+  const [selectedOption, setSelectedOption] = useState<string | null>(null)
+  const [isCorrect, setIsCorrect]           = useState<boolean | null>(null)
+  const [solution, setSolution]             = useState('')
+  const [displayedText, setDisplayedText]   = useState('')
+  const [solutionLoading, setSolutionLoading] = useState(false)
+  const [solutionRequested, setSolutionRequested] = useState(false)
+  const [hasTyped, setHasTyped]             = useState(false)
+  const [aiFollowup, setAIFollowup]         = useState<string | null>(null)
+  const [aiFollowupLoading, setAIFollowupLoading] = useState(false)
+  const [imageModal, setImageModal]         = useState<string | null>(null)
+  const [integerAnswer, setIntegerAnswer]   = useState('')
+  const [determiningAnswer, setDeterminingAnswer] = useState(false)
+  const questionStartTime = useRef(Date.now())
 
-  // ── Core state ────────────────────────────────────────────────────────────
-  const [loading, setLoading]               = useState(true);
-  const [questions, setQuestions]           = useState<Question[]>([]);
-  const startIndexParam = parseInt(sp.get('startIndex') || '0');
-  const [currentIndex, setCurrentIndex] = useState(startIndexParam);
-  const [rookieCoins, setRookieCoins]       = useState(0);
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [isCorrect, setIsCorrect]           = useState<boolean | null>(null);
-  const [motivation, setMotivation]         = useState('');
-  const [timer, setTimer]                   = useState(0);
-  const [solution, setSolution]             = useState('');
-  const [displayedText, setDisplayedText]   = useState('');
-  const [isTyping, setIsTyping]             = useState(false);
-  const [aiFollowup, setAIFollowup]         = useState<string | null>(null);
-  const [aiFollowupLoading, setAIFollowupLoading] = useState(false);
-  const [bookmarked, setBookmarked]         = useState(false);
-  const [solutionLoading, setSolutionLoading] = useState(false);
-  const [motivationLoading, setMotivationLoading] = useState(false);
-  const [solutionRequested, setSolutionRequested] = useState(false);
-  const [determiningAnswer, setDeterminingAnswer] = useState(false);
-  const [integerAnswer, setIntegerAnswer]   = useState('');
-  const [imageModal, setImageModal]         = useState<string | null>(null);
-  const [buddyId, setBuddyId]               = useState(DEFAULT_BUDDY_ID);
-  const [toasts, setToasts]                 = useState<ToastItem[]>([]);
-  const [isConnected, setIsConnected]       = useState(true);
-  const [hasTyped, setHasTyped] = useState(false);
-  // ── User activity tracking ─────────────────────────────────────────────────
-const [userId, setUserId] = useState<string | null>(null);
-const [buddyModalOpen, setBuddyModalOpen] = useState(false);
-const answeredThisSession = useRef<Set<string>>(new Set()); // track which q_ids answered THIS session
+  const buddyId = (() => { try { const s = localStorage.getItem('selectedBuddy'); return (s && AI_BUDDIES[s]) ? s : DEFAULT_BUDDY_ID } catch { return DEFAULT_BUDDY_ID } })()
+  const buddy = AI_BUDDIES[buddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
 
-  // Dig Deeper
-  const [isDigging, setIsDigging]           = useState(false);
-  const [conceptMCQ, setConceptMCQ]         = useState<any>(null);
-  const [conceptLoading, setConceptLoading] = useState(false);
-  const [conceptFeedback, setConceptFeedback] = useState('');
-  const [digDeepSelected, setDigDeepSelected] = useState<string | null>(null);
-  const [prevDigResult, setPrevDigResult]   = useState<{
-    status: 'correct' | 'incorrect' | ''; explanation?: string; answer?: string;
-  } | null>(null);
+  const T = {
+    card:       isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-white border-[#E5E7EB]',
+    optionIdle: isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/50 text-white' : 'bg-white border-[#E5E7EB] hover:border-indigo-400 text-[#0f172a]',
+    optionLabel:isDark ? 'bg-[#151B27] border-[#262F4C] text-slate-200' : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]',
+    muted:      isDark ? 'text-slate-400'  : 'text-slate-500',
+    examBadge:  isDark ? 'bg-blue-900/40 text-blue-400 border border-blue-500/50' : 'bg-blue-100 text-blue-700 border border-blue-300',
+    imgWrapper: isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-gray-50 border-gray-200',
+    btnSecondary:isDark ? 'bg-[#111827] border-[#1D2939] text-white hover:bg-[#1a2235]' : 'bg-white border-[#D1D5DB] text-[#0f172a] hover:bg-gray-50',
+    input:      isDark ? 'bg-[#0d1117] border-[#1e2538] text-white placeholder-gray-500 focus:border-indigo-500' : 'bg-white border-[#D1D5DB] text-[#0f172a] placeholder-gray-400 focus:border-indigo-400',
+    followCard: isDark ? 'bg-[#0a0f1a] border-[#1D2939] text-slate-300' : 'bg-indigo-50 border-indigo-200 text-slate-700',
+  }
 
-  const timerRef          = useRef<number | null>(null);
-  const scrollRef         = useRef<HTMLDivElement | null>(null);
-  const questionStartTime = useRef(Date.now());
+  const isIntegerQ = !q.option_a && !q.option_b && !q.option_c && !q.option_d && !q.option_a_img && !q.option_b_img && !q.option_c_img && !q.option_d_img
 
-  const buddy = AI_BUDDIES[buddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID];
-  const [solutionBuddyId, setSolutionBuddyId] = useState(DEFAULT_BUDDY_ID);
-  // Add this derived value just before your return statement (near where buddy is derived):
-const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID];
+  // Typing effect
+  useEffect(() => {
+    if (!solutionRequested || !solution) return
+    if (hasTyped) { setDisplayedText(solution); return }
+    setDisplayedText(''); let i = 0; setHasTyped(false)
+    const iv = setInterval(() => {
+      i++; setDisplayedText(solution.slice(0, i))
+      if (i >= solution.length) { clearInterval(iv); setHasTyped(true) }
+    }, 8)
+    return () => clearInterval(iv)
+  }, [solution, solutionRequested])
 
+  const getAISolCacheKey = (qid: string, bid: string) => `${AI_SOL_CACHE}:similar:${qid}:${bid}`
+
+  const generateSolution = async (): Promise<string> => {
+    try {
+      const cacheKey = getAISolCacheKey(q.question_id, buddyId)
+      const cached = sessionStorage.getItem(cacheKey)
+      if (cached) return cached
+
+      const col = buddy.columnKey
+      if (q[col]?.trim()) { sessionStorage.setItem(cacheKey, q[col]); return q[col] }
+
+      const { data: fresh } = await supabase.from(DB_TABLE).select(col).eq('question_id', q.question_id).single()
+      if ((fresh as any)?.[col]?.trim()) {
+        sessionStorage.setItem(cacheKey, (fresh as any)[col])
+        return (fresh as any)[col]
+      }
+
+      const res = await axios.post(`${API_BASE}/solution`, {
+        action: 'generate_solution',
+        question_text: q.question_text, option_A: q.option_a, option_B: q.option_b,
+        option_C: q.option_c, option_D: q.option_d, solution: q.solution,
+        correct_option: q.correct_option, buddy_id: buddyId,
+        buddy_name: buddy.name, buddy_system_prompt: buddy.systemPrompt,
+      })
+      const aiSol = res.data.solution || q.solution || ''
+      sessionStorage.setItem(cacheKey, aiSol)
+      supabase.from(DB_TABLE).update({ [col]: aiSol }).eq('question_id', q.question_id).then(() => {})
+      return aiSol
+    } catch { return q.solution || '' }
+  }
+
+  const determineAnswer = async (): Promise<string | null> => {
+    setDeterminingAnswer(true)
+    try {
+      const res = await axios.post(`${API_BASE}/solution`, {
+        action: 'determine_answer', question_text: q.question_text,
+        option_A: q.option_a, option_B: q.option_b, option_C: q.option_c, option_D: q.option_d, solution: q.solution,
+      })
+      const ans = res.data.correct_answer
+      await supabase.from(DB_TABLE).update({ correct_option: ans }).eq('question_id', q.question_id)
+      return ans
+    } catch { return null } finally { setDeterminingAnswer(false) }
+  }
+
+  const postAnswer = async (correct: boolean, opt: string) => {
+    setSolutionRequested(true); setSolutionLoading(true)
+    addToast(correct ? `✓ Correct! Keep going!` : '✗ Not quite — check the solution', correct ? 'coin' : 'error', 3000)
+    const sol = await generateSolution()
+    setSolution(sol); setSolutionLoading(false)
+  }
+
+  const handleOption = async (opt: string) => {
+    if (selectedOption !== null) return
+    questionStartTime.current = Date.now()
+    setSelectedOption(opt)
+    let ans = q.correct_option
+    if (!ans) ans = await determineAnswer()
+    const normalize = (v: string | null) => v?.replace('option_','').replace('_img','').trim().toUpperCase() ?? null
+    const correct = normalize(opt) === normalize(ans)
+    // patch the local copy so the answer indicator renders correctly
+    q.correct_option = ans
+    setIsCorrect(correct)
+    await postAnswer(correct, opt)
+  }
+
+  const handleIntegerSubmit = async () => {
+    if (isCorrect !== null || !integerAnswer.trim()) return
+    setSelectedOption('INTEGER')
+    let ans = q.correct_option
+    if (!ans) ans = await determineAnswer()
+    const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
+    const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
+    q.correct_option = ans
+    setIsCorrect(correct)
+    await postAnswer(correct, 'INTEGER')
+  }
+
+  const handleFollowup = async () => {
+    if (!q) return
+    setAIFollowupLoading(true); setAIFollowup(null)
+    try {
+      const res = await axios.post(`${API_BASE}/solution`, {
+        action: 'better_understanding', question_text: q.question_text, solution: q.solution,
+        buddy_id: buddyId, buddy_name: buddy.name, buddy_system_prompt: buddy.systemPrompt,
+      })
+      setAIFollowup(res.data.explanation || 'Could not generate explanation.')
+    } catch { setAIFollowup('Error generating explanation.') } finally { setAIFollowupLoading(false) }
+  }
+
+  const parseShift = (s: string | null) => s?.split('_').join(' ') ?? null
+
+  return (
+    <div className={`rounded-2xl border p-5 space-y-4 transition-colors ${T.card}`}>
+      {/* Header badges */}
+      <div className="flex flex-wrap items-center gap-2">
+        {q.exam_shift && (
+          <span className={`inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full ${T.examBadge}`}>
+            {parseShift(q.exam_shift)}
+          </span>
+        )}
+        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
+          Similar
+        </span>
+      </div>
+
+      {/* Question text */}
+      <div className="font-medium text-sm leading-relaxed">{renderLatex(q.question_text)}</div>
+
+      {/* Question image */}
+      {q.question_img_url && (
+        <div className="relative group">
+          <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-56 ${T.imgWrapper}`}>
+            <img src={q.question_img_url} alt="Q" className="max-h-48 max-w-full object-contain cursor-zoom-in" onClick={() => setImageModal(q.question_img_url!)} />
+            <button onClick={() => setImageModal(q.question_img_url!)} className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/70 text-white flex items-center justify-center">
+              <FiZoomIn size={12} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Integer input */}
+      {isIntegerQ ? (
+        <div className="space-y-3">
+          <p className={`text-xs font-medium ${T.muted}`}>Enter integer answer:</p>
+          {isCorrect === null ? (
+            <div className="flex gap-2">
+              <input type="number" value={integerAnswer} onChange={e => setIntegerAnswer(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleIntegerSubmit() }}
+                placeholder="Type answer…" className={`flex-1 border rounded-xl px-3 py-2.5 text-base outline-none ${T.input}`} />
+              <motion.button whileTap={{ scale: 0.97 }} onClick={handleIntegerSubmit} disabled={!integerAnswer.trim()}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 font-semibold text-white text-sm">
+                Submit
+              </motion.button>
+            </div>
+          ) : (
+            <div className={`rounded-xl p-3 border-2 ${isCorrect ? 'bg-[#04271C] border-[#1DC97A]' : 'bg-[#2D0A0A] border-[#DC2626]'}`}>
+              <span className={`font-bold text-sm ${isCorrect ? 'text-[#1DC97A]' : 'text-[#DC2626]'}`}>{isCorrect ? '✓ Correct!' : '✗ Incorrect'}</span>
+              {!isCorrect && q.correct_option && <p className="text-xs text-gray-300 mt-1">Correct: <b className="text-[#1DC97A]">{q.correct_option}</b></p>}
+            </div>
+          )}
+          {determiningAnswer && <div className="flex items-center gap-2"><Spinner size={14} cls="border-white" /><span className={`text-xs ${T.muted}`}>Checking answer…</span></div>}
+        </div>
+      ) : selectedOption === null ? (
+        /* MCQ unanswered */
+        <div className="space-y-2">
+          {(['a','b','c','d'] as const).map(opt => {
+            const tv = q[`option_${opt}`] as string | null
+            const iv = q[`option_${opt}_img`] as string | null
+            if (!tv && !iv) return null
+            return (
+              <motion.button key={opt} whileTap={{ scale: 0.98 }} onClick={() => handleOption(opt)}
+                className={`w-full text-left rounded-xl p-3.5 border flex items-center gap-3 transition-colors ${T.optionIdle}`}>
+                <div className={`w-8 h-8 rounded-lg border flex items-center justify-center font-semibold text-xs uppercase flex-shrink-0 ${T.optionLabel}`}>{opt}</div>
+                <div className="flex-1 text-sm leading-relaxed">{iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-16 rounded-lg" /> : renderLatex(tv)}</div>
+              </motion.button>
+            )
+          })}
+        </div>
+      ) : (
+        /* MCQ answered */
+        <div className="space-y-2">
+          {(['a','b','c','d'] as const).map(opt => {
+            const tv = q[`option_${opt}`] as string | null
+            const iv = q[`option_${opt}_img`] as string | null
+            if (!tv && !iv) return null
+            const sel  = selectedOption === opt
+            const corr = opt === q.correct_option?.toLowerCase().trim()
+            return (
+              <div key={opt} className={`rounded-xl p-3.5 flex items-center gap-3 border-2 transition-colors ${corr ? 'bg-[#04271C] border-[#1DC97A]' : sel ? 'bg-[#2D0A0A] border-[#DC2626]' : isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'}`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-xs uppercase flex-shrink-0 ${corr ? 'bg-[#1DC97A] text-black' : sel ? 'bg-[#DC2626] text-white' : T.optionLabel}`}>{opt}</div>
+                <div className={`flex-1 text-sm leading-relaxed ${corr || sel ? 'text-white' : ''}`}>{iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-16 rounded-lg" /> : renderLatex(tv)}</div>
+                {corr && <CheckIcon />}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Solution */}
+      {solutionRequested && (
+        <div className={`rounded-xl border p-4 transition-colors ${isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'}`}>
+          <div className="flex items-center gap-2 mb-3">
+            <img src={buddy.image} alt={buddy.name} className="w-8 h-8 rounded-full object-cover" />
+            <div>
+              <p className="font-bold text-xs">Solution</p>
+              <p className={`text-[10px] ${T.muted}`}>by {buddy.name}</p>
+            </div>
+          </div>
+          {solutionLoading ? (
+            <div className="flex items-center gap-3 py-3"><Spinner size={16} /><span className={`text-xs ${T.muted}`}>Generating…</span></div>
+          ) : (
+            <>
+              <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                {renderLatex(displayedText || solution)}
+              </div>
+              {q.solution_image_url && (
+                <div className="mt-3 relative group">
+                  <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-48 ${T.imgWrapper}`}>
+                    <img src={q.solution_image_url} alt="Solution" className="max-h-40 max-w-full object-contain cursor-zoom-in" onClick={() => setImageModal(q.solution_image_url!)} />
+                  </div>
+                </div>
+              )}
+              {!aiFollowup && !aiFollowupLoading && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <motion.button whileTap={{ scale: 0.97 }} onClick={handleFollowup}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'}`}>
+                    <FiSmile size={11} /> Simpler Explanation
+                  </motion.button>
+                </div>
+              )}
+              {aiFollowupLoading && <div className="flex items-center gap-2 mt-2"><Spinner size={14} /><span className={`text-xs ${T.muted}`}>Generating…</span></div>}
+              {aiFollowup && (
+                <div className={`mt-3 rounded-xl border p-3 text-sm leading-relaxed whitespace-pre-wrap ${T.followCard}`}>{aiFollowup}</div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Image modal */}
+      <AnimatePresence>{imageModal && <ImageModal src={imageModal} onClose={() => setImageModal(null)} />}</AnimatePresence>
+    </div>
+  )
+}
+
+// ─── Similar Questions Panel ──────────────────────────────────────────────────
+function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageKey, isDark, addToast }: {
+  mainQuestion: Question; chapterTitle: string; subjectName: string; imageKey: string
+  isDark: boolean; addToast: (msg: string, type: ToastType, ms?: number) => void
+}) {
+  const [loading, setLoading]         = useState(false)
+  const [questions, setQuestions]     = useState<Question[]>([])
+  const [showAll, setShowAll]         = useState(false)
+  const [fetched, setFetched]         = useState(false)
+  const [error, setError]             = useState(false)
+
+  const fetchSimilar = async () => {
+    if (fetched) return
+    setLoading(true); setError(false)
+    try {
+      // Use the embedding of the current question for vector similarity search
+      // We call a Supabase RPC or use match_documents pattern
+      // First get the embedding for this question
+      const { data: sourceRow, error: embErr } = await supabase
+        .from(DB_TABLE)
+        .select('embedding')
+        .eq('question_id', mainQuestion.question_id)
+        .single()
+
+      if (embErr || !sourceRow?.embedding) {
+        // Fallback: text search on same chapter, exclude current
+        const { data: fallback } = await supabase
+          .from(DB_TABLE)
+          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
+          .eq('subject', mainQuestion.subject ?? subjectName)
+          .eq('chapter', mainQuestion.chapter ?? chapterTitle)
+          .neq('question_id', mainQuestion.question_id)
+          .limit(5)
+        setQuestions((fallback || []) as Question[])
+        setFetched(true)
+        return
+      }
+
+      // Vector similarity via Supabase RPC (match_jee_mains)
+      const { data: similar, error: rpcErr } = await supabase.rpc('match_jee_mains', {
+        query_embedding: sourceRow.embedding,
+        match_count: 6,
+        filter_subject: mainQuestion.subject ?? subjectName,
+        filter_chapter: mainQuestion.chapter ?? chapterTitle,
+      })
+
+      if (rpcErr) {
+        // Fallback if RPC doesn't exist yet
+        const { data: fallback } = await supabase
+          .from(DB_TABLE)
+          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
+          .eq('subject', mainQuestion.subject ?? subjectName)
+          .eq('chapter', mainQuestion.chapter ?? chapterTitle)
+          .neq('question_id', mainQuestion.question_id)
+          .limit(5)
+        setQuestions((fallback || []) as Question[])
+      } else {
+        // Filter out the current question
+        const filtered = ((similar || []) as Question[]).filter(q => q.question_id !== mainQuestion.question_id).slice(0, 5)
+        // Fetch full rows for the matched IDs
+        const ids = filtered.map((q: any) => q.question_id ?? q.id)
+        if (ids.length === 0) { setQuestions([]); setFetched(true); return }
+
+        const { data: fullRows } = await supabase
+          .from(DB_TABLE)
+          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
+          .in('question_id', ids)
+        setQuestions((fullRows || []) as Question[])
+      }
+      setFetched(true)
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const visible = showAll ? questions : questions.slice(0, 3)
+
+  const bg     = isDark ? 'bg-[#07090f]' : 'bg-[#F0F2FA]'
+  const border = isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'
+  const muted  = isDark ? 'text-slate-400' : 'text-slate-500'
+
+  return (
+    <div className={`rounded-2xl border p-5 ${isDark ? 'bg-[#0a0d14] border-[#1e2538]' : 'bg-[#F8F9FF] border-[#E5E7EB]'}`}>
+      {/* Header + trigger */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <FiLayers size={16} className={muted} />
+          <span className="font-bold text-sm">Similar Questions</span>
+        </div>
+        {!fetched && (
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={fetchSimilar}
+            disabled={loading}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-colors ${isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'}`}
+          >
+            {loading ? <><Spinner size={14} cls="border-black" /> Finding…</> : <><FiLayers size={13} /> Find Similar</>}
+          </motion.button>
+        )}
+      </div>
+
+      {/* Error */}
+      {error && <p className={`text-sm ${muted}`}>Could not load similar questions. Try again.</p>}
+
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <div key={i} className={`rounded-2xl border p-5 animate-pulse ${isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'}`}>
+              <div className={`h-3 rounded mb-2 ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: '80%' }} />
+              <div className={`h-3 rounded mb-4 ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: '60%' }} />
+              <div className="space-y-2">
+                {[1,2,3,4].map(j => <div key={j} className={`h-10 rounded-xl ${isDark ? 'bg-[#1e2538]' : 'bg-gray-100'}`} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Questions */}
+      {!loading && fetched && questions.length === 0 && (
+        <p className={`text-sm ${muted}`}>No similar questions found in this chapter.</p>
+      )}
+
+      {!loading && fetched && questions.length > 0 && (
+        <div className="space-y-4">
+          {visible.map((q, i) => (
+            <motion.div key={q.question_id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+              <SimilarQuestionCard
+                q={q} chapterTitle={chapterTitle} subjectName={subjectName}
+                imageKey={imageKey} isDark={isDark} addToast={addToast}
+              />
+            </motion.div>
+          ))}
+
+          {/* Show more / less */}
+          {questions.length > 3 && (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowAll(p => !p)}
+              className={`w-full py-2.5 rounded-xl border text-xs font-semibold transition-colors ${isDark ? 'bg-[#111827] border-[#1D2939] text-white hover:bg-[#1a2235]' : 'bg-white border-[#D1D5DB] text-[#0f172a] hover:bg-gray-50'}`}
+            >
+              {showAll ? `Show less` : `Show ${questions.length - 3} more similar question${questions.length - 3 !== 1 ? 's' : ''}`}
+            </motion.button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Main QuestionViewer Component ───────────────────────────────────────────
+export default function QuestionViewerClient() {
+  const isDark = useTheme()
+  const router = useRouter()
+  const sp     = useSearchParams()
+
+  // URL params — new unified schema
+  const subject      = sp.get('subject')      || sp.get('subjectName') || ''
+  const chapterTitle = sp.get('chapter')      || sp.get('chapterTitle') || ''
+  const imageKey     = sp.get('imageKey')     || ''
+  const startQId     = sp.get('qid')          || ''   // SEO: specific question_id
+  const startIndex   = parseInt(sp.get('startIndex') || sp.get('index') || '0', 10)
+
+  // ── Windowed question state ────────────────────────────────────────────────
+  const [questions, setQuestions]       = useState<Question[]>([])
+  const [totalCount, setTotalCount]     = useState(0)
+  const [pageOffset, setPageOffset]     = useState(0)   // offset of the loaded window in the full list
+  const [loading, setLoading]           = useState(true)
+  const [loadingMore, setLoadingMore]   = useState(false)
+  const [currentIndex, setCurrentIndex] = useState(0)   // index within the loaded window
+  const [globalIndex, setGlobalIndex]   = useState(startIndex) // position in the full dataset
+
+  // ── Per-question UI state ──────────────────────────────────────────────────
+  const [rookieCoins, setRookieCoins]           = useState(0)
+  const [selectedOption, setSelectedOption]     = useState<string | null>(null)
+  const [isCorrect, setIsCorrect]               = useState<boolean | null>(null)
+  const [motivation, setMotivation]             = useState('')
+  const [timer, setTimer]                       = useState(0)
+  const [solution, setSolution]                 = useState('')
+  const [displayedText, setDisplayedText]       = useState('')
+  const [isTyping, setIsTyping]                 = useState(false)
+  const [aiFollowup, setAIFollowup]             = useState<string | null>(null)
+  const [aiFollowupLoading, setAIFollowupLoading] = useState(false)
+  const [bookmarked, setBookmarked]             = useState(false)
+  const [solutionLoading, setSolutionLoading]   = useState(false)
+  const [solutionRequested, setSolutionRequested] = useState(false)
+  const [determiningAnswer, setDeterminingAnswer] = useState(false)
+  const [integerAnswer, setIntegerAnswer]       = useState('')
+  const [imageModal, setImageModal]             = useState<string | null>(null)
+  const [buddyId, setBuddyId]                   = useState(DEFAULT_BUDDY_ID)
+  const [solutionBuddyId, setSolutionBuddyId]   = useState(DEFAULT_BUDDY_ID)
+  const [toasts, setToasts]                     = useState<ToastItem[]>([])
+  const [hasTyped, setHasTyped]                 = useState(false)
+  const [buddyModalOpen, setBuddyModalOpen]     = useState(false)
+  const [userId, setUserId]                     = useState<string | null>(null)
+  const [showSimilar, setShowSimilar]           = useState(false)
+
+  const timerRef          = useRef<number | null>(null)
+  const scrollRef         = useRef<HTMLDivElement | null>(null)
+  const questionStartTime = useRef(Date.now())
+  const answeredThisSession = useRef<Set<string>>(new Set())
+
+  const buddy        = AI_BUDDIES[buddyId]        ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
+  const solutionBuddy= AI_BUDDIES[solutionBuddyId]?? AI_BUDDIES[DEFAULT_BUDDY_ID]
 
   // ── Theme tokens ──────────────────────────────────────────────────────────
   const T = {
@@ -810,742 +773,538 @@ const solutionBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID
                         : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]',
     input:       isDark ? 'bg-[#0d1117] border-[#1e2538] text-white placeholder-gray-500 focus:border-indigo-500'
                         : 'bg-white border-[#D1D5DB] text-[#0f172a] placeholder-gray-400 focus:border-indigo-400',
-    muted:       isDark ? 'text-slate-400'                       : 'text-slate-500',
-    progress:    isDark ? 'bg-[#1e2538]'                         : 'bg-gray-200',
-    bar: isDark ? 'bg-white'                         : 'bg-black', 
+    muted:       isDark ? 'text-slate-400'    : 'text-slate-500',
+    progress:    isDark ? 'bg-[#1e2538]'      : 'bg-gray-200',
+    bar:         isDark ? 'bg-white'          : 'bg-black',
     footer:      isDark ? 'bg-[#07090f]/95 border-[#1e2538]'    : 'bg-white/95 border-[#E5E7EB]',
     btnSecondary:isDark ? 'bg-[#111827] border-[#1D2939] text-white hover:bg-[#1a2235]'
                         : 'bg-white border-[#D1D5DB] text-[#0f172a] hover:bg-gray-50',
     solCard:     isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-white border-[#E5E7EB]',
     followCard:  isDark ? 'bg-[#0a0f1a] border-[#1D2939] text-slate-300'
                         : 'bg-indigo-50 border-indigo-200 text-slate-700',
-    // Exam shift badge - highlighted like screenshot
-    examBadge: isDark
-    ? 'bg-blue-900/40 text-blue-400 border border-blue-500/50'
+    examBadge:   isDark ? 'bg-blue-900/40 text-blue-400 border border-blue-500/50'
                         : 'bg-blue-100 text-blue-700 border border-blue-300',
-    subjectBadge:isDark ? 'bg-[#1e2538] text-slate-300 border border-[#2a3548]'
-                        : 'bg-slate-100 text-slate-600 border border-slate-200',
     yearBadge:   isDark ? 'bg-[#1a2235] text-slate-400'         : 'bg-gray-100 text-gray-500',
     imgWrapper:  isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-gray-50 border-gray-200',
     coinBadge:   isDark ? 'bg-[#111827] border-[#1D2939] text-white'
                         : 'bg-amber-50 border-amber-200 text-amber-800',
-    buddyPanel:  isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-indigo-50 border-indigo-200',
-  };
+  }
 
-  // ── Toast helpers ─────────────────────────────────────────────────────────
-  const addToast = (message: string, type: ToastType = 'info', ms = 3500) => {
-    const id = Date.now() + Math.random();
-    setToasts(p => [...p, { id, message, type }]);
-    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), ms);
-  };
-  const removeToast = (id: number) => setToasts(p => p.filter(t => t.id !== id));
+  // ── Toasts ────────────────────────────────────────────────────────────────
+  const addToast = useCallback((message: string, type: ToastType = 'info', ms = 3500) => {
+    const id = Date.now() + Math.random()
+    setToasts(p => [...p, { id, message, type }])
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), ms)
+  }, [])
+  const removeToast = (id: number) => setToasts(p => p.filter(t => t.id !== id))
 
-  // ── Load buddy from localStorage ──────────────────────────────────────────
+  // ── Load buddy ────────────────────────────────────────────────────────────
   useEffect(() => {
-    try {
-      const s = localStorage.getItem('selectedBuddy');
-      if (s && AI_BUDDIES[s]) setBuddyId(s);
-    } catch {}
-  }, []);
+    try { const s = localStorage.getItem('selectedBuddy'); if (s && AI_BUDDIES[s]) setBuddyId(s) } catch {}
+  }, [])
 
-
-  // ── Load userId + save recent session ─────────────────────────────────
+  // ── Auth + session save ───────────────────────────────────────────────────
   useEffect(() => {
-    const saveSession = async () => {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (authError || !user) {
-        console.error('❌ Auth error:', authError?.message || 'No user');
-        return;
-      }
-  
-      if (!chapterTitle) {
-        console.warn('⚠️ No chapterTitle provided');
-        return;
-      }
-  
-      setUserId(user.id);
-  
-      // Verify user exists in users table
-      const { data: userExists, error: checkError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', user.id)
-        .single();
-  
-      if (checkError || !userExists) {
-        console.warn('⚠️ User not in users table, creating...');
-        await supabase.from('users').upsert({
-          id: user.id,
-          email: user.email,
-          created_at: new Date().toISOString(),
-        }, { onConflict: 'id' });
-      }
-  
-      // Now save the session
-      const { error: upsertError } = await supabase
-        .from('user_recent_session')
-        .upsert({
-          user_id: user.id,
-          chapter_title: chapterTitle,
-          subject_name: subjectName,
-          image_key: imageKey,
-          question_index: currentIndex,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
-  
-      if (upsertError) {
-        console.error('❌ Session save failed:', {
-          message: upsertError.message,
-          details: upsertError.details,
-          hint: upsertError.hint,
-        });
-      } else {
-        console.log('✅ Session saved successfully');
-      }
-    };
-  
-    saveSession();
-  }, [chapterTitle, subjectName, imageKey]);
-  
-  // Update recent question_index when user navigates
+    const run = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || !chapterTitle) return
+      setUserId(user.id)
+      await supabase.from('user_recent_session').upsert({
+        user_id: user.id, chapter_title: chapterTitle,
+        subject_name: subject, image_key: imageKey,
+        question_index: globalIndex, updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' })
+    }
+    run()
+  }, [chapterTitle, subject, imageKey])
+
   useEffect(() => {
-    if (!userId || !chapterTitle) return;
-  
-    const updateSession = async () => {
-      const { error } = await supabase
-        .from('user_recent_session')
-        .upsert({
-          user_id: userId,
-          chapter_title: chapterTitle,
-          subject_name: subjectName,
-          image_key: imageKey,
-          question_index: currentIndex,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
-  
-      if (error) {
-        console.error('❌ Index update failed:', error.message);
-      } else {
-        console.log('✅ Question index updated:', currentIndex);
-      }
-    };
-  
-    updateSession();
-  }, [currentIndex, userId, chapterTitle, subjectName, imageKey]);
-
-
-
-
-  // ── Network detection ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const online  = () => setIsConnected(true);
-    const offline = () => { setIsConnected(false); addToast('No internet connection', 'error'); };
-    window.addEventListener('online', online);
-    window.addEventListener('offline', offline);
-    return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline); };
-  }, []);
-
-  // ---------- Fetch questions from Supabase ----------
-  useEffect(() => {
-    const fetchQuestionsFromSupabase = async () => {
-      if (!chapterTitle) return;
-      
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from(chapterTitle)
-          .select('*')
-          .order('question', { ascending: true });
-
-        if (error) {
-          console.error('Error fetching questions from Supabase:', error);
-          setQuestions([]);
-          return;
-        }
-
-        if (data && data.length > 0) {
-          setQuestions(data as Question[]);
-        } else {
-          setQuestions([]);
-        }
-      } catch (err) {
-        console.error('Error fetching questions:', err);
-        setQuestions([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchQuestionsFromSupabase();
-  }, [chapterTitle]);
+    if (!userId || !chapterTitle) return
+    supabase.from('user_recent_session').upsert({
+      user_id: userId, chapter_title: chapterTitle, subject_name: subject,
+      image_key: imageKey, question_index: globalIndex, updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' }).then(() => {})
+  }, [globalIndex, userId, chapterTitle, subject, imageKey])
 
   // ── Load coins ────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+      if (!user) return
       supabase.from('users').select('rookieCoinsEarned').eq('id', user.id).single()
-        .then(({ data, error }) => { if (!error && data) setRookieCoins(data.rookieCoinsEarned || 0); });
-    });
-  }, []);
+        .then(({ data }) => { if (data) setRookieCoins(data.rookieCoinsEarned || 0) })
+    })
+  }, [])
+
+  // ── Network detection ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const on  = () => setToasts(p => p) // no-op, just to keep connection
+    const off = () => addToast('No internet connection', 'error')
+    window.addEventListener('online', on); window.addEventListener('offline', off)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [addToast])
+
+  // ── Initial data fetch — windowed ─────────────────────────────────────────
+  useEffect(() => {
+    if (!chapterTitle) return
+    const load = async () => {
+      setLoading(true)
+      try {
+        // Count total for progress bar
+        const { count } = await supabase
+          .from(DB_TABLE)
+          .select('*', { count: 'exact', head: true })
+          .eq('subject', subject)
+          .eq('chapter', chapterTitle)
+        setTotalCount(count ?? 0)
+
+        // If a specific question_id is in the URL, find its offset first
+        let windowStart = Math.max(0, startIndex - Math.floor(PAGE_SIZE / 2))
+
+        if (startQId) {
+          // Find position of this question_id by fetching just IDs in order
+          const { data: idRows } = await supabase
+            .from(DB_TABLE)
+            .select('question_id')
+            .eq('subject', subject)
+            .eq('chapter', chapterTitle)
+            .order('question', { ascending: true })
+          if (idRows) {
+            const pos = idRows.findIndex(r => r.question_id === startQId)
+            if (pos >= 0) {
+              windowStart = Math.max(0, pos - Math.floor(PAGE_SIZE / 2))
+              setGlobalIndex(pos)
+            }
+          }
+        }
+
+        const { data, error } = await supabase
+          .from(DB_TABLE)
+          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,sol_ai,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
+          .eq('subject', subject)
+          .eq('chapter', chapterTitle)
+          .order('question', { ascending: true })
+          .range(windowStart, windowStart + PAGE_SIZE - 1)
+
+        if (error || !data) { setQuestions([]); return }
+
+        setQuestions(data as Question[])
+        setPageOffset(windowStart)
+
+        // currentIndex within window
+        const localIdx = globalIndex - windowStart
+        setCurrentIndex(Math.max(0, Math.min(localIdx, data.length - 1)))
+      } catch (e) {
+        console.error('Fetch error:', e)
+        setQuestions([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [chapterTitle, subject])
+
+  // ── Prefetch next window ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (loadingMore || loading) return
+    const remainInWindow = questions.length - 1 - currentIndex
+    const nextWindowNeeded = remainInWindow <= PREFETCH_AHEAD
+    const moreAvailable = pageOffset + questions.length < totalCount
+
+    if (!nextWindowNeeded || !moreAvailable) return
+
+    const loadNext = async () => {
+      setLoadingMore(true)
+      const nextStart = pageOffset + questions.length
+      try {
+        const { data } = await supabase
+          .from(DB_TABLE)
+          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,sol_ai,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
+          .eq('subject', subject)
+          .eq('chapter', chapterTitle)
+          .order('question', { ascending: true })
+          .range(nextStart, nextStart + PAGE_SIZE - 1)
+
+        if (data && data.length > 0) {
+          setQuestions(prev => [...prev, ...(data as Question[])])
+        }
+      } catch { /* silent */ } finally {
+        setLoadingMore(false)
+      }
+    }
+    loadNext()
+  }, [currentIndex, questions.length, pageOffset, totalCount, loadingMore, loading, chapterTitle, subject])
+
+  // ── Update URL with current question for SEO + session continuity ─────────
+  useEffect(() => {
+    if (!questions.length) return
+    const q = questions[currentIndex]
+    if (!q) return
+    const params = new URLSearchParams({
+      subject: subject,
+      chapter: chapterTitle,
+      imageKey: imageKey,
+      qid: q.question_id,
+      index: String(globalIndex),
+    })
+    // Add truncated question text for SEO — Google indexes URL params
+    if (q.question_text) {
+      const clean = q.question_text.replace(/\$[^$]*\$/g, '').replace(/\s+/g, ' ').trim().slice(0, 120)
+      if (clean) params.set('q', clean)
+    }
+    // Replace state so back button works naturally and bots can crawl each question URL
+    window.history.replaceState(null, '', `/QuestionViewer?${params.toString()}`)
+  }, [currentIndex, questions, subject, chapterTitle, imageKey, globalIndex])
 
   // ── Session helpers ───────────────────────────────────────────────────────
-  const saveSession = (partial: Record<string, any> = {}) => {
+  const sessionKey = `${chapterTitle}::${subject}`
+
+  const saveSession = useCallback((partial: Record<string, any> = {}) => {
     try {
-      const raw = localStorage.getItem(SESSION_KEY);
-      const obj = raw ? JSON.parse(raw) : {};
-      // Ensure chapter key exists before writing
-      if (!obj[chapterTitle]) obj[chapterTitle] = {};
-      obj[chapterTitle][String(currentIndex)] = {
-        ...(obj[chapterTitle][String(currentIndex)] || {}),
-        selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup,
-        solutionBuddyId,
+      const raw = localStorage.getItem(SESSION_KEY)
+      const obj = raw ? JSON.parse(raw) : {}
+      if (!obj[sessionKey]) obj[sessionKey] = {}
+      obj[sessionKey][String(globalIndex)] = {
+        ...(obj[sessionKey][String(globalIndex)] || {}),
+        selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup, solutionBuddyId,
         ...partial,
-      };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(obj));
+      }
+      localStorage.setItem(SESSION_KEY, JSON.stringify(obj))
     } catch {}
-  };
+  }, [sessionKey, globalIndex, selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup, solutionBuddyId])
 
-  const loadSession = (i: number) => {
+  const loadSession = useCallback((gIdx: number) => {
     try {
-      const raw = localStorage.getItem(SESSION_KEY);
-      return raw ? JSON.parse(raw)?.[chapterTitle]?.[String(i)] || null : null;
-    } catch { return null; }
-  };
+      const raw = localStorage.getItem(SESSION_KEY)
+      return raw ? JSON.parse(raw)?.[sessionKey]?.[String(gIdx)] || null : null
+    } catch { return null }
+  }, [sessionKey])
 
-  // ── AI solution sessionStorage cache (persists across re-renders, not page reloads) ──
   const getAISolCacheKey = (questionId: string, bId: string) =>
-    `${AI_SOL_CACHE_KEY}:${chapterTitle}:${questionId}:${bId}`;
+    `${AI_SOL_CACHE}:${chapterTitle}:${questionId}:${bId}`
 
   const saveAISolToCache = (questionId: string, bId: string, sol: string) => {
-    try {
-      sessionStorage.setItem(getAISolCacheKey(questionId, bId), sol);
-    } catch {}
-  };
+    try { sessionStorage.setItem(getAISolCacheKey(questionId, bId), sol) } catch {}
+  }
 
   const loadAISolFromCache = (questionId: string, bId: string): string | null => {
-    try {
-      return sessionStorage.getItem(getAISolCacheKey(questionId, bId)) || null;
-    } catch { return null; }
-  };
+    try { return sessionStorage.getItem(getAISolCacheKey(questionId, bId)) || null } catch { return null }
+  }
 
-  // ── Restore session on question change ────────────────────────────────────
+  // ── Restore session on navigation ─────────────────────────────────────────
   useEffect(() => {
-    if (!questions.length) return;
-    const prev = loadSession(currentIndex);
-    const q = questions[currentIndex];
+    if (!questions.length) return
+    const q = questions[currentIndex]
+    const prev = loadSession(globalIndex)
+
+    // Reset similar questions panel when navigating
+    setShowSimilar(false)
 
     if (prev) {
-      setSelectedOption(prev.selectedOption || null);
-      setIsCorrect(prev.isCorrect ?? null);
-      setMotivation(prev.motivation || '');
-      setSolutionRequested(prev.solutionRequested || false);
-      setHasTyped(prev.hasTyped || false);
-      setSolutionBuddyId(prev.solutionBuddyId || buddyId);
-      if (prev.integerAnswer !== undefined)
-        setIntegerAnswer(prev.integerAnswer);
-      setAIFollowup(prev.aiFollowup || null);
+      setSelectedOption(prev.selectedOption || null)
+      setIsCorrect(prev.isCorrect ?? null)
+      setMotivation(prev.motivation || '')
+      setSolutionRequested(prev.solutionRequested || false)
+      setHasTyped(prev.hasTyped || false)
+      setSolutionBuddyId(prev.solutionBuddyId || buddyId)
+      if (prev.integerAnswer !== undefined) setIntegerAnswer(prev.integerAnswer)
+      setAIFollowup(prev.aiFollowup || null)
 
-      // Try to restore solution: first from localStorage session, then from sessionStorage cache
-      const savedBuddyId = prev.solutionBuddyId || buddyId;
-      const cachedSol = prev.solution
-        || (q ? loadAISolFromCache(q.question_id, savedBuddyId) : null);
+      const savedBuddyId = prev.solutionBuddyId || buddyId
+      const cachedSol = prev.solution || (q ? loadAISolFromCache(q.question_id, savedBuddyId) : null)
 
       if (cachedSol) {
-        setSolution(cachedSol);
-        setSolutionLoading(false);
-      } else if (prev.solutionRequested) {
-        // Solution was requested but not yet in cache — re-fetch silently
-        setSolution('');
-        setSolutionLoading(true);
-
-        if (q) {
-          const currentBuddyId = buddyId;
-          generateAISolution(q, currentBuddyId, AI_BUDDIES[currentBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]).then((aiSol) => {
-
-            setSolution(aiSol);
-            setSolutionLoading(false);
-            saveSession({ solution: aiSol, solutionRequested: true, solutionBuddyId: savedBuddyId, hasTyped: true });
-          });
-        }
+        setSolution(cachedSol); setSolutionLoading(false)
+      } else if (prev.solutionRequested && q) {
+        setSolution(''); setSolutionLoading(true)
+        generateAISolution(q, buddyId, AI_BUDDIES[buddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]).then(aiSol => {
+          setSolution(aiSol); setSolutionLoading(false)
+          saveSession({ solution: aiSol, solutionRequested: true, solutionBuddyId: savedBuddyId, hasTyped: true })
+        })
       } else {
-        setSolution('');
+        setSolution('')
       }
     } else {
-      setSelectedOption(null); setIsCorrect(null); setMotivation('');
-      setSolution(''); setAIFollowup(null); setSolutionRequested(false);
-      setIsDigging(false); setConceptMCQ(null); setPrevDigResult(null);
-      setDigDeepSelected(null); setIntegerAnswer(''); setDisplayedText('');
-      setHasTyped(false);
+      setSelectedOption(null); setIsCorrect(null); setMotivation('')
+      setSolution(''); setAIFollowup(null); setSolutionRequested(false)
+      setIntegerAnswer(''); setDisplayedText(''); setHasTyped(false)
     }
-  }, [currentIndex, questions, chapterTitle]);
+  }, [currentIndex, questions, chapterTitle, globalIndex])
 
   // ── Bookmark sync ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!questions.length) return;
+    if (!questions.length) return
     try {
-      const raw = localStorage.getItem(BOOKMARKS_KEY);
-      const arr = raw ? JSON.parse(raw) : [];
-      const q = questions[currentIndex];
-      setBookmarked(arr.some((b: any) => b.question_id === q?.question_id && b.chapterTitle === chapterTitle));
-    } catch { setBookmarked(false); }
-  }, [currentIndex, questions, chapterTitle]);
+      const raw = localStorage.getItem(BOOKMARKS_KEY)
+      const arr = raw ? JSON.parse(raw) : []
+      const q = questions[currentIndex]
+      setBookmarked(arr.some((b: any) => b.question_id === q?.question_id))
+    } catch { setBookmarked(false) }
+  }, [currentIndex, questions])
 
   // ── Timer ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) clearInterval(timerRef.current)
     if (selectedOption === null && questions[currentIndex]) {
-      const start = Date.now();
-      questionStartTime.current = start;
-      timerRef.current = window.setInterval(() => setTimer(Math.floor((Date.now() - start) / 1000)), 1000);
+      const start = Date.now(); questionStartTime.current = start
+      timerRef.current = window.setInterval(() => setTimer(Math.floor((Date.now() - start) / 1000)), 1000)
     }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [selectedOption, currentIndex, questions]);
-
-
-
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [selectedOption, currentIndex, questions])
 
   // ── Typing effect ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!solutionRequested) return;
-    if (!solution) return;
-  
-    if (hasTyped) {
-      setDisplayedText(solution);
-      setIsTyping(false);
-      return;
-    }
-  
-    setIsTyping(true);
-    setDisplayedText('');
-  
-    let i = 0;
-  
+    if (!solutionRequested || !solution) return
+    if (hasTyped) { setDisplayedText(solution); setIsTyping(false); return }
+    setIsTyping(true); setDisplayedText(''); let i = 0
     const iv = setInterval(() => {
-      i++;
-      setDisplayedText(solution.slice(0, i));
-  
-      if (i >= solution.length) {
-        clearInterval(iv);
-        setIsTyping(false);
-        setHasTyped(true);
-      }
-    }, 8);
-  
-    return () => clearInterval(iv);
-  }, [solution, solutionRequested]);
+      i++; setDisplayedText(solution.slice(0, i))
+      if (i >= solution.length) { clearInterval(iv); setIsTyping(false); setHasTyped(true) }
+    }, 8)
+    return () => clearInterval(iv)
+  }, [solution, solutionRequested])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const isIntegerQ = (q: Question) =>
     !q.option_a && !q.option_b && !q.option_c && !q.option_d &&
-    !q.option_a_img && !q.option_b_img && !q.option_c_img && !q.option_d_img;
+    !q.option_a_img && !q.option_b_img && !q.option_c_img && !q.option_d_img
 
-  const calcCoins = (timeSpent: number, correct: boolean): number => {
-    if (!correct) return 0;
-    const t = timeSpent <= 30 ? 5 : timeSpent <= 60 ? 4 : timeSpent <= 90 ? 3 : timeSpent <= 120 ? 2 : 1;
-    return Math.min(t + 5, 10);
-  };
+  const calcCoins = (timeSpent: number, correct: boolean) => {
+    if (!correct) return 0
+    const t = timeSpent <= 30 ? 5 : timeSpent <= 60 ? 4 : timeSpent <= 90 ? 3 : timeSpent <= 120 ? 2 : 1
+    return Math.min(t + 5, 10)
+  }
 
-  // ---------- Update rookie coins in Supabase ----------
   const updateRookieCoins = async (coinsToAdd: number) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-  
-      const { data } = await supabase
-        .from('users')
-        .select('rookieCoinsEarned')
-        .eq('id', user.id)
-        .single();
-  
-      const currentCoins = data?.rookieCoinsEarned || 0;
-      const newTotal = currentCoins + coinsToAdd;
-  
-      const { error } = await supabase
-        .from('users')
-        .update({ rookieCoinsEarned: newTotal })
-        .eq('id', user.id);
-  
-      if (!error) {
-        setRookieCoins(newTotal);
-      }
-    } catch (err) {
-      console.error('Error updating rookie coins:', err);
-    }
-  };
-
-
-
-  // ── Save user activity to Supabase ────────────────────────────────────────
-const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number) => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from('user_activity').upsert({
-      user_id: user.id,
-      chapter_title: chapterTitle,
-      subject_name: subjectName,
-      image_key: imageKey,
-      question_id: q.question_id,
-      question_index: currentIndex,
-      is_correct: correct,
-      time_spent_seconds: timeSpent,
-      buddy_id: buddyId,
-      answered_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,chapter_title,question_id' });
-    answeredThisSession.current.add(q.question_id);
-  } catch (err) {
-    console.error('saveUserActivity error:', err);
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase.from('users').select('rookieCoinsEarned').eq('id', user.id).single()
+      const newTotal = (data?.rookieCoinsEarned || 0) + coinsToAdd
+      const { error } = await supabase.from('users').update({ rookieCoinsEarned: newTotal }).eq('id', user.id)
+      if (!error) setRookieCoins(newTotal)
+    } catch {}
   }
-};
 
-  // ── Bookmark handler ──────────────────────────────────────────────────────
+  const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      await supabase.from('user_activity').upsert({
+        user_id: user.id, chapter_title: chapterTitle, subject_name: subject,
+        image_key: imageKey, question_id: q.question_id, question_index: globalIndex,
+        is_correct: correct, time_spent_seconds: timeSpent, buddy_id: buddyId,
+        answered_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,chapter_title,question_id' })
+      answeredThisSession.current.add(q.question_id)
+    } catch {}
+  }
+
+  // ── Bookmark ──────────────────────────────────────────────────────────────
   const handleBookmark = () => {
     try {
-      const q = questions[currentIndex];
-      if (!q) return;
-      const raw = localStorage.getItem(BOOKMARKS_KEY);
-      let arr = raw ? JSON.parse(raw) : [];
+      const q = questions[currentIndex]; if (!q) return
+      const raw = localStorage.getItem(BOOKMARKS_KEY)
+      let arr = raw ? JSON.parse(raw) : []
       if (!bookmarked) {
-        arr.push({ ...q, chapterTitle, subjectName, imageKey });
-        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
-        setBookmarked(true);
-        addToast('Question bookmarked!', 'bookmark');
+        arr.push({ ...q, chapterTitle, subjectName: subject, imageKey })
+        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr))
+        setBookmarked(true); addToast('Question bookmarked!', 'bookmark')
       } else {
-        arr = arr.filter((b: any) => !(b.question_id === q.question_id && b.chapterTitle === chapterTitle));
-        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr));
-        setBookmarked(false);
-        addToast('Bookmark removed', 'info');
+        arr = arr.filter((b: any) => b.question_id !== q.question_id)
+        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(arr))
+        setBookmarked(false); addToast('Bookmark removed', 'info')
       }
     } catch {}
-  };
+  }
 
-  // ── Determine answer via AI ────────────────────────────────────────────────
+  // ── Determine answer via AI ───────────────────────────────────────────────
   const determineAnswer = async (q: Question): Promise<string | null> => {
-    setDeterminingAnswer(true);
+    setDeterminingAnswer(true)
     try {
       const res = await axios.post(`${API_BASE}/solution`, {
-        action: 'determine_answer',
-        question_text: q.question_text,
-        option_A: q.option_a, option_B: q.option_b,
-        option_C: q.option_c, option_D: q.option_d,
+        action: 'determine_answer', question_text: q.question_text,
+        option_A: q.option_a, option_B: q.option_b, option_C: q.option_c, option_D: q.option_d,
         solution: q.solution,
-      });
-      const ans = res.data.correct_answer;
-      await supabase.from(chapterTitle).update({ correct_option: ans }).eq('question_id', q.question_id);
-      q.correct_option = ans;
-      return ans;
-    } catch { return null; }
-    finally { setDeterminingAnswer(false); }
-  };
+      })
+      const ans = res.data.correct_answer
+      // Write back to unified table
+      await supabase.from(DB_TABLE).update({ correct_option: ans }).eq('question_id', q.question_id)
+      q.correct_option = ans
+      return ans
+    } catch { return null } finally { setDeterminingAnswer(false) }
+  }
 
-
-  // ── Generate buddy-flavoured AI solution ───────────────────────────────────
-  // REPLACE WITH THIS:
-  // ── buddyId and buddy are now passed as parameters to avoid stale closures ──
+  // ── Generate AI solution ──────────────────────────────────────────────────
   const generateAISolution = async (
-    q: Question,
-    activeBuddyId: string,
-    activeBuddy: typeof AI_BUDDIES[string]
+    q: Question, activeBuddyId: string, activeBuddy: typeof AI_BUDDIES[string]
   ): Promise<string> => {
     try {
-      const col = activeBuddy.columnKey;
-  
-      // 0. Check sessionStorage cache first
-      const cached = loadAISolFromCache(q.question_id, activeBuddyId);
-      if (cached) return cached;
-  
-      // 1. Check in-memory question object
-      if (q[col] && typeof q[col] === 'string' && q[col].trim().length > 0) {
-        saveAISolToCache(q.question_id, activeBuddyId, q[col] as string);
-        return q[col] as string;
+      const col = activeBuddy.columnKey
+
+      const cached = loadAISolFromCache(q.question_id, activeBuddyId)
+      if (cached) return cached
+
+      if (q[col]?.trim()) {
+        saveAISolToCache(q.question_id, activeBuddyId, q[col])
+        return q[col]
       }
-  
-      // 2. Re-fetch from Supabase to catch solutions saved by other users
+
       const { data: freshRow } = await supabase
-        .from(chapterTitle)
-        .select(col)
-        .eq('question_id', q.question_id)
-        .single();
-  
-      if ((freshRow as any)?.[col] && typeof (freshRow as any)?.[col] === 'string' && (freshRow as any)?.[col].trim().length > 0) {
-        const dbSol = (freshRow as any)?.[col] as string;
-        saveAISolToCache(q.question_id, activeBuddyId, dbSol);
-        setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: dbSol } : item));
-        return dbSol;
+        .from(DB_TABLE).select(col).eq('question_id', q.question_id).single()
+      if ((freshRow as any)?.[col]?.trim()) {
+        const dbSol = (freshRow as any)[col] as string
+        saveAISolToCache(q.question_id, activeBuddyId, dbSol)
+        setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: dbSol } : item))
+        return dbSol
       }
-  
-      // 3. Generate via API
+
       const res = await axios.post(`${API_BASE}/solution`, {
-        action: 'generate_solution',
-        question_text: q.question_text,
-        option_A: q.option_a, option_B: q.option_b,
-        option_C: q.option_c, option_D: q.option_d,
-        solution: q.solution,
-        correct_option: q.correct_option,
-        buddy_id: activeBuddyId,
-        buddy_name: activeBuddy.name,
+        action: 'generate_solution', question_text: q.question_text,
+        option_A: q.option_a, option_B: q.option_b, option_C: q.option_c, option_D: q.option_d,
+        solution: q.solution, correct_option: q.correct_option,
+        buddy_id: activeBuddyId, buddy_name: activeBuddy.name,
         buddy_system_prompt: activeBuddy.systemPrompt,
-      });
-  
-      const aiSol = res.data.solution || q.solution;
-  
-      // 4. Cache immediately
-      saveAISolToCache(q.question_id, activeBuddyId, aiSol);
-  
-      // 5. Background Supabase write
-      supabase.from(chapterTitle).update({ [col]: aiSol }).eq('question_id', q.question_id).then(() => {
-        setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: aiSol } : item));
-      });
-  
-      return aiSol;
-    } catch { return q.solution; }
-  };
+      })
+      const aiSol = res.data.solution || q.solution || ''
+      saveAISolToCache(q.question_id, activeBuddyId, aiSol)
+      // Background write to unified table
+      supabase.from(DB_TABLE).update({ [col]: aiSol }).eq('question_id', q.question_id).then(() => {
+        setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: aiSol } : item))
+      })
+      return aiSol
+    } catch { return questions[currentIndex]?.solution || '' }
+  }
 
-  // ── Generate buddy motivation ──────────────────────────────────────────────
- 
+  // ── Post-answer handler ───────────────────────────────────────────────────
+  const handlePostAnswer = async (correct: boolean, timeSpent: number, q: Question, optKey: string) => {
+    const coins = calcCoins(timeSpent, correct)
+    addToast(correct ? `✓ Correct! +${coins} Coins earned` : '✗ Not quite — keep going!', correct ? 'coin' : 'error', 3500)
 
-  // ── Post-answer: award coins + motivation + solution ───────────────────────
-  const handlePostAnswer = async (
-    correct: boolean, timeSpent: number, q: Question, optKey: string
-  ) => {
-    const coins = calcCoins(timeSpent, correct);
-  
-    if (correct) {
-      addToast(coins > 0 ? `✓ Correct! +${coins} Coins earned` : '✓ Correct!', 'coin', 3500);
-    } else {
-      addToast(`✗ Not quite — keep going!`, 'error', 3000);
-    }
-  
-    // Anti-cheat: only award coins if not already rewarded
     if (correct && coins > 0) {
-      const prev = loadSession(currentIndex);
-      const alreadyRewarded = prev?.isCorrect === true;
-      if (!alreadyRewarded) updateRookieCoins(coins);
+      const prev = loadSession(globalIndex)
+      if (prev?.isCorrect !== true) updateRookieCoins(coins)
     }
-  
-    updateStreak();
-  
-    // ✅ Save activity for ALL answered questions (not just correct)
-    // Also update localStorage daily count
-    const prev = loadSession(currentIndex);
-    const alreadyAnswered = prev?.selectedOption != null;
-    if (!alreadyAnswered) {
-      // Increment questions solved today (regardless of correct/wrong)
-      const todayKey = `questionsToday_${new Date().toDateString()}`;
-      const todayCount = parseInt(localStorage.getItem(todayKey) || '0') + 1;
-      localStorage.setItem(todayKey, todayCount.toString());
-      localStorage.setItem('questionsToday', todayCount.toString());
-  
-      // Also increment week/month
-      const weekCount = parseInt(localStorage.getItem('questionsWeek') || '0') + 1;
-      localStorage.setItem('questionsWeek', weekCount.toString());
-      const monthCount = parseInt(localStorage.getItem('questionsMonth') || '0') + 1;
-      localStorage.setItem('questionsMonth', monthCount.toString());
-  
-      // Save to Supabase
-      saveUserActivity(q, correct, timeSpent);
-    }
-  
-    const currentBuddyId = buddyId;
-    setSolutionBuddyId(currentBuddyId);
-  
-    setSolutionRequested(true);
-    setSolutionLoading(true);
-    const savedBuddyId =  buddyId;
-    generateAISolution(q, savedBuddyId, AI_BUDDIES[savedBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]).then((aiSol) => {
 
-      setSolution(aiSol);
-      setSolutionLoading(false);
+    updateStreak()
+
+    const prev = loadSession(globalIndex)
+    if (!prev?.selectedOption) {
+      const todayKey = `questionsToday_${new Date().toDateString()}`
+      localStorage.setItem(todayKey, String((parseInt(localStorage.getItem(todayKey) || '0') + 1)))
+      localStorage.setItem('questionsWeek', String((parseInt(localStorage.getItem('questionsWeek') || '0') + 1)))
+      localStorage.setItem('questionsMonth', String((parseInt(localStorage.getItem('questionsMonth') || '0') + 1)))
+      saveUserActivity(q, correct, timeSpent)
+    }
+
+    const activeBuddyId = buddyId
+    setSolutionBuddyId(activeBuddyId)
+    setSolutionRequested(true); setSolutionLoading(true)
+
+    generateAISolution(q, activeBuddyId, AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]).then(aiSol => {
+      setSolution(aiSol); setSolutionLoading(false)
       saveSession({
-        selectedOption: optKey,
-        isCorrect: correct,
-        solution: aiSol,
-        solutionRequested: true,
-        solutionBuddyId: currentBuddyId,
-        hasTyped: false,
-      });
-      setTimeout(() => {
-        scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 200);
-    });
-  };
+        selectedOption: optKey, isCorrect: correct, solution: aiSol,
+        solutionRequested: true, solutionBuddyId: activeBuddyId, hasTyped: false,
+      })
+      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200)
+    })
+  }
 
-
-  // ── Regenerate solution ────────────────────────────────────────────────────
-  // REPLACE WITH THIS:
+  // ── Regenerate solution ───────────────────────────────────────────────────
   const handleRegenerateSolution = async () => {
-    const q = questions[currentIndex];
-    if (!q) return;
-  
-    // Use the buddy that generated the current solution, not the currently selected one
-    const regenBuddyId = solutionBuddyId;
-    const regenBuddy = AI_BUDDIES[regenBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID];
-  
-    // Clear BOTH possible cache keys so it truly regenerates
+    const q = questions[currentIndex]; if (!q) return
+    try { sessionStorage.removeItem(getAISolCacheKey(q.question_id, solutionBuddyId)) } catch {}
+    setSolution(''); setDisplayedText(''); setHasTyped(false); setAIFollowup(null); setSolutionLoading(true)
     try {
-      sessionStorage.removeItem(getAISolCacheKey(q.question_id, regenBuddyId));
-      if (buddyId !== regenBuddyId) {
-        sessionStorage.removeItem(getAISolCacheKey(q.question_id, buddyId));
-      }
-    } catch {}
-  
-    setSolution('');
-    setDisplayedText('');
-    setHasTyped(false);
-    setAIFollowup(null);
-    setSolutionLoading(true);
-  
-    try {
+      const regenBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
       const res = await axios.post(`${API_BASE}/solution`, {
-        action: 'generate_solution',
-        question_text: q.question_text,
-        option_A: q.option_a, option_B: q.option_b,
-        option_C: q.option_c, option_D: q.option_d,
-        solution: q.solution,
-        correct_option: q.correct_option,
-        buddy_id: regenBuddyId,
-        buddy_name: regenBuddy.name,
-        buddy_system_prompt: regenBuddy.systemPrompt,
-      });
-      const aiSol = res.data.solution || q.solution;
-      saveAISolToCache(q.question_id, regenBuddyId, aiSol);
-      setSolution(aiSol);
-      saveSession({ solution: aiSol, hasTyped: false, solutionBuddyId: regenBuddyId });
-    } catch {
-      addToast('Failed to regenerate. Try again.', 'error');
-    } finally {
-      setSolutionLoading(false);
-    }
-  };
+        action: 'generate_solution', question_text: q.question_text,
+        option_A: q.option_a, option_B: q.option_b, option_C: q.option_c, option_D: q.option_d,
+        solution: q.solution, correct_option: q.correct_option,
+        buddy_id: solutionBuddyId, buddy_name: regenBuddy.name, buddy_system_prompt: regenBuddy.systemPrompt,
+      })
+      const aiSol = res.data.solution || q.solution || ''
+      saveAISolToCache(q.question_id, solutionBuddyId, aiSol)
+      setSolution(aiSol)
+      saveSession({ solution: aiSol, hasTyped: false, solutionBuddyId })
+    } catch { addToast('Failed to regenerate. Try again.', 'error') } finally { setSolutionLoading(false) }
+  }
 
-  // ── MCQ selection ─────────────────────────────────────────────────────────
+  // ── MCQ click ─────────────────────────────────────────────────────────────
   const handleOptionClick = async (opt: string) => {
-    if (selectedOption !== null) return;
-    const q = questions[currentIndex];
-    if (!q) return;
-  
-    const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000);
-    setSelectedOption(opt);
-  
-    let ans = q.correct_option;
-    if (!ans) ans = await determineAnswer(q);
-  
-    const normalize = (val: string | null) => {
-      if (!val) return null;
-      return val
-        .replace("option_", "")
-        .replace("_img", "")
-        .trim()
-        .toUpperCase();
-    };
-  
-    const correct = normalize(opt) === normalize(ans);
-  
-    console.log("Selected:", normalize(opt));
-    console.log("Correct:", normalize(ans));
-    console.log("Result:", correct);
-  
-    setIsCorrect(correct);
-    handlePostAnswer(correct, timeSpent, q, opt);
-  };
+    if (selectedOption !== null) return
+    const q = questions[currentIndex]; if (!q) return
+    const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000)
+    setSelectedOption(opt)
+    let ans = q.correct_option
+    if (!ans) ans = await determineAnswer(q)
+    const normalize = (v: string | null) => v?.replace('option_','').replace('_img','').trim().toUpperCase() ?? null
+    const correct = normalize(opt) === normalize(ans)
+    setIsCorrect(correct)
+    handlePostAnswer(correct, timeSpent, q, opt)
+  }
 
-  // ── Integer submit ─────────────────────────────────────────────────────────
+  // ── Integer submit ────────────────────────────────────────────────────────
   const handleIntegerSubmit = async () => {
-    if (isCorrect !== null) return;
-    const q = questions[currentIndex];
-    if (!q || !integerAnswer.trim()) return;
-    const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000);
-    let ans = q.correct_option;
-    if (!ans) ans = await determineAnswer(q);
-    const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '');
-    const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim();
-    setIsCorrect(correct);
-    setSelectedOption('INTEGER');
-    await handlePostAnswer(correct, timeSpent, q, 'INTEGER');
-  };
+    if (isCorrect !== null) return
+    const q = questions[currentIndex]; if (!q || !integerAnswer.trim()) return
+    const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000)
+    let ans = q.correct_option
+    if (!ans) ans = await determineAnswer(q)
+    const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
+    const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
+    setIsCorrect(correct); setSelectedOption('INTEGER')
+    await handlePostAnswer(correct, timeSpent, q, 'INTEGER')
+  }
 
-  // ── AI Followup ───────────────────────────────────────────────────────────
-  const handleAIFollowup = async (type: '5yr' | 'better') => {
-    const q = questions[currentIndex];
-    if (!q) return;
-    setAIFollowupLoading(true); setAIFollowup(null);
+  // ── AI Followup (Simpler Explanation) ─────────────────────────────────────
+  const handleAIFollowup = async () => {
+    const q = questions[currentIndex]; if (!q) return
+    setAIFollowupLoading(true); setAIFollowup(null)
     try {
       const res = await axios.post(`${API_BASE}/solution`, {
-        action: type === '5yr' ? 'explain_5yr' : 'better_understanding',
-        question_text: q.question_text,
-        solution: q.solution,
-        buddy_id: buddyId,
-        buddy_name: buddy.name,
-        buddy_system_prompt: buddy.systemPrompt,
-      });
-      setAIFollowup(res.data.explanation || 'Could not generate explanation.');
-    } catch { setAIFollowup('Error generating explanation. Please try again.'); }
-    finally { setAIFollowupLoading(false); }
-  };
+        action: 'better_understanding', question_text: q.question_text, solution: q.solution,
+        buddy_id: buddyId, buddy_name: buddy.name, buddy_system_prompt: buddy.systemPrompt,
+      })
+      setAIFollowup(res.data.explanation || 'Could not generate explanation.')
+    } catch { setAIFollowup('Error generating explanation. Please try again.') }
+    finally { setAIFollowupLoading(false) }
+  }
 
-  // ── Dig Deeper ────────────────────────────────────────────────────────────
-  const handleDigDeeper = async () => {
-    const q = questions[currentIndex];
-    if (!q) return;
-    setIsDigging(true); setConceptLoading(true); setConceptMCQ(null); setPrevDigResult(null);
-    try {
-      const res = await axios.post(`${API_BASE}/solution`, {
-        action: 'dig_deeper',
-        question_text: q.question_text,
-        solution: q.solution,
-        buddy_id: buddyId,
-        buddy_name: buddy.name,
-        buddy_system_prompt: buddy.systemPrompt,
-      });
-      setConceptMCQ(res.data);
-    } catch { setConceptFeedback('Error generating concept question.'); }
-    finally { setConceptLoading(false); }
-  };
-
-  const handleConceptResponse = (ans: string) => {
-    if (!conceptMCQ?.mcq) return;
-    setDigDeepSelected(ans);
-    if (ans === 'I_am_not_sure') {
-      setPrevDigResult({ status: 'incorrect', explanation: conceptMCQ.mcq.explanation, answer: conceptMCQ.mcq.correctAnswer });
-      return;
-    }
-    const correct = ans === conceptMCQ.mcq.correctAnswer;
-    setPrevDigResult(correct
-      ? { status: 'correct' }
-      : { status: 'incorrect', explanation: conceptMCQ.mcq.explanation, answer: conceptMCQ.mcq.correctAnswer });
-  };
-
-
-
-
-
+  // ── Navigation ────────────────────────────────────────────────────────────
+  const goTo = (delta: number) => {
+    const newLocal  = currentIndex + delta
+    const newGlobal = globalIndex + delta
+    if (newLocal < 0 || newGlobal < 0) return
+    if (newLocal >= questions.length && newGlobal >= totalCount) return
+    setCurrentIndex(newLocal)
+    setGlobalIndex(newGlobal)
+    setTimer(0); setSelectedOption(null); setIsCorrect(null)
+    setSolution(''); setSolutionRequested(false); setAIFollowup(null)
+    setIntegerAnswer(''); setDisplayedText(''); setHasTyped(false)
+  }
 
   // ── Loading screen ────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#07090f] text-white' : 'bg-[#F0F2FA] text-[#0f172a]'}`}>
+      <div className={`min-h-screen flex items-center justify-center ${T.page}`}>
         <div className="text-center">
           <div className="w-12 h-12 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mx-auto mb-4" />
           <p className={T.muted}>Loading questions…</p>
         </div>
       </div>
-    );
+    )
   }
 
-  const Q = questions[currentIndex];
-
-  // Helper: parse exam_shift into readable label
-  const parseShift = (s: string) => s?.split('_').join(' ') || null;
+  const Q = questions[currentIndex]
+  const parseShift = (s: string | null) => s?.split('_').join(' ') ?? null
+  const progressPct = totalCount > 0 ? ((globalIndex + 1) / totalCount) * 100 : 0
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    
-    <div
-      className={`min-h-screen pb-20 transition-colors duration-300 ${T.page}`}
-      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
-    >
-      {/* ── Toast stack ─────────────────────────────────────────────────────── */}
+    <div className={`min-h-screen pb-20 transition-colors duration-300 ${T.page}`} style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+
+      {/* Toasts */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] flex flex-col gap-2 items-center pointer-events-none">
         <AnimatePresence mode="popLayout">
           {toasts.map(t => (
@@ -1556,69 +1315,51 @@ const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number
         </AnimatePresence>
       </div>
 
-      {/* ── Image modal ──────────────────────────────────────────────────────── */}
+      {/* Image modal */}
+      <AnimatePresence>{imageModal && <ImageModal src={imageModal} onClose={() => setImageModal(null)} />}</AnimatePresence>
+
+      {/* Buddy selector modal */}
       <AnimatePresence>
-        {imageModal && <ImageModal src={imageModal} onClose={() => setImageModal(null)} />}
+        {buddyModalOpen && (
+          <BuddySelectorModal
+            currentBuddyId={buddyId} isDark={isDark}
+            onClose={() => setBuddyModalOpen(false)}
+            onSelect={id => {
+              setBuddyId(id)
+              try { localStorage.setItem('selectedBuddy', id) } catch {}
+              addToast(`Buddy changed to ${AI_BUDDIES[id]?.name}`, 'info', 2000)
+            }}
+          />
+        )}
       </AnimatePresence>
 
-      {/* ── Buddy selector modal ─────────────────────────────────────────────── */}
-<AnimatePresence>
-  {buddyModalOpen && (
-    <BuddySelectorModal
-      currentBuddyId={buddyId}
-      isDark={isDark}
-      onClose={() => setBuddyModalOpen(false)}
-      onSelect={(id) => {
-        setBuddyId(id);
-        try { localStorage.setItem('selectedBuddy', id); } catch {}
-        addToast(`Buddy changed to ${AI_BUDDIES[id]?.name}`, 'info', 2000);
-      }}
-    />
-  )}
-</AnimatePresence>
-
-      {/* ── Header ───────────────────────────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className={`sticky top-0 z-30 backdrop-blur-sm border-b transition-colors duration-300 ${T.header}`}>
         <div className="flex items-center justify-between px-4 sm:px-3 py-3">
-          {/* Back button */}
           <motion.button
             whileTap={{ scale: 0.95 }} onClick={() => router.back()}
             className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 transition-colors ${T.btnSecondary}`}
           >
             <FiChevronLeft size={18} />
           </motion.button>
-        
-          <span className={`text-[11px] ${T.muted} ml-2`}>
-              Q {currentIndex + 1} / {questions.length}
-            </span>
-        
 
-          {/* Chapter title */}
+          <span className={`text-[11px] ${T.muted} ml-2 flex-shrink-0`}>
+            {globalIndex + 1} / {totalCount || questions.length}
+          </span>
+
           <div className="flex-1 mx-3 min-w-0 text-center">
             <h1 className="text-sm sm:text-base font-bold truncate">{chapterTitle}</h1>
-        
           </div>
-          {/* Buddy indicator */}
-          {/* Buddy indicator — clickable to open modal */}
-<button
-  onClick={() => setBuddyModalOpen(true)}
-  className="flex items-center gap-1.5 mr-2 group"
->
-  <div className="relative">
-    <img
-      src={buddy.image}
-      alt={buddy.name}
-      width={32}
-      height={32}
-      className="w-8 h-8 rounded-full object-cover border-2 border-indigo-500/50 group-hover:border-indigo-400 transition-colors"
-    />
-    <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-indigo-500 border-2 border-[#07090f] flex items-center justify-center">
-    
-    </div>
-  </div>
-  <span className={`text-[10px] font-medium hidden sm:block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{buddy.name}</span>
-</button>
-          {/* Right: coins + timer */}
+
+          {/* Buddy avatar — opens selector */}
+          <button onClick={() => setBuddyModalOpen(true)} className="flex items-center gap-1.5 mr-2 group">
+            <div className="relative">
+              <img src={buddy.image} alt={buddy.name} className="w-8 h-8 rounded-full object-cover border-2 border-indigo-500/50 group-hover:border-indigo-400 transition-colors" />
+              <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-indigo-500 border-2 border-[#07090f]" />
+            </div>
+            <span className={`text-[10px] font-medium hidden sm:block ${T.muted}`}>{buddy.name}</span>
+          </button>
+
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors ${T.coinBadge}`}>
               <Image src="coin (1).svg" alt="Coins" width={13} height={13} />
@@ -1632,73 +1373,42 @@ const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number
         </div>
 
         {/* Progress bar */}
-        <div className="">
-          <div className="flex items-center justify-between ">
-       
-      
-          </div>
-          <div className={`h-1 rounded-full overflow-hidden ${T.progress}`}>
+        <div className={`h-1 rounded-full overflow-hidden ${T.progress}`}>
           <motion.div
-  className={`h-full ${T.bar}`}
-              initial={{ width: 0 }}
-              animate={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
-              transition={{ duration: 0.3 }}
-            />
-          </div>
+            className={`h-full ${T.bar}`}
+            initial={{ width: 0 }}
+            animate={{ width: `${progressPct}%` }}
+            transition={{ duration: 0.3 }}
+          />
         </div>
       </div>
 
-      {/* ── Main content ──────────────────────────────────────────────────────── */}
+      {/* ── Main content ─────────────────────────────────────────────────────── */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-7 pb-8">
         {!Q ? (
-          <p className={`text-center py-20 ${T.muted}`}>No questions available.</p>
+          <p className={`text-center py-20 ${T.muted}`}>No questions available for this chapter.</p>
         ) : (
-          <motion.div
-            key={currentIndex}
-            initial={{ opacity: 0, x: 14 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-4"
-          >
+          <motion.div key={`${chapterTitle}-${globalIndex}`} initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
 
-            {/* ── Question card ─────────────────────────────────────────────── */}
+            {/* ── Question card ─────────────────────────────────────────── */}
             <div className={`rounded-2xl border p-5 sm:p-6 transition-colors duration-300 ${T.card}`}>
-              {/* Badge row */}
               <div className="flex flex-wrap items-center gap-2 mb-4">
-                {/* Exam shift – highlighted like screenshot */}
                 {Q.exam_shift && (
                   <span className={`inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full ${T.examBadge}`}>
                     {parseShift(Q.exam_shift)}
                   </span>
                 )}
-                {Q.year && (
-                  <span className={`inline-flex items-center text-[11px] font-medium px-2.5 py-1 rounded-full ${T.yearBadge}`}>
-                    {Q.year}
-                  </span>
-                )}
-             
               </div>
+              <div className="question-body__text font-medium">{renderLatex(Q.question_text)}</div>
 
-              {/* Question text */}
-              <div className="question-body__text font-medium">
-                {renderLatex(Q.question_text)}
-              </div>
-
-              {/* Question image – fitted, click to enlarge */}
               {Q.question_img_url && (
                 <div className="mt-4 relative group">
                   <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-64 ${T.imgWrapper}`}>
-                    <img
-                      src={Q.question_img_url}
-                      alt="Question illustration"
+                    <img src={Q.question_img_url} alt="Question illustration"
                       className="max-h-56 max-w-full object-contain cursor-zoom-in select-none"
-                      onClick={() => setImageModal(Q.question_img_url!)}
-                    />
-                    {/* Enlarge button (always visible on mobile, hover on desktop) */}
-                    <button
-                      onClick={() => setImageModal(Q.question_img_url!)}
-                      className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/70 text-white flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity shadow"
-                      title="Enlarge image"
-                    >
+                      onClick={() => setImageModal(Q.question_img_url!)} />
+                    <button onClick={() => setImageModal(Q.question_img_url!)}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/70 text-white flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity shadow">
                       <FiZoomIn size={14} />
                     </button>
                   </div>
@@ -1706,110 +1416,81 @@ const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number
               )}
             </div>
 
-            {/* ── Integer type ──────────────────────────────────────────────── */}
+            {/* ── Integer input ─────────────────────────────────────────── */}
             {isIntegerQ(Q) ? (
               <div className={`rounded-2xl border p-5 space-y-4 transition-colors ${T.card}`}>
                 <p className={`text-sm font-medium ${T.muted}`}>Enter your integer answer:</p>
-
                 {isCorrect === null ? (
                   <div className="flex gap-3">
-                    <input
-                      type="number"
-                      value={integerAnswer}
-                      onChange={e => setIntegerAnswer(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleIntegerSubmit(); }}
+                    <input type="number" value={integerAnswer} onChange={e => setIntegerAnswer(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleIntegerSubmit() }}
                       placeholder="Type your answer…"
-                      className={`flex-1 border rounded-xl px-4 py-3 text-lg outline-none transition-colors ${T.input}`}
-                    />
-                    <motion.button
-                      whileTap={{ scale: 0.97 }} onClick={handleIntegerSubmit}
-                      disabled={!integerAnswer.trim()}
-                      className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 font-semibold text-white transition-colors"
-                    >
+                      className={`flex-1 border rounded-xl px-4 py-3 text-lg outline-none transition-colors ${T.input}`} />
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={handleIntegerSubmit} disabled={!integerAnswer.trim()}
+                      className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 font-semibold text-white transition-colors">
                       Submit
                     </motion.button>
                   </div>
                 ) : (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                    className={`rounded-xl p-4 border-2 ${isCorrect ? 'bg-[#04271C] border-[#1DC97A]' : 'bg-[#2D0A0A] border-[#DC2626]'}`}
-                  >
+                  <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                    className={`rounded-xl p-4 border-2 ${isCorrect ? 'bg-[#04271C] border-[#1DC97A]' : 'bg-[#2D0A0A] border-[#DC2626]'}`}>
                     <span className={`font-bold text-base ${isCorrect ? 'text-[#1DC97A]' : 'text-[#DC2626]'}`}>
                       {isCorrect ? '✓ Correct!' : '✗ Incorrect'}
                     </span>
-                    <p className="text-sm text-gray-300 mt-1">
-                      Your answer: <b className="text-white">{integerAnswer}</b>
-                    </p>
+                    <p className="text-sm text-gray-300 mt-1">Your answer: <b className="text-white">{integerAnswer}</b></p>
                     {!isCorrect && Q.correct_option && (
-                      <p className="text-sm text-gray-300 mt-0.5">
-                        Correct: <b className="text-[#1DC97A]">{Q.correct_option}</b>
-                      </p>
+                      <p className="text-sm text-gray-300 mt-0.5">Correct: <b className="text-[#1DC97A]">{Q.correct_option}</b></p>
                     )}
                   </motion.div>
                 )}
-
                 {determiningAnswer && (
-                  <div className="flex items-center gap-3">
-                    <Spinner size={16} cls="border-white" />
-                    <span className={`text-sm ${T.muted}`}>Determining correct answer…</span>
-                  </div>
+                  <div className="flex items-center gap-3"><Spinner size={16} cls="border-white" /><span className={`text-sm ${T.muted}`}>Determining correct answer…</span></div>
                 )}
               </div>
 
             ) : selectedOption === null ? (
-              /* ── MCQ unanswered ────────────────────────────────────────────── */
+              /* ── MCQ unanswered ──────────────────────────────────────── */
               <div className="space-y-2.5">
-                {(['a', 'b', 'c', 'd'] as const).map(opt => {
-                  const tv = Q[`option_${opt}`] as string;
-                  const iv = Q[`option_${opt}_img`] as string | null;
-                  if (!tv && !iv) return null;
+                {(['a','b','c','d'] as const).map(opt => {
+                  const tv = Q[`option_${opt}`] as string | null
+                  const iv = Q[`option_${opt}_img`] as string | null
+                  if (!tv && !iv) return null
                   return (
-                    <motion.button
-                      key={opt} whileTap={{ scale: 0.98 }} onClick={() => handleOptionClick(opt)}
-                      className={`w-full text-left rounded-xl p-4 border flex items-center gap-4 transition-colors ${T.optionIdle}`}
-                    >
-                      <div className={`w-9 h-9 rounded-lg border flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${T.optionLabel}`}>
-                        {opt}
-                      </div>
+                    <motion.button key={opt} whileTap={{ scale: 0.98 }} onClick={() => handleOptionClick(opt)}
+                      className={`w-full text-left rounded-xl p-4 border flex items-center gap-4 transition-colors ${T.optionIdle}`}>
+                      <div className={`w-9 h-9 rounded-lg border flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${T.optionLabel}`}>{opt}</div>
                       <div className="flex-1 text-sm leading-relaxed">
                         {iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-20 rounded-lg" /> : renderLatex(tv)}
                       </div>
                     </motion.button>
-                  );
+                  )
                 })}
               </div>
 
             ) : (
-              /* ── MCQ answered ──────────────────────────────────────────────── */
+              /* ── MCQ answered ────────────────────────────────────────── */
               <div className="space-y-2.5">
-                {(['a', 'b', 'c', 'd'] as const).map(opt => {
-                  const tv = Q[`option_${opt}`] as string;
-                  const iv = Q[`option_${opt}_img`] as string | null;
-                  if (!tv && !iv) return null;
-                  const sel   = selectedOption === opt;
-                  const corr  = opt === Q.correct_option?.toLowerCase().trim();
+                {(['a','b','c','d'] as const).map(opt => {
+                  const tv = Q[`option_${opt}`] as string | null
+                  const iv = Q[`option_${opt}_img`] as string | null
+                  if (!tv && !iv) return null
+                  const sel  = selectedOption === opt
+                  const corr = opt === Q.correct_option?.toLowerCase().trim()
                   return (
-                    
-                    <motion.div
-                      key={opt} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+                    <motion.div key={opt} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
                       className={`rounded-xl p-4 flex items-center gap-4 border-2 transition-colors ${
-                        corr ? 'bg-[#04271C] border-[#1DC97A]' :
-                        sel  ? 'bg-[#2D0A0A] border-[#DC2626]' :
-                        isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
-                      }`}
-                    >
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${
-                        corr ? 'bg-[#1DC97A] text-black' :
-                        sel  ? 'bg-[#DC2626] text-white' : T.optionLabel
+                        corr ? 'bg-[#04271C] border-[#1DC97A]' : sel ? 'bg-[#2D0A0A] border-[#DC2626]'
+                             : isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
                       }`}>
-                        {opt}
-                      </div>
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${
+                        corr ? 'bg-[#1DC97A] text-black' : sel ? 'bg-[#DC2626] text-white' : T.optionLabel
+                      }`}>{opt}</div>
                       <div className={`flex-1 text-sm leading-relaxed ${corr || sel ? 'text-white' : ''}`}>
                         {iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-20 rounded-lg" /> : renderLatex(tv)}
                       </div>
                       {corr && <CheckIcon />}
                     </motion.div>
-                  );
+                  )
                 })}
               </div>
             )}
@@ -1822,118 +1503,92 @@ const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number
               </div>
             )}
 
-            {/* ── Post-answer section ───────────────────────────────────────── */}
+            {/* ── Post-answer section ───────────────────────────────────── */}
             {selectedOption !== null && (
               <>
-                {/* Buddy motivation card */}
-                {motivationLoading ? (
-                  <div className="rounded-2xl p-5 bg-gradient-to-r from-[#47006A] to-[#0031D0] flex items-center gap-3">
-                    <Spinner size={18} cls="border-white" />
-                    <span className="text-white text-sm">{buddy.name} is thinking…</span>
-                  </div>
-             ) : motivation ? (
-              <motion.div
-                key="motivation-card"  
-                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl p-5 bg-gradient-to-r from-[#47006A] to-[#0031D0]"
-              >
+                {/* Motivation */}
+                {motivation ? (
+                  <motion.div key="motivation-card" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                    className="rounded-2xl p-5 bg-gradient-to-r from-[#47006A] to-[#0031D0]">
                     <div className="flex items-start gap-3">
-                    <img
-  src={buddy.image}
-  alt={buddy.name}
-  width={32}
-  height={32}
-  className="w-12 h-12 rounded-full object-cover"
-/>
-
+                      <img src={buddy.image} alt={buddy.name} className="w-12 h-12 rounded-full object-cover" />
                       <div>
-                        <p className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1">
-                          {buddy.name}
-                        </p>
+                        <p className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1">{buddy.name}</p>
                         <p className="text-white text-sm leading-relaxed font-medium">{motivation}</p>
                       </div>
                     </div>
                   </motion.div>
                 ) : null}
 
-{solutionRequested && (
-  <div key="solution-card" className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
-    {/* Header row */}
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2.5">
-        <img
-          src={solutionBuddy.image}
-          alt={solutionBuddy.name}
-          width={32} height={32}
-          className="w-10 h-10 rounded-full object-cover"
-        />
-        <div>
-          <h3 className="font-bold text-sm">Solution</h3>
-          <p className={`text-[11px] ${T.muted}`}>Explained by {solutionBuddy.name}</p>
-        </div>
-      </div>
-      {/* Regenerate button */}
-      {!solutionLoading && (
-        <motion.button
-          whileTap={{ scale: 0.95 }}
-          onClick={handleRegenerateSolution}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${T.btnSecondary}`}
-          title="Regenerate solution"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M21 8h-4M3 16h4"/>
-          </svg>
-          Redo
-        </motion.button>
-      )}
-    </div>
+                {/* Solution card */}
+                {solutionRequested && (
+                  <div key="solution-card" className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <img src={solutionBuddy.image} alt={solutionBuddy.name} className="w-10 h-10 rounded-full object-cover" />
+                        <div>
+                          <h3 className="font-bold text-sm">Solution</h3>
+                          <p className={`text-[11px] ${T.muted}`}>Explained by {solutionBuddy.name}</p>
+                        </div>
+                      </div>
+                      {!solutionLoading && (
+                        <motion.button whileTap={{ scale: 0.95 }} onClick={handleRegenerateSolution}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${T.btnSecondary}`}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M21 8h-4M3 16h4"/>
+                          </svg>
+                          Redo
+                        </motion.button>
+                      )}
+                    </div>
 
-    {solutionLoading ? (
-      <div className="flex items-center gap-3 py-5">
-        <Spinner size={20} />
-        <span className={`text-sm ${T.muted}`}>Generating solution…</span>
-      </div>
-    ) : (
-      <>
-        <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-          {renderLatex(displayedText.length ? displayedText : solution)}
-        </div>
+                    {solutionLoading ? (
+                      <div className="flex items-center gap-3 py-5">
+                        <Spinner size={20} /><span className={`text-sm ${T.muted}`}>Generating solution…</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                          {renderLatex(displayedText.length ? displayedText : solution)}
+                        </div>
+                        {Q?.solution_image_url && (
+                          <div className="mt-4 relative group">
+                            <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-64 ${T.imgWrapper}`}>
+                              <img src={Q.solution_image_url} alt="Solution illustration"
+                                className="max-h-56 max-w-full object-contain cursor-zoom-in select-none"
+                                onClick={() => setImageModal(Q.solution_image_url!)} />
+                              <button onClick={() => setImageModal(Q.solution_image_url!)}
+                                className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/70 text-white flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity shadow">
+                                <FiZoomIn size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
 
-        {/* Solution image if exists */}
-        {Q?.solution_image_url && (
-          <div className="mt-4 relative group">
-            <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-64 ${T.imgWrapper}`}>
-              <img
-                src={Q.solution_image_url}
-                alt="Solution illustration"
-                className="max-h-56 max-w-full object-contain cursor-zoom-in select-none"
-                onClick={() => setImageModal(Q.solution_image_url!)}
-              />
-              <button
-                onClick={() => setImageModal(Q.solution_image_url!)}
-                className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/70 text-white flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity shadow"
-              >
-                <FiZoomIn size={14} />
-              </button>
-            </div>
-          </div>
-        )}
-      </>
-    )}
-
-    {/* AI Followup buttons — keep existing code below unchanged */}
-    {!solutionLoading && solution && (
+                    {/* AI Followup buttons */}
+                    {!solutionLoading && solution && (
                       <div className="mt-5">
                         {!aiFollowup && !aiFollowupLoading && (
                           <div className="flex flex-wrap gap-2">
+                            {/* Similar Questions button */}
                             <motion.button
-                              whileTap={{ scale: 0.97 }} onClick={handleDigDeeper}
-                              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-colors ${isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'}`}
+                              whileTap={{ scale: 0.97 }}
+                              onClick={() => setShowSimilar(p => !p)}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-colors ${
+                                showSimilar
+                                  ? 'bg-indigo-600 border-indigo-500 text-white'
+                                  : isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'
+                              }`}
                             >
-                              <FiSearch size={13} /> Test Your Understanding
+                              <FiLayers size={13} />
+                              {showSimilar ? 'Hide Similar' : 'Similar Questions'}
                             </motion.button>
+
+                            {/* Simpler Explanation button */}
                             <motion.button
-                              whileTap={{ scale: 0.97 }} onClick={() => handleAIFollowup('better')}
+                              whileTap={{ scale: 0.97 }} onClick={handleAIFollowup}
                               className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-colors ${isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'}`}
                             >
                               <FiSmile size={13} /> Simpler Explanation
@@ -1943,16 +1598,13 @@ const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number
 
                         {aiFollowupLoading && (
                           <div className="flex items-center gap-3 mt-3">
-                            <Spinner size={16} />
-                            <span className={`text-sm ${T.muted}`}>Generating…</span>
+                            <Spinner size={16} /><span className={`text-sm ${T.muted}`}>Generating…</span>
                           </div>
                         )}
 
                         {aiFollowup && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                            className={`mt-4 rounded-xl border p-4 text-sm leading-relaxed whitespace-pre-wrap transition-colors ${T.followCard}`}
-                          >
+                          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                            className={`mt-4 rounded-xl border p-4 text-sm leading-relaxed whitespace-pre-wrap transition-colors ${T.followCard}`}>
                             {aiFollowup}
                           </motion.div>
                         )}
@@ -1961,79 +1613,20 @@ const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number
                   </div>
                 )}
 
-                {/* ── Dig Deeper ──────────────────────────────────────────────── */}
+                {/* ── Similar Questions Panel ─────────────────────────── */}
                 <AnimatePresence>
-                  {isDigging && (
+                  {showSimilar && Q && (
                     <motion.div
-                      initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                      className="rounded-2xl overflow-hidden"
+                      initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
                     >
-                      <div className="bg-gradient-to-r from-[#47006A] to-[#0031D0] p-5 sm:p-6 rounded-2xl">
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-bold text-white text-base">Test Your Understanding</div>
-                            {prevDigResult?.status && (
-                              <div className="text-xs text-white/70 mt-1">
-                                {prevDigResult.status === 'correct'
-                                  ? '✓ Previous: Correct!'
-                                  : `✗ Correct was: ${prevDigResult.answer}`}
-                              </div>
-                            )}
-                            {prevDigResult?.status === 'incorrect' && prevDigResult.explanation && (
-                              <div className="mt-2 text-sm bg-white/10 rounded-xl p-3 text-white/90">
-                                {prevDigResult.explanation}
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => { setIsDigging(false); setConceptMCQ(null); setPrevDigResult(null); setDigDeepSelected(null); }}
-                            className="ml-3 flex-shrink-0 bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1.5 rounded-full font-medium transition-colors"
-                          >
-                            Close
-                          </button>
-                        </div>
-
-                        {conceptLoading ? (
-                          <div className="flex items-center gap-3">
-                            <Spinner size={22} cls="border-white" />
-                            <span className="text-white text-sm">Generating question…</span>
-                          </div>
-                        ) : conceptMCQ?.mcq ? (
-                          <>
-                            <div className="text-white font-semibold text-sm sm:text-base mb-4">
-                              {conceptMCQ.mcq.question}
-                            </div>
-                            <div className="space-y-2.5">
-                              {conceptMCQ.mcq.options.map((opt: string, i: number) => {
-                                const l = ['a', 'b', 'c', 'd'][i];
-                                const sel = digDeepSelected === l;
-                                return (
-                                  <motion.button
-                                    key={i} whileTap={{ scale: 0.99 }}
-                                    onClick={() => handleConceptResponse(l)}
-                                    className={`w-full text-left rounded-xl p-3.5 flex items-center gap-3 transition-colors ${
-                                      sel ? 'bg-[#04271C] border-2 border-[#1DC97A]' : 'bg-black/30 border border-white/10 hover:border-white/30'
-                                    }`}
-                                  >
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm flex-shrink-0 ${sel ? 'bg-[#1DC97A] text-black' : 'bg-white/10 text-white'}`}>
-                                      {l}
-                                    </div>
-                                    <span className="text-white text-sm">{opt}</span>
-                                  </motion.button>
-                                );
-                              })}
-                            </div>
-                            <button
-                              onClick={() => handleConceptResponse('I_am_not_sure')}
-                              className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 text-white text-xs font-medium hover:bg-white/30 transition-colors"
-                            >
-                              <FiX size={12} /> Not Sure
-                            </button>
-                          </>
-                        ) : (
-                          <div className="text-sm text-white/60">{conceptFeedback || 'Loading…'}</div>
-                        )}
-                      </div>
+                      <SimilarQuestionsPanel
+                        mainQuestion={Q}
+                        chapterTitle={chapterTitle}
+                        subjectName={subject}
+                        imageKey={imageKey}
+                        isDark={isDark}
+                        addToast={addToast}
+                      />
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -2041,27 +1634,30 @@ const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number
             )}
 
             <div ref={scrollRef} />
+
+            {/* Loading more indicator */}
+            {loadingMore && (
+              <div className="flex items-center justify-center gap-2 py-2">
+                <Spinner size={14} cls={isDark ? 'border-slate-600' : 'border-gray-300'} />
+                <span className={`text-xs ${T.muted}`}>Loading more questions…</span>
+              </div>
+            )}
           </motion.div>
         )}
       </div>
 
-      {/* ── Footer navigation ────────────────────────────────────────────────── */}
+      {/* ── Footer navigation ─────────────────────────────────────────────── */}
       <div className={`fixed bottom-0 left-0 right-0 h-16 backdrop-blur-sm border-t flex items-center justify-between px-4 sm:px-6 z-40 transition-colors duration-300 ${T.footer}`}>
-        {/* Previous */}
         <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={() => { if (currentIndex > 0) setCurrentIndex(currentIndex - 1); }}
-          disabled={currentIndex === 0}
+          whileTap={{ scale: 0.97 }} onClick={() => goTo(-1)}
+          disabled={globalIndex === 0}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold disabled:opacity-40 transition-colors ${T.btnSecondary}`}
         >
           <FiArrowLeft size={15} />
           <span className="hidden sm:inline">Previous</span>
         </motion.button>
 
-      
-
         <div className="flex items-center gap-2">
-          {/* Bookmark */}
           <motion.button
             whileTap={{ scale: 0.97 }} onClick={handleBookmark}
             className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${bookmarked ? 'bg-indigo-600 border-indigo-500 text-white' : T.btnSecondary}`}
@@ -2069,11 +1665,9 @@ const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number
             {bookmarked ? <IoBookmark size={17} /> : <FiBookmark size={17} />}
           </motion.button>
 
-          {/* Next */}
           <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => { if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1); }}
-            disabled={currentIndex === questions.length - 1}
+            whileTap={{ scale: 0.97 }} onClick={() => goTo(1)}
+            disabled={globalIndex >= (totalCount ? totalCount - 1 : questions.length - 1)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
           >
             <span>Next</span> <FiArrowRight size={15} />
@@ -2081,5 +1675,5 @@ const saveUserActivity = async (q: Question, correct: boolean, timeSpent: number
         </div>
       </div>
     </div>
-  );
+  )
 }

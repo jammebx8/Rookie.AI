@@ -310,14 +310,13 @@ function ChapterPageContent() {
   };
 
   const handleChapterPress = (chapter: Chapter, index: number) => {
-    // Navigate to QuestionViewer page and pass required params.
-    // The QuestionViewer route should read these query params and load questionsData[chapterTitle]
     const params = new URLSearchParams({
-      chapterTitle: chapter.title,
-      subjectName,
+      subject: subjectName,
+      chapter: chapter.title,
       imageKey,
       examName,
       chapterIndex: String(index),
+      index: '0',
     }).toString();
 
     router.push(`/QuestionViewer?${params}`);

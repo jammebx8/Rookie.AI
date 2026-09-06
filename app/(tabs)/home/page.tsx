@@ -674,15 +674,15 @@ function ContinueSection({ isDark }: { isDark: boolean }) {
       </h2>
       <button
         onClick={() => {
-          // Fix: Route to the correct path with proper parameters
           if (!session.chapter_title) return;
           const params = new URLSearchParams({
-            chapterTitle: session.chapter_title,
-            subjectName: session.subject_name || '',
+            subject: session.subject_name || '',
+            chapter: session.chapter_title,
             imageKey: session.image_key || '',
+            index: String(session.question_index || 0),
             startIndex: String(session.question_index || 0),
           });
-          router.push(`/questionviewer?${params.toString()}`);
+          router.push(`/QuestionViewer?${params.toString()}`);
         }}
         className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all ${
           isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/40' : 'bg-white border-[#E5E7EB] hover:border-indigo-300'
@@ -805,14 +805,14 @@ function RecommendedSection({ isDark }: { isDark: boolean }) {
       </p>
       <button
         onClick={() => {
-          // Fix: Route properly with all parameters
           const params = new URLSearchParams({
-            chapterTitle: recommended.title,
-            subjectName: recommended.subject || '',
+            subject: recommended.subject || '',
+            chapter: recommended.title,
             imageKey: recommended.imageKey || '',
+            index: '0',
             startIndex: '0',
           });
-          router.push(`/questionviewer?${params.toString()}`);
+          router.push(`/QuestionViewer?${params.toString()}`);
         }}
         className={`w-full p-4 rounded-2xl border text-left transition-all ${
           isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-amber-500/40' : 'bg-white border-[#E5E7EB] hover:border-amber-300'
