@@ -141,8 +141,7 @@ export default function LeaderboardPage() {
       let query: any = supabase
         .from("users")
         .select("id, name, email, avatar_url, rookieCoinsEarned, exam")
-        .not("rookieCoinsEarned", "is", null)
-        .order("rookieCoinsEarned", { ascending: false });
+        .order("rookieCoinsEarned", { ascending: false, nullsFirst: false });
       if (examFilter !== "All") query = query.eq("exam", examFilter);
 
       const { data, error } = await query;
