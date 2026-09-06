@@ -148,27 +148,34 @@ function useTheme() {
 }
 
 // ─── Toast ───────────────────────────────────────────────────────────────────
-function Toast({ toast, onClose }: { toast: ToastItem; onClose: (id: number) => void }) {
-  const styles: Record<ToastType, string> = {
-    success: 'bg-emerald-600 text-white',
-    error:   'bg-rose-600 text-white',
-    info:    'bg-slate-700 text-white',
-    coin:    'bg-gradient-to-r from-amber-500 to-orange-500 text-white',
-    bookmark:'bg-indigo-600 text-white',
+// Single pill — slides up from bottom-right, no close button, non-intrusive
+function Toast({ toast }: { toast: ToastItem }) {
+  const icons: Record<ToastType, string> = {
+    success: '✓', error: '✗', info: 'ℹ', coin: '🪙', bookmark: '🔖',
   }
-  const icons: Record<ToastType, string> = { success:'✓', error:'✗', info:'ℹ', coin:'🪙', bookmark:'🔖' }
+  const accent: Record<ToastType, string> = {
+    success: '#1DC97A', error: '#f87171', info: '#94a3b8', coin: '#f59e0b', bookmark: '#818cf8',
+  }
   return (
     <motion.div
-      initial={{ opacity: 0, y: -20, scale: 0.92 }}
+      layout
+      initial={{ opacity: 0, y: 16, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -16, scale: 0.94 }}
-      className={`flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl ${styles[toast.type]}`}
+      exit={{ opacity: 0, y: 8, scale: 0.97 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-lg backdrop-blur-sm"
+      style={{
+        background: 'rgba(15,17,25,0.88)',
+        border: `1px solid ${accent[toast.type]}33`,
+        color: '#f1f5f9',
+        minWidth: 180,
+        maxWidth: 320,
+      }}
     >
-      <span className="text-base font-bold">{icons[toast.type]}</span>
-      <span className="font-semibold text-sm">{toast.message}</span>
-      <button onClick={() => onClose(toast.id)} className="ml-1 opacity-60 hover:opacity-100 transition-opacity">
-        <FiX size={13} />
-      </button>
+      <span style={{ color: accent[toast.type], fontSize: 13, fontWeight: 700 }}>
+        {icons[toast.type]}
+      </span>
+      <span className="text-sm font-medium leading-tight">{toast.message}</span>
     </motion.div>
   )
 }
@@ -418,12 +425,14 @@ function SimilarQuestionCard({
   return (
     <div className={`rounded-2xl border p-5 space-y-4 transition-colors ${T.card}`}>
       {/* Header badges */}
-      <div className="flex flex-wrap items-center gap-2">
-        {q.exam_shift && (
-          <span className={`inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full ${T.examBadge}`}>
-            {parseShift(q.exam_shift)}
-          </span>
-        )}
+<div className="flex flex-wrap items-center gap-2">
+  {q.exam_shift && (
+    <span
+      className={`inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full ${T.examBadge}`}
+    >
+      {parseShift(q.exam_shift)}
+    </span>
+  )}
         <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
           Similar
         </span>
@@ -780,12 +789,15 @@ export default function QuestionViewerClient() {
   }
 
   // ── Toasts ────────────────────────────────────────────────────────────────
-  const addToast = useCallback((message: string, type: ToastType = 'info', ms = 3500) => {
+  const addToast = useCallback((message: string, type: ToastType = 'info', ms = 2200) => {
+    // Replace any existing toast of the same type — no stacking
     const id = Date.now() + Math.random()
-    setToasts(p => [...p, { id, message, type }])
+    setToasts(p => {
+      const filtered = p.filter(t => t.type !== type)
+      return [...filtered, { id, message, type }]
+    })
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), ms)
   }, [])
-  const removeToast = (id: number) => setToasts(p => p.filter(t => t.id !== id))
 
   // ── Load buddy ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1102,7 +1114,14 @@ export default function QuestionViewerClient() {
         option_A: q.option_a, option_B: q.option_b, option_C: q.option_c, option_D: q.option_d,
         solution: q.solution,
       })
-      const ans = res.data.correct_answer
+      const raw: string = res.data.correct_answer || ''
+      // Normalise to a single lowercase letter: "A" → "a", "option_A" → "a", "Option A" → "a"
+      const normalised = raw
+        .replace(/option_?/gi, '')
+        .replace(/[^a-dA-D]/g, '')
+        .slice(0, 1)
+        .toLowerCase()
+      const ans = normalised || raw.trim()
       // Write back to unified table
       await supabase.from(DB_TABLE).update({ correct_option: ans }).eq('question_id', q.question_id)
       q.correct_option = ans
@@ -1182,7 +1201,7 @@ export default function QuestionViewerClient() {
         selectedOption: optKey, isCorrect: correct, solution: aiSol,
         solutionRequested: true, solutionBuddyId: activeBuddyId,
       })
-      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200)
+      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150)
     })
   }
 
@@ -1214,7 +1233,11 @@ export default function QuestionViewerClient() {
     setSelectedOption(opt)
     let ans = q.correct_option
     if (!ans) ans = await determineAnswer(q)
-    const normalize = (v: string | null) => v?.replace('option_','').replace('_img','').trim().toUpperCase() ?? null
+    // Normalise both sides to a single lowercase letter for comparison
+    const normalize = (v: string | null): string => {
+      if (!v) return ''
+      return v.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
+    }
     const correct = normalize(opt) === normalize(ans)
     setIsCorrect(correct)
     handlePostAnswer(correct, timeSpent, q, opt)
@@ -1265,7 +1288,7 @@ export default function QuestionViewerClient() {
     return (
       <div className={`min-h-screen flex items-center justify-center ${T.page}`}>
         <div className="text-center">
-          <div className="w-12 h-12 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mx-auto mb-4" />
+          <div className={`w-12 h-12 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-4 ${isDark ? 'border-white' : 'border-[#0f172a]'}`} />
           <p className={T.muted}>Loading questions…</p>
         </div>
       </div>
@@ -1280,13 +1303,11 @@ export default function QuestionViewerClient() {
   return (
     <div className={`min-h-screen pb-20 transition-colors duration-300 ${T.page}`} style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
 
-      {/* Toasts */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] flex flex-col gap-2 items-center pointer-events-none">
+      {/* Toasts — bottom-right, non-intrusive */}
+      <div className="fixed bottom-20 right-4 z-[300] flex flex-col gap-2 items-end pointer-events-none">
         <AnimatePresence mode="popLayout">
           {toasts.map(t => (
-            <div key={t.id} className="pointer-events-auto">
-              <Toast toast={t} onClose={removeToast} />
-            </div>
+            <Toast key={t.id} toast={t} />
           ))}
         </AnimatePresence>
       </div>
@@ -1426,7 +1447,7 @@ export default function QuestionViewerClient() {
 
             ) : selectedOption === null ? (
               /* ── MCQ unanswered ──────────────────────────────────────── */
-              <div className="space-y-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(['a','b','c','d'] as const).map(opt => {
                   const tv = Q[`option_${opt}`] as string | null
                   const iv = Q[`option_${opt}_img`] as string | null
@@ -1445,13 +1466,16 @@ export default function QuestionViewerClient() {
 
             ) : (
               /* ── MCQ answered ────────────────────────────────────────── */
-              <div className="space-y-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(['a','b','c','d'] as const).map(opt => {
                   const tv = Q[`option_${opt}`] as string | null
                   const iv = Q[`option_${opt}_img`] as string | null
                   if (!tv && !iv) return null
                   const sel  = selectedOption === opt
-                  const corr = opt === Q.correct_option?.toLowerCase().trim()
+                  // Normalise stored correct_option to single lowercase letter
+                  const storedCorr = (Q.correct_option ?? '')
+                    .replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0,1).toLowerCase()
+                  const corr = opt === storedCorr
                   return (
                     <motion.div key={opt} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
                       className={`rounded-xl p-4 flex items-center gap-4 border-2 transition-colors ${
@@ -1498,7 +1522,7 @@ export default function QuestionViewerClient() {
 
                 {/* Solution card */}
                 {solutionRequested && (
-                  <div key="solution-card" className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
+                  <div ref={scrollRef} key="solution-card" className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2.5">
                         <img src={solutionBuddy.image} alt={solutionBuddy.name} className="w-10 h-10 rounded-full object-cover" />
@@ -1595,7 +1619,6 @@ export default function QuestionViewerClient() {
               </>
             )}
 
-            <div ref={scrollRef} />
 
             {/* Loading more indicator */}
             {loadingMore && (
@@ -1622,7 +1645,11 @@ export default function QuestionViewerClient() {
         <div className="flex items-center gap-2">
           <motion.button
             whileTap={{ scale: 0.97 }} onClick={handleBookmark}
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${bookmarked ? 'bg-indigo-600 border-indigo-500 text-white' : T.btnSecondary}`}
+            className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${
+              bookmarked
+                ? isDark ? 'bg-white text-black border-white' : 'bg-[#0f172a] text-white border-[#0f172a]'
+                : T.btnSecondary
+            }`}
           >
             {bookmarked ? <IoBookmark size={17} /> : <FiBookmark size={17} />}
           </motion.button>
@@ -1630,7 +1657,11 @@ export default function QuestionViewerClient() {
           <motion.button
             whileTap={{ scale: 0.97 }} onClick={() => goTo(1)}
             disabled={globalIndex >= (totalCount ? totalCount - 1 : questions.length - 1)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors ${
+              isDark
+                ? 'bg-white text-black hover:bg-gray-100'
+                : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'
+            }`}
           >
             <span>Next</span> <FiArrowRight size={15} />
           </motion.button>
