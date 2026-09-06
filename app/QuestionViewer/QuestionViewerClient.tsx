@@ -289,10 +289,8 @@ function SimilarQuestionCard({
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [isCorrect, setIsCorrect]           = useState<boolean | null>(null)
   const [solution, setSolution]             = useState('')
-  const [displayedText, setDisplayedText]   = useState('')
   const [solutionLoading, setSolutionLoading] = useState(false)
   const [solutionRequested, setSolutionRequested] = useState(false)
-  const [hasTyped, setHasTyped]             = useState(false)
   const [aiFollowup, setAIFollowup]         = useState<string | null>(null)
   const [aiFollowupLoading, setAIFollowupLoading] = useState(false)
   const [imageModal, setImageModal]         = useState<string | null>(null)
@@ -317,17 +315,14 @@ function SimilarQuestionCard({
 
   const isIntegerQ = !q.option_a && !q.option_b && !q.option_c && !q.option_d && !q.option_a_img && !q.option_b_img && !q.option_c_img && !q.option_d_img
 
-  // Typing effect
-  useEffect(() => {
-    if (!solutionRequested || !solution) return
-    if (hasTyped) { setDisplayedText(solution); return }
-    setDisplayedText(''); let i = 0; setHasTyped(false)
-    const iv = setInterval(() => {
-      i++; setDisplayedText(solution.slice(0, i))
-      if (i >= solution.length) { clearInterval(iv); setHasTyped(true) }
-    }, 8)
-    return () => clearInterval(iv)
-  }, [solution, solutionRequested])
+  // Skeleton lines for solution loading
+  const SolutionSkeleton = () => (
+    <div className="space-y-2 py-2">
+      {[100, 85, 92, 70, 80].map((w, i) => (
+        <div key={i} className={`h-3 rounded-full animate-pulse ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: `${w}%` }} />
+      ))}
+    </div>
+  )
 
   const getAISolCacheKey = (qid: string, bid: string) => `${AI_SOL_CACHE}:similar:${qid}:${bid}`
 
@@ -518,11 +513,15 @@ function SimilarQuestionCard({
             </div>
           </div>
           {solutionLoading ? (
-            <div className="flex items-center gap-3 py-3"><Spinner size={16} /><span className={`text-xs ${T.muted}`}>Generating…</span></div>
+            <div className="space-y-2 py-2">
+              {[100, 85, 92, 70, 80].map((w, i) => (
+                <div key={i} className={`h-3 rounded-full animate-pulse ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: `${w}%` }} />
+              ))}
+            </div>
           ) : (
             <>
               <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-                {renderLatex(displayedText || solution)}
+                {renderLatex(solution)}
               </div>
               {q.solution_image_url && (
                 <div className="mt-3 relative group">
@@ -564,6 +563,11 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
   const [showAll, setShowAll]         = useState(false)
   const [fetched, setFetched]         = useState(false)
   const [error, setError]             = useState(false)
+
+  // Auto-fetch on mount
+  useEffect(() => {
+    fetchSimilar()
+  }, [mainQuestion.question_id])
 
   const fetchSimilar = async () => {
     if (fetched) return
@@ -639,22 +643,11 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
 
   return (
     <div className={`rounded-2xl border p-5 ${isDark ? 'bg-[#0a0d14] border-[#1e2538]' : 'bg-[#F8F9FF] border-[#E5E7EB]'}`}>
-      {/* Header + trigger */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <FiLayers size={16} className={muted} />
-          <span className="font-bold text-sm">Similar Questions</span>
-        </div>
-        {!fetched && (
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={fetchSimilar}
-            disabled={loading}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-colors ${isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'}`}
-          >
-            {loading ? <><Spinner size={14} cls="border-black" /> Finding…</> : <><FiLayers size={13} /> Find Similar</>}
-          </motion.button>
-        )}
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <FiLayers size={16} className={muted} />
+        <span className="font-bold text-sm">Similar Questions</span>
+        {loading && <Spinner size={14} cls={isDark ? 'border-slate-500' : 'border-gray-400'} />}
       </div>
 
       {/* Error */}
@@ -736,8 +729,6 @@ export default function QuestionViewerClient() {
   const [motivation, setMotivation]             = useState('')
   const [timer, setTimer]                       = useState(0)
   const [solution, setSolution]                 = useState('')
-  const [displayedText, setDisplayedText]       = useState('')
-  const [isTyping, setIsTyping]                 = useState(false)
   const [aiFollowup, setAIFollowup]             = useState<string | null>(null)
   const [aiFollowupLoading, setAIFollowupLoading] = useState(false)
   const [bookmarked, setBookmarked]             = useState(false)
@@ -749,10 +740,8 @@ export default function QuestionViewerClient() {
   const [buddyId, setBuddyId]                   = useState(DEFAULT_BUDDY_ID)
   const [solutionBuddyId, setSolutionBuddyId]   = useState(DEFAULT_BUDDY_ID)
   const [toasts, setToasts]                     = useState<ToastItem[]>([])
-  const [hasTyped, setHasTyped]                 = useState(false)
   const [buddyModalOpen, setBuddyModalOpen]     = useState(false)
   const [userId, setUserId]                     = useState<string | null>(null)
-  const [showSimilar, setShowSimilar]           = useState(false)
 
   const timerRef          = useRef<number | null>(null)
   const scrollRef         = useRef<HTMLDivElement | null>(null)
@@ -996,15 +985,14 @@ export default function QuestionViewerClient() {
     const q = questions[currentIndex]
     const prev = loadSession(globalIndex)
 
-    // Reset similar questions panel when navigating
-    setShowSimilar(false)
+    // Reset state when navigating to a new question
+    setAIFollowup(null)
 
     if (prev) {
       setSelectedOption(prev.selectedOption || null)
       setIsCorrect(prev.isCorrect ?? null)
       setMotivation(prev.motivation || '')
       setSolutionRequested(prev.solutionRequested || false)
-      setHasTyped(prev.hasTyped || false)
       setSolutionBuddyId(prev.solutionBuddyId || buddyId)
       if (prev.integerAnswer !== undefined) setIntegerAnswer(prev.integerAnswer)
       setAIFollowup(prev.aiFollowup || null)
@@ -1018,7 +1006,7 @@ export default function QuestionViewerClient() {
         setSolution(''); setSolutionLoading(true)
         generateAISolution(q, buddyId, AI_BUDDIES[buddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]).then(aiSol => {
           setSolution(aiSol); setSolutionLoading(false)
-          saveSession({ solution: aiSol, solutionRequested: true, solutionBuddyId: savedBuddyId, hasTyped: true })
+          saveSession({ solution: aiSol, solutionRequested: true, solutionBuddyId: savedBuddyId })
         })
       } else {
         setSolution('')
@@ -1026,7 +1014,7 @@ export default function QuestionViewerClient() {
     } else {
       setSelectedOption(null); setIsCorrect(null); setMotivation('')
       setSolution(''); setAIFollowup(null); setSolutionRequested(false)
-      setIntegerAnswer(''); setDisplayedText(''); setHasTyped(false)
+      setIntegerAnswer(''); setAIFollowup(null); setSolutionRequested(false)
     }
   }, [currentIndex, questions, chapterTitle, globalIndex])
 
@@ -1050,18 +1038,6 @@ export default function QuestionViewerClient() {
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [selectedOption, currentIndex, questions])
-
-  // ── Typing effect ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!solutionRequested || !solution) return
-    if (hasTyped) { setDisplayedText(solution); setIsTyping(false); return }
-    setIsTyping(true); setDisplayedText(''); let i = 0
-    const iv = setInterval(() => {
-      i++; setDisplayedText(solution.slice(0, i))
-      if (i >= solution.length) { clearInterval(iv); setIsTyping(false); setHasTyped(true) }
-    }, 8)
-    return () => clearInterval(iv)
-  }, [solution, solutionRequested])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const isIntegerQ = (q: Question) =>
@@ -1204,7 +1180,7 @@ export default function QuestionViewerClient() {
       setSolution(aiSol); setSolutionLoading(false)
       saveSession({
         selectedOption: optKey, isCorrect: correct, solution: aiSol,
-        solutionRequested: true, solutionBuddyId: activeBuddyId, hasTyped: false,
+        solutionRequested: true, solutionBuddyId: activeBuddyId,
       })
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200)
     })
@@ -1214,7 +1190,7 @@ export default function QuestionViewerClient() {
   const handleRegenerateSolution = async () => {
     const q = questions[currentIndex]; if (!q) return
     try { sessionStorage.removeItem(getAISolCacheKey(q.question_id, solutionBuddyId)) } catch {}
-    setSolution(''); setDisplayedText(''); setHasTyped(false); setAIFollowup(null); setSolutionLoading(true)
+    setSolution(''); setAIFollowup(null); setSolutionLoading(true)
     try {
       const regenBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
       const res = await axios.post(`${API_BASE}/solution`, {
@@ -1226,7 +1202,7 @@ export default function QuestionViewerClient() {
       const aiSol = res.data.solution || q.solution || ''
       saveAISolToCache(q.question_id, solutionBuddyId, aiSol)
       setSolution(aiSol)
-      saveSession({ solution: aiSol, hasTyped: false, solutionBuddyId })
+      saveSession({ solution: aiSol, solutionBuddyId })
     } catch { addToast('Failed to regenerate. Try again.', 'error') } finally { setSolutionLoading(false) }
   }
 
@@ -1281,7 +1257,7 @@ export default function QuestionViewerClient() {
     setGlobalIndex(newGlobal)
     setTimer(0); setSelectedOption(null); setIsCorrect(null)
     setSolution(''); setSolutionRequested(false); setAIFollowup(null)
-    setIntegerAnswer(''); setDisplayedText(''); setHasTyped(false)
+    setIntegerAnswer('')
   }
 
   // ── Loading screen ────────────────────────────────────────────────────────
@@ -1543,13 +1519,15 @@ export default function QuestionViewerClient() {
                     </div>
 
                     {solutionLoading ? (
-                      <div className="flex items-center gap-3 py-5">
-                        <Spinner size={20} /><span className={`text-sm ${T.muted}`}>Generating solution…</span>
+                      <div className="space-y-2.5 py-2">
+                        {[100, 88, 94, 72, 83, 90, 65].map((w, i) => (
+                          <div key={i} className={`h-3 rounded-full animate-pulse ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: `${w}%` }} />
+                        ))}
                       </div>
                     ) : (
                       <>
                         <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-                          {renderLatex(displayedText.length ? displayedText : solution)}
+                          {renderLatex(solution)}
                         </div>
                         {Q?.solution_image_url && (
                           <div className="mt-4 relative group">
@@ -1572,20 +1550,6 @@ export default function QuestionViewerClient() {
                       <div className="mt-5">
                         {!aiFollowup && !aiFollowupLoading && (
                           <div className="flex flex-wrap gap-2">
-                            {/* Similar Questions button */}
-                            <motion.button
-                              whileTap={{ scale: 0.97 }}
-                              onClick={() => setShowSimilar(p => !p)}
-                              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-colors ${
-                                showSimilar
-                                  ? 'bg-indigo-600 border-indigo-500 text-white'
-                                  : isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'
-                              }`}
-                            >
-                              <FiLayers size={13} />
-                              {showSimilar ? 'Hide Similar' : 'Similar Questions'}
-                            </motion.button>
-
                             {/* Simpler Explanation button */}
                             <motion.button
                               whileTap={{ scale: 0.97 }} onClick={handleAIFollowup}
@@ -1613,23 +1577,21 @@ export default function QuestionViewerClient() {
                   </div>
                 )}
 
-                {/* ── Similar Questions Panel ─────────────────────────── */}
-                <AnimatePresence>
-                  {showSimilar && Q && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
-                    >
-                      <SimilarQuestionsPanel
-                        mainQuestion={Q}
-                        chapterTitle={chapterTitle}
-                        subjectName={subject}
-                        imageKey={imageKey}
-                        isDark={isDark}
-                        addToast={addToast}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {/* ── Similar Questions — auto-shown after solution ───── */}
+                {solutionRequested && Q && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+                  >
+                    <SimilarQuestionsPanel
+                      mainQuestion={Q}
+                      chapterTitle={chapterTitle}
+                      subjectName={subject}
+                      imageKey={imageKey}
+                      isDark={isDark}
+                      addToast={addToast}
+                    />
+                  </motion.div>
+                )}
               </>
             )}
 
