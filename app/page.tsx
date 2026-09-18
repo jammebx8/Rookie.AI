@@ -39,6 +39,28 @@ const MoonIcon = () => (
   </svg>
 );
 
+// ─── Exam logo (falls back to a lettered badge if the image is missing) ──────
+type ExamMeta = { name: string; color: string; logo: string; abbr: string };
+
+const ExamLogo = ({ ex }: { ex: ExamMeta }) => {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <span className="exam-logo exam-logo-fb" style={{ background: ex.color }}>{ex.abbr}</span>
+    );
+  }
+  return (
+    <img
+      className="exam-logo"
+      src={ex.logo}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
 export default function OnboardingPage() {
   const router = useRouter();
 
@@ -53,7 +75,7 @@ export default function OnboardingPage() {
   const [selectedClass, setSelectedClass]   = useState('');
   const [selectedExam, setSelectedExam]     = useState('');
   const [selectionError, setSelectionError] = useState(false);
-  const [isDark, setIsDark]                 = useState(true);
+  const [isDark, setIsDark]                 = useState(false);
 
   // ── real avatars from DB ────────────────────────────────────────────────
   const [dbAvatars, setDbAvatars] = useState<{ name: string; avatar_url: string | null }[]>([]);
@@ -61,7 +83,7 @@ export default function OnboardingPage() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem('theme');
-      setIsDark(stored !== 'light');
+      setIsDark(stored === 'dark');
     } catch {}
 
     // Fetch random 4 users with avatar_url
@@ -169,137 +191,141 @@ export default function OnboardingPage() {
   // ── theme vars ───────────────────────────────────────────────────────────
   const d = isDark;
   const C = {
-    bg:        d ? '#080b12' : '#f5f6fa',
-    bg2:       d ? '#0d1017' : '#eef0f8',
+    bg:        d ? '#080b12' : '#f7f6f1',
+    bg2:       d ? 'rgba(13,16,23,0.72)' : 'rgba(238,240,248,0.66)',
     surface:   d ? '#111520' : '#ffffff',
     border:    d ? '#1c2030' : '#e0e3ef',
     text:      d ? '#f0f2f8' : '#0d1117',
     text2:     d ? '#8892a4' : '#4a5568',
     text3:     d ? '#3d4557' : '#a0aab8',
-    navBg:     d ? 'rgba(8,11,18,0.94)' : 'rgba(245,246,250,0.94)',
+    navBg:     d ? 'rgba(8,11,18,0.92)' : 'rgba(247,246,241,0.92)',
     primary:   '#4f46e5',
     accent:    '#7c3aed',
     red:       '#ef4444',
   };
 
+  // paper-theme tints
+  const RULE   = d ? 'rgba(96,110,190,0.075)' : 'rgba(40,70,160,0.075)';
+  const MARGIN = d ? 'rgba(239,68,68,0.20)'   : 'rgba(214,52,52,0.26)';
+  const INK    = d ? 'rgba(214,224,255,0.80)' : 'rgba(16,26,62,0.78)';
+  const SHEET  = d ? 'rgba(12,16,26,0.86)'    : 'rgba(255,255,254,0.92)';
+
   // ── paper content ─────────────────────────────────────────────────────────
   const PAPERS = [
     {
-      id: 'p1', w: 230, top: '-15px', right: '4%', rotate: '1.4deg', opacity: d ? 0.58 : 0.62,
+      id: 'p1', w: 300, top: '-10px', right: '2%', rotate: '1.2deg', opacity: d ? 0.72 : 0.78, keep: true,
       header: 'JEE Advanced 2023 — Paper 2',
-      section: 'Section 2 (Multiple Correct)',
+      section: 'Section 2 (One or more correct)',
       questions: [
-        { n: '1.', marks: '[4, –2]', text: 'If α, β (α < β) are roots of x⁴ – (k+3)x + 8 = 0 such that (1/α) + (1/β) = 3/2, admissible values of k:', math: 'x⁴ – (k+3)x + 8 = 0', opts: ['(A) 2', '(B) 6 ✓', '(C) 5', '(D) 4'] },
-        { n: '2.', marks: '[4]', text: 'For isothermal expansion from P to 1 atm in n steps:', math: '-nRT Σᵢ(1/(P+1-i))' },
+        { n: '1.', marks: '[4, –2]', text: 'Let α, β (α < β) be roots of x⁴ – (k+3)x + 8 = 0 with 1/α + 1/β = 3/2. The admissible values of k are', math: 'x⁴ – (k + 3)x + 8 = 0', opts: ['(A) 2', '(B) 6', '(C) 5', '(D) 4'] },
+        { n: '2.', marks: '[4]', text: 'An ideal gas expands isothermally from P to 1 atm in n discrete steps. Work done is', math: 'W = –nRT Σᵢ 1/(P + 1 – i)' },
       ]
     },
     {
-      id: 'p2', w: 205, top: '30px', right: '26%', rotate: '-1.9deg', opacity: d ? 0.44 : 0.48,
-      header: 'JEE Advanced 2022 — Chemistry',
+      id: 'p2', w: 272, top: '34px', right: '25%', rotate: '-1.8deg', opacity: d ? 0.58 : 0.64, keep: false,
+      header: 'JEE Advanced 2022 — Physics',
       section: 'Section A',
       questions: [
-        { n: '3.', marks: '[3]', text: 'Fermi level in N-type semiconductor with concentration and temperature', math: 'Ef = Ec – kT ln(Nc/Nd)' },
-        { n: '4.', marks: '[3]', text: 'P-N junction diode V-I characteristics explain working', opts: ['(a) Forward bias', '(b) Reverse bias', '(c) Zener breakdown', '(d) Avalanche'] },
+        { n: '3.', marks: '[3]', text: 'Fermi level of an n-type semiconductor at temperature T is given by', math: 'E_f = E_c – kT ln(N_c / N_d)' },
+        { n: '4.', marks: '[3]', text: 'The V–I characteristic of a p–n junction diode is best explained by', opts: ['(a) Forward bias', '(b) Reverse bias', '(c) Zener breakdown', '(d) Avalanche'] },
       ]
     },
     {
-      id: 'p3', w: 218, bottom: '10px', right: '3%', rotate: '0.9deg', opacity: d ? 0.42 : 0.46,
-      header: 'JEE Mains 2024 — Mathematics',
-      section: 'Section B — Integer Type',
+      id: 'p3', w: 288, bottom: '8px', right: '2%', rotate: '0.8deg', opacity: d ? 0.56 : 0.62, keep: true,
+      header: 'JEE Main 2024 — Mathematics',
+      section: 'Section B — Integer type',
       questions: [
-        { n: '5.', marks: '[4]', text: 'Area bounded by y = |sin x| and x-axis on [0, 2π] equals', math: 'A = ∫₀²π |sin x| dx = 4' },
-        { n: '6.', marks: '[4]', text: 'If ∇²ψ = 0 everywhere in region, flux through closed surface:', math: '∮ ψ·dS = 0', opts: ['(a) 0 ✓', '(b) 1', '(c) ∞', '(d) –1'] },
+        { n: '5.', marks: '[4]', text: 'The area bounded by y = |sin x| and the x-axis on [0, 2π] equals', math: 'A = ∫₀^{2π} |sin x| dx = 4' },
+        { n: '6.', marks: '[4]', text: 'If ∇²ψ = 0 everywhere inside a region, the flux through any closed surface in it is', math: '∮ ∇ψ · dS = 0', opts: ['(a) 0', '(b) 1', '(c) ∞', '(d) –1'] },
       ]
     },
     {
-      id: 'p4', w: 196, bottom: '-8px', right: '21%', rotate: '-1.3deg', opacity: d ? 0.36 : 0.40,
+      id: 'p4', w: 258, bottom: '-6px', right: '22%', rotate: '-1.2deg', opacity: d ? 0.46 : 0.52, keep: false,
       header: 'JEE Advanced 2021 — Physics',
-      section: 'Paragraph Questions',
+      section: 'Paragraph type',
       questions: [
-        { n: '7.', marks: '[3]', text: 'Newton rings — diameter of dark and bright fringes expression:', math: 'D²ₙ = 4nλR' },
-        { n: '8.', marks: '[3]', text: 'Acceptance angle of optical fiber (n₁=1.75, n₂=1.70):', math: 'θₐ = sin⁻¹(√(n₁²–n₂²))' },
+        { n: '7.', marks: '[3]', text: 'For Newton\u2019s rings, the diameter of the n-th dark ring satisfies', math: 'D²ₙ = 4nλR' },
+        { n: '8.', marks: '[3]', text: 'Acceptance angle of an optical fibre with n₁ = 1.75, n₂ = 1.70 is', math: 'θₐ = sin⁻¹ √(n₁² – n₂²)' },
       ]
     },
     {
-      id: 'p5', w: 188, top: '55%', right: '0%', rotate: '2.2deg', opacity: d ? 0.30 : 0.34,
-      header: 'NEET 2024 — Biology',
+      id: 'p5', w: 248, top: '54%', right: '0%', rotate: '2deg', opacity: d ? 0.40 : 0.46, keep: false,
+      header: 'JEE Main 2025 — Physics',
       section: 'Section A',
       questions: [
-        { n: '9.', marks: '[4]', text: 'Continuity equation for current densities in conducting medium:', math: '∂ρ/∂t + ∇·J = 0' },
-        { n: '10.', marks: '[4]', text: 'Hall coefficient and Hall voltage for semiconductor:', math: 'Rₕ = 1/(nq)' },
+        { n: '9.', marks: '[4]', text: 'The continuity equation for current density in a conducting medium reads', math: '∂ρ/∂t + ∇·J = 0' },
+        { n: '10.', marks: '[4]', text: 'The Hall coefficient of a semiconductor of carrier density n is', math: 'R_H = 1/(nq)' },
       ]
     },
     {
-      id: 'p6', w: 200, top: '10%', right: '15%', rotate: '-0.7deg', opacity: d ? 0.28 : 0.32,
-      header: 'JEE Mains 2023 — Chemistry',
+      id: 'p6', w: 262, top: '9%', right: '14%', rotate: '-0.6deg', opacity: d ? 0.38 : 0.44, keep: false,
+      header: 'JEE Main 2023 — Chemistry',
       section: 'Section A',
       questions: [
-        { n: '11.', marks: '[4]', text: 'Thermodynamics — work done in reversible isothermal process:', math: 'W = -nRT ln(V₂/V₁)' },
-        { n: '12.', marks: '[4]', text: 'Equilibrium constant Kp for N₂ + 3H₂ ⇌ 2NH₃:', math: 'Kp = Kc(RT)⁻²' },
+        { n: '11.', marks: '[4]', text: 'Work done in a reversible isothermal expansion of an ideal gas is', math: 'W = –nRT ln(V₂ / V₁)' },
+        { n: '12.', marks: '[4]', text: 'For N₂ + 3H₂ ⇌ 2NH₃, the relation between K_p and K_c is', math: 'K_p = K_c (RT)⁻²' },
       ]
     },
   ];
 
   const renderPaperSheet = (p: typeof PAPERS[0]) => (
-    <div key={p.id} style={{
-      position: 'absolute',
-      width: p.w,
-      top: (p as any).top, right: (p as any).right, bottom: (p as any).bottom,
-      transform: `rotate(${p.rotate})`,
-      opacity: p.opacity,
-      background: d ? 'rgba(11,14,22,0.88)' : 'rgba(255,255,255,0.9)',
-      border: `1px solid ${d ? 'rgba(80,90,140,0.18)' : 'rgba(79,70,229,0.12)'}`,
-      borderRadius: 3,
-      boxShadow: d ? '0 4px 20px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.1)',
-      fontFamily: '"Times New Roman", Times, serif',
-      color: d ? 'rgba(230,235,255,0.78)' : 'rgba(10,20,50,0.72)',
-      fontSize: 8.5,
-      lineHeight: 1.65,
-      padding: '12px 14px',
-      overflow: 'hidden',
-      pointerEvents: 'none',
-    }}>
+    <div
+      key={p.id}
+      className={`sheet${p.keep ? '' : ' sheet-sm-hide'}`}
+      style={{
+        width: p.w,
+        top: (p as any).top, right: (p as any).right, bottom: (p as any).bottom,
+        transform: `rotate(${p.rotate})`,
+        opacity: p.opacity,
+        background: SHEET,
+        borderColor: d ? 'rgba(90,100,150,0.22)' : 'rgba(30,50,120,0.14)',
+        color: INK,
+      }}
+    >
       {/* ruled lines */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
-        backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 15.7px, ${d ? 'rgba(99,102,241,0.07)' : 'rgba(79,70,229,0.055)'} 15.7px, ${d ? 'rgba(99,102,241,0.07)' : 'rgba(79,70,229,0.055)'} 16.3px)`,
+        backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 17.4px, ${RULE} 17.4px, ${RULE} 18px)`,
       }} />
       {/* margin line */}
-      <div style={{ position: 'absolute', top: 0, bottom: 0, left: 22, width: 1, background: d ? 'rgba(220,50,50,0.18)' : 'rgba(220,50,50,0.2)' }} />
-      <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', opacity: 0.5, marginBottom: 5, borderBottom: `1px solid ${d ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`, paddingBottom: 4 }}>
-        {p.header}
-      </div>
-      <div style={{ fontSize: 7.5, fontWeight: 700, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.09em', opacity: 0.55, margin: '4px 0 6px', borderTop: `1px solid ${d ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, borderBottom: `1px solid ${d ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, padding: '2px 0' }}>
-        {p.section}
-      </div>
+      <div style={{ position: 'absolute', top: 0, bottom: 0, left: 26, width: 1, background: MARGIN }} />
+
+      <div className="sheet-head">{p.header}</div>
+      <div className="sheet-sec">{p.section}</div>
+
       {p.questions.map((q, qi) => (
-        <div key={qi} style={{ marginBottom: 7 }}>
-          <div style={{ fontWeight: 600, fontSize: 8, opacity: 0.88, display: 'flex', justifyContent: 'space-between' }}>
+        <div key={qi} style={{ marginBottom: 9 }}>
+          <div className="sheet-q">
             <span>{q.n} {q.text}</span>
-            <span style={{ opacity: 0.4, fontSize: 7, marginLeft: 4, whiteSpace: 'nowrap' }}>{q.marks}</span>
+            <span className="sheet-marks">{q.marks}</span>
           </div>
-          {(q as any).math && <div style={{ fontStyle: 'italic', opacity: 0.72, fontSize: 9, margin: '2px 0 2px 8px' }}>{(q as any).math}</div>}
-          {(q as any).opts?.map((o: string, oi: number) => (
-            <div key={oi} style={{ paddingLeft: 10, opacity: 0.65, fontSize: 8 }}>{o}</div>
-          ))}
+          {(q as any).math && <div className="sheet-math">{(q as any).math}</div>}
+          {(q as any).opts && (
+            <div className="sheet-opts">
+              {(q as any).opts.map((o: string, oi: number) => <span key={oi}>{o}</span>)}
+            </div>
+          )}
         </div>
       ))}
     </div>
   );
 
+  // heavier physics / maths formulas floating behind the copy
   const MATH_FLOATS = [
-    { expr: 'F = ma', top: '14%', right: '52%', sz: 13, rot: '-3deg' },
-    { expr: 'E = mc²', top: '38%', right: '49%', sz: 11, rot: '2.5deg' },
-    { expr: 'PV = nRT', bottom: '32%', right: '51%', sz: 12, rot: '-1.8deg' },
-    { expr: '∇²ψ + k²ψ = 0', top: '62%', right: '44%', sz: 10, rot: '3deg' },
-    { expr: 'v² = u² + 2as', top: '7%', right: '43%', sz: 11, rot: '-2.2deg' },
-    { expr: 'dQ = TdS', bottom: '12%', right: '47%', sz: 10, rot: '1.4deg' },
-    { expr: 'F = q(E + v×B)', top: '80%', right: '40%', sz: 9, rot: '-2deg' },
+    { expr: 'iħ ∂ψ/∂t = Ĥψ',              top: '11%',    right: '50%', sz: 15, rot: '-3deg',   keep: true  },
+    { expr: '∮ B·dl = μ₀I + μ₀ε₀ dΦ_E/dt', top: '32%',    right: '46%', sz: 12, rot: '2.2deg',  keep: false },
+    { expr: '∫ e^{–x²} dx = √π',            bottom: '30%', right: '49%', sz: 13, rot: '-1.6deg', keep: true  },
+    { expr: '∇²ψ + k²ψ = 0',                top: '61%',    right: '42%', sz: 12, rot: '2.6deg',  keep: false },
+    { expr: 'd/dt (∂L/∂q̇) – ∂L/∂q = 0',    top: '6%',     right: '40%', sz: 12, rot: '-2deg',   keep: false },
+    { expr: 'dS ≥ δQ/T',                    bottom: '11%', right: '46%', sz: 12, rot: '1.4deg',  keep: true  },
+    { expr: 'F = q(E + v × B)',             top: '79%',    right: '38%', sz: 11, rot: '-2deg',   keep: false },
+    { expr: 'ζ(s) = Σ n⁻ˢ',                 top: '45%',    right: '55%', sz: 12, rot: '1.8deg',  keep: false },
+    { expr: 'lim_{x→0} (sin x)/x = 1',      bottom: '46%', right: '36%', sz: 11, rot: '-1.2deg', keep: false },
   ];
 
   // ─── CSS ──────────────────────────────────────────────────────────────────
   const css = `
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:ital,wght@0,700;0,800;1,700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -313,17 +339,35 @@ export default function OnboardingPage() {
       --text3:    ${C.text3};
       --primary:  ${C.primary};
       --accent:   ${C.accent};
+      --rule:     ${RULE};
+      --margin:   ${MARGIN};
       --r:        12px;
       --rp:       999px;
       --t:        0.17s ease;
       --f:        'Inter', system-ui, sans-serif;
-      --fd:       'Fraunces', Georgia, serif;
+      --fd:       'Archivo', 'Inter', system-ui, sans-serif;
     }
 
     body { font-family: var(--f); background: var(--bg); color: var(--text); transition: background 0.22s, color 0.22s; }
 
-    /* ── Page ── */
-    .pg { min-height: 100vh; display: flex; flex-direction: column; }
+    /* ── Page: answer-sheet base (ruled lines + margin rules, both themes) ── */
+    .pg { position: relative; min-height: 100vh; display: flex; flex-direction: column; }
+
+    .pg::before {
+      content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: repeating-linear-gradient(
+        0deg, transparent, transparent 27px, var(--rule) 27px, var(--rule) 28px
+      );
+    }
+    /* left double margin rule + faint right rule, like a real answer sheet */
+    .pg::after {
+      content: ''; position: fixed; top: 0; bottom: 0; left: clamp(16px, 7vw, 116px);
+      width: 5px; z-index: 0; pointer-events: none;
+      background:
+        linear-gradient(90deg, var(--margin) 0 1px, transparent 1px 4px, var(--margin) 4px 5px);
+    }
+
+    .hero-wrap, .sec, .foot { position: relative; z-index: 1; }
 
     /* ── Nav ── */
     .nav {
@@ -336,10 +380,11 @@ export default function OnboardingPage() {
     }
     .nav-brand {
       display: flex; align-items: center; gap: 9px;
-      font-size: 0.95rem; font-weight: 700; color: var(--text);
-      text-decoration: none; letter-spacing: -0.01em;
+      font-family: var(--fd); font-size: 1rem; font-weight: 800; color: var(--text);
+      text-decoration: none; letter-spacing: -0.02em;
     }
     .nav-tag {
+      font-family: var(--f);
       font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em;
       text-transform: uppercase; color: var(--text3);
       padding: 2px 7px; border: 1px solid var(--border); border-radius: 4px;
@@ -355,29 +400,54 @@ export default function OnboardingPage() {
     .theme-btn:hover { border-color: var(--primary); color: var(--primary); }
 
     /* ── Hero wrapper ── */
-    .hero-wrap {
-      position: relative; overflow: hidden;
-      background: var(--bg);
+    .hero-wrap { position: relative; overflow: hidden; background: transparent; }
+
+    .papers-layer { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+
+    /* ── Background question sheets (readable, not decorative noise) ── */
+    .sheet {
+      position: absolute;
+      border: 1px solid;
+      border-radius: 3px;
+      box-shadow: ${d ? '0 6px 26px rgba(0,0,0,0.55)' : '0 6px 22px rgba(20,30,80,0.10)'};
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 10.5px; line-height: 1.72;
+      padding: 14px 16px 14px 18px;
+      overflow: hidden; pointer-events: none; user-select: none;
+      transform-origin: top right;
     }
-    /* full-page ruled lines watermark */
-    .hero-wrap::before {
-      content: '';
-      position: absolute; inset: 0;
-      background-image: repeating-linear-gradient(
-        0deg, transparent, transparent 27px,
-        ${d ? 'rgba(80,90,180,0.045)' : 'rgba(79,70,229,0.04)'} 27px,
-        ${d ? 'rgba(80,90,180,0.045)' : 'rgba(79,70,229,0.04)'} 28px
-      );
-      pointer-events: none; z-index: 0;
+    .sheet-head {
+      position: relative; font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; opacity: 0.62; margin-bottom: 6px;
+      border-bottom: 1px solid currentColor; padding-bottom: 4px;
     }
-    /* big left margin red line */
-    .hero-wrap::after {
-      content: ''; position: absolute; top: 0; bottom: 0; left: 12%;
-      width: 1px; background: ${d ? 'rgba(239,68,68,0.10)' : 'rgba(239,68,68,0.12)'};
-      pointer-events: none; z-index: 0;
+    .sheet-sec {
+      position: relative; font-size: 9px; font-weight: 700; text-align: center;
+      text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6;
+      margin: 5px 0 8px; padding: 3px 0;
+      border-top: 1px solid currentColor; border-bottom: 1px solid currentColor;
+    }
+    .sheet-head, .sheet-sec { border-color: currentColor; }
+    .sheet-q {
+      position: relative; display: flex; gap: 6px; justify-content: space-between;
+      font-size: 10.5px; font-weight: 600; opacity: 0.94;
+    }
+    .sheet-marks { opacity: 0.5; font-size: 9px; white-space: nowrap; }
+    .sheet-math {
+      position: relative; font-style: italic; opacity: 0.88;
+      font-size: 11.5px; margin: 3px 0 3px 12px;
+    }
+    .sheet-opts {
+      position: relative; display: flex; flex-wrap: wrap; gap: 2px 14px;
+      padding-left: 12px; opacity: 0.74; font-size: 10px;
     }
 
-    .papers-layer { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+    /* floating formulas */
+    .mf {
+      position: absolute; font-family: 'Times New Roman', Times, serif; font-style: italic;
+      color: ${d ? 'rgba(150,162,215,0.20)' : 'rgba(46,62,130,0.16)'};
+      pointer-events: none; user-select: none; white-space: nowrap;
+    }
 
     /* ── Hero grid ── */
     .hero {
@@ -394,16 +464,17 @@ export default function OnboardingPage() {
       text-transform: uppercase; color: var(--text3);
       border: 1px solid var(--border); border-radius: 4px;
       padding: 4px 10px; margin-bottom: 22px;
+      background: ${d ? 'rgba(8,11,18,0.6)' : 'rgba(255,255,255,0.7)'};
     }
     .eyebrow-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
 
     .hero-h1 {
       font-family: var(--fd);
-      font-size: clamp(2.4rem, 4.5vw, 3.6rem);
-      font-weight: 800; line-height: 1.08; letter-spacing: -0.03em;
+      font-size: clamp(2.3rem, 4.6vw, 3.7rem);
+      font-weight: 800; line-height: 1.04; letter-spacing: -0.035em;
       color: var(--text); margin-bottom: 20px;
     }
-    .hero-h1 em { font-style: italic; color: var(--primary); }
+    .hero-h1 em { font-style: normal; font-weight: 900; color: var(--primary); }
 
     .hero-sub {
       font-size: 1rem; color: var(--text2); line-height: 1.7;
@@ -414,8 +485,8 @@ export default function OnboardingPage() {
     /* stat row */
     .stat-row { display: flex; gap: 32px; margin-bottom: 32px; }
     .stat { }
-    .stat-num { font-size: 1.5rem; font-weight: 700; color: var(--text); letter-spacing: -0.03em; line-height: 1; }
-    .stat-label { font-size: 0.75rem; color: var(--text3); margin-top: 3px; font-weight: 500; letter-spacing: 0.02em; }
+    .stat-num { font-family: var(--fd); font-size: 1.55rem; font-weight: 800; color: var(--text); letter-spacing: -0.035em; line-height: 1; }
+    .stat-label { font-size: 0.75rem; color: var(--text3); margin-top: 4px; font-weight: 500; letter-spacing: 0.02em; }
 
     /* avatars + social proof */
     .proof { display: flex; align-items: center; gap: 12px; }
@@ -436,7 +507,7 @@ export default function OnboardingPage() {
     .card {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 18px; padding: 32px 28px;
-      box-shadow: ${d ? '0 24px 64px rgba(0,0,0,0.5)' : '0 24px 64px rgba(79,70,229,0.1)'};
+      box-shadow: ${d ? '0 24px 64px rgba(0,0,0,0.55)' : '0 24px 64px rgba(30,40,100,0.12)'};
       position: relative;
     }
     .card::before {
@@ -447,7 +518,7 @@ export default function OnboardingPage() {
       font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em;
       text-transform: uppercase; color: var(--text3); margin-bottom: 6px;
     }
-    .card-title { font-size: 1.25rem; font-weight: 700; color: var(--text); margin-bottom: 22px; letter-spacing: -0.02em; }
+    .card-title { font-family: var(--fd); font-size: 1.3rem; font-weight: 800; color: var(--text); margin-bottom: 22px; letter-spacing: -0.025em; }
 
     .fg { margin-bottom: 16px; }
     .fl { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text3); margin-bottom: 7px; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -489,48 +560,82 @@ export default function OnboardingPage() {
     .sp { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(99,102,241,0.25); border-top-color: var(--primary); animation: spin 0.7s linear infinite; }
 
     /* ── Sections ── */
-    .sec { padding: 64px 5vw; }
+    .sec { position: relative; padding: 64px 5vw; }
     .sec-inner { max-width: 1180px; margin: 0 auto; }
-    .sec2 { background: var(--bg2); }
+    .sec2 { background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
     .sec-eyebrow { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 6px; }
-    .sec-title { font-family: var(--fd); font-size: clamp(1.5rem, 2.8vw, 2.2rem); font-weight: 800; color: var(--text); margin-bottom: 36px; letter-spacing: -0.03em; }
-    .sec-title em { font-style: italic; color: var(--primary); }
+    .sec-title { font-family: var(--fd); font-size: clamp(1.5rem, 2.9vw, 2.25rem); font-weight: 800; color: var(--text); margin-bottom: 32px; letter-spacing: -0.035em; }
+    .sec-title em { font-style: normal; font-weight: 900; color: var(--primary); }
 
-    .exam-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-    .exam-item {
-      display: flex; align-items: center; gap: 11px;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 13px 15px;
-      transition: all var(--t);
+    /* ── Exam coverage: sliding logo rail ── */
+    .exam-rail {
+      position: relative; overflow: hidden; padding: 4px 0;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+              mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
     }
-    .exam-item:hover { border-color: var(--primary); transform: translateY(-2px); }
-    .exam-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .exam-item-name { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+    .exam-track {
+      display: flex; width: max-content; gap: 14px;
+      animation: rail 30s linear infinite;
+    }
+    .exam-rail:hover .exam-track,
+    .exam-rail:focus-within .exam-track { animation-play-state: paused; }
+    @keyframes rail { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    .exam-item {
+      display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--rp); padding: 11px 24px 11px 14px;
+      box-shadow: ${d ? '0 2px 10px rgba(0,0,0,0.35)' : '0 2px 10px rgba(30,40,100,0.06)'};
+    }
+    .exam-logo {
+      width: 30px; height: 30px; border-radius: 50%; object-fit: contain;
+      flex-shrink: 0; background: ${d ? 'rgba(255,255,255,0.9)' : '#fff'};
+      padding: 2px;
+    }
+    .exam-logo-fb {
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-family: var(--fd); font-size: 0.66rem; font-weight: 800;
+      letter-spacing: 0.02em; padding: 0;
+    }
+    .exam-item-name { font-family: var(--fd); font-size: 1.02rem; font-weight: 700; color: var(--text); letter-spacing: -0.015em; white-space: nowrap; }
 
     .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
     .feat {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 14px; padding: 26px 22px; transition: all var(--t);
     }
-    .feat:hover { border-color: ${d ? 'rgba(99,102,241,0.4)' : '#c4b5fd'}; transform: translateY(-3px); }
+    .feat:hover { border-color: ${d ? 'rgba(99,102,241,0.4)' : '#c4b5fd'}; }
     .feat-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 14px; }
-    .feat-title { font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 8px; letter-spacing: -0.01em; }
+    .feat-title { font-family: var(--fd); font-size: 1.05rem; font-weight: 700; color: var(--text); margin-bottom: 8px; letter-spacing: -0.02em; }
     .feat-desc { font-size: 0.85rem; color: var(--text2); line-height: 1.6; }
 
     /* ── Profile step ── */
-    .prof-pg { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 5vw; background: var(--bg); }
+    .prof-pg {
+      position: relative; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 40px 5vw; background: var(--bg);
+    }
+    .prof-pg::before {
+      content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: repeating-linear-gradient(0deg, transparent, transparent 27px, var(--rule) 27px, var(--rule) 28px);
+    }
+    .prof-pg::after {
+      content: ''; position: fixed; top: 0; bottom: 0; left: clamp(16px, 7vw, 116px);
+      width: 5px; z-index: 0; pointer-events: none;
+      background: linear-gradient(90deg, var(--margin) 0 1px, transparent 1px 4px, var(--margin) 4px 5px);
+    }
     .prof-card {
+      position: relative; z-index: 1;
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 18px; padding: 40px 36px;
-      box-shadow: ${d ? '0 24px 64px rgba(0,0,0,0.5)' : '0 24px 64px rgba(79,70,229,0.1)'};
-      max-width: 460px; width: 100%; position: relative;
+      box-shadow: ${d ? '0 24px 64px rgba(0,0,0,0.5)' : '0 24px 64px rgba(30,40,100,0.12)'};
+      max-width: 460px; width: 100%;
     }
     .prof-card::before {
       content: ''; position: absolute; top: 0; left: 36px; right: 36px; height: 1px;
       background: linear-gradient(90deg, transparent, var(--primary), var(--accent), transparent);
     }
     .prof-step { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--primary); margin-bottom: 6px; }
-    .prof-title { font-family: var(--fd); font-size: 1.7rem; font-weight: 800; color: var(--text); margin-bottom: 6px; letter-spacing: -0.03em; }
+    .prof-title { font-family: var(--fd); font-size: 1.75rem; font-weight: 800; color: var(--text); margin-bottom: 6px; letter-spacing: -0.035em; }
     .prof-sub { font-size: 0.88rem; color: var(--text2); margin-bottom: 28px; line-height: 1.6; }
     .inp {
       width: 100%; padding: 11px 14px; border: 1px solid var(--border);
@@ -551,7 +656,7 @@ export default function OnboardingPage() {
     .foot {
       border-top: 1px solid var(--border); padding: 28px 5vw;
       display: flex; align-items: center; justify-content: space-between;
-      flex-wrap: wrap; gap: 12px; background: var(--bg);
+      flex-wrap: wrap; gap: 12px; background: ${d ? 'rgba(8,11,18,0.82)' : 'rgba(247,246,241,0.82)'};
     }
     .foot-brand { font-size: 0.85rem; font-weight: 600; color: var(--text2); }
     .foot-links { display: flex; gap: 18px; }
@@ -559,33 +664,54 @@ export default function OnboardingPage() {
     .foot-link:hover { color: var(--primary); }
     .foot-copy { font-size: 0.75rem; color: var(--text3); }
 
-    /* ── Mobile ── */
+    /* keyboard focus */
+    a:focus-visible, button:focus-visible, input:focus-visible {
+      outline: 2px solid var(--primary); outline-offset: 2px;
+    }
+
+    /* ── Tablet ── */
     @media (max-width: 900px) {
       .hero { grid-template-columns: 1fr; gap: 36px; padding: 56px 5vw 44px; }
       .feat-grid { grid-template-columns: 1fr; }
+      .sheet-sm-hide, .mf-sm-hide { display: none; }
+      .sheet { transform-origin: top right; }
+      .papers-layer { opacity: 0.55; }
+      .exam-track { animation-duration: 22s; }
     }
+
+    /* ── Mobile: keep the sheets legible instead of cramming them in ── */
     @media (max-width: 640px) {
       .nav { padding: 0 4vw; }
-      .hero { padding: 40px 4vw 32px; }
+      .hero { padding: 36px 4vw 32px; }
       .sec { padding: 44px 4vw; }
-      .exam-grid { grid-template-columns: repeat(2, 1fr); }
       .card { padding: 24px 18px; }
       .stat-row { gap: 20px; }
       .prof-card { padding: 32px 20px; }
       .foot { flex-direction: column; align-items: flex-start; }
+      .pg::after, .prof-pg::after { left: 10px; }
+
+      .papers-layer { opacity: 0.4; }
+      .sheet { width: 240px !important; right: -46px !important; }
+      .sheet:not(.sheet-sm-hide) ~ .sheet:not(.sheet-sm-hide) { top: auto !important; bottom: 4% !important; }
+      .mf { font-size: 11px !important; }
+      .exam-item { padding: 9px 18px 9px 11px; gap: 10px; }
+      .exam-logo { width: 26px; height: 26px; }
+      .exam-item-name { font-size: 0.92rem; }
+      .exam-track { gap: 10px; animation-duration: 18s; }
     }
-    /* mobile paper: show smaller versions overlapping top-right */
-    @media (max-width: 900px) {
-      .papers-layer { opacity: 0.5; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .exam-track { animation: none; }
+      .exam-rail { overflow-x: auto; }
     }
   `;
 
-  const EXAMS = [
-    { name: 'JEE Mains', color: '#3b82f6' },
-    { name: 'JEE Advanced', color: '#8b5cf6' },
-    { name: 'NEET', color: '#10b981' },
-    { name: 'MHT CET', color: '#f59e0b' },
-    { name: 'BITSAT', color: '#6366f1' },
+  const EXAMS: ExamMeta[] = [
+    { name: 'JEE Main',     color: '#3b82f6', logo: '/JM.png',     abbr: 'JM'  },
+    { name: 'JEE Advanced', color: '#8b5cf6', logo: '/JA.png', abbr: 'JA'  },
+    { name: 'NEET',         color: '#10b981', logo: '/NT.png',         abbr: 'NT'  },
+    { name: 'MHT CET',      color: '#f59e0b', logo: '/MH.png',      abbr: 'MH'  },
+    { name: 'BITSAT',       color: '#6366f1', logo: '/BS.png',       abbr: 'BS'  },
   ];
 
   const FEATS = [
@@ -645,17 +771,19 @@ export default function OnboardingPage() {
         <div className="hero-wrap">
 
           {/* Paper sheets layer */}
-          <div className="papers-layer">
+          <div className="papers-layer" aria-hidden="true">
             {PAPERS.map(renderPaperSheet)}
-            {/* Floating math */}
+            {/* Floating formulas */}
             {MATH_FLOATS.map((m, i) => (
-              <span key={i} style={{
-                position: 'absolute', top: (m as any).top, bottom: (m as any).bottom,
-                right: m.right, fontSize: m.sz, fontFamily: '"Times New Roman", serif',
-                fontStyle: 'italic', transform: `rotate(${m.rot})`,
-                color: d ? 'rgba(140,150,200,0.14)' : 'rgba(79,70,229,0.10)',
-                pointerEvents: 'none', userSelect: 'none', whiteSpace: 'nowrap',
-              }}>{m.expr}</span>
+              <span
+                key={i}
+                className={`mf${m.keep ? '' : ' mf-sm-hide'}`}
+                style={{
+                  top: (m as any).top, bottom: (m as any).bottom,
+                  right: m.right, fontSize: m.sz,
+                  transform: `rotate(${m.rot})`,
+                }}
+              >{m.expr}</span>
             ))}
           </div>
 
@@ -684,7 +812,7 @@ export default function OnboardingPage() {
                 </div>
                 <div className="stat">
                   <div className="stat-num">2013–2026</div>
-                  <div className="stat-label">Shift-tagged</div>
+                  <div className="stat-label">All Shifts</div>
                 </div>
                 <div className="stat">
                
@@ -771,13 +899,15 @@ export default function OnboardingPage() {
           <div className="sec-inner">
             <p className="sec-eyebrow">Coverage</p>
             <h2 className="sec-title">Every major <em>entrance exam</em></h2>
-            <div className="exam-grid">
-              {EXAMS.map(ex => (
-                <div key={ex.name} className="exam-item">
-                  <div className="exam-dot" style={{ background: ex.color }} />
-                  <span className="exam-item-name">{ex.name}</span>
-                </div>
-              ))}
+            <div className="exam-rail">
+              <div className="exam-track">
+                {[...EXAMS, ...EXAMS].map((ex, i) => (
+                  <div key={`${ex.name}-${i}`} className="exam-item">
+                    <ExamLogo ex={ex} />
+                    <span className="exam-item-name">{ex.name}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>

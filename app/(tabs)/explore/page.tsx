@@ -18,7 +18,7 @@ type Subject = {
   color: string;
 };
 
-const EXAMS = [{ name: 'JEE Main' }, { name: 'JEE Adv.' }, { name: 'NEET' }];
+const EXAMS = [{ name: 'JEE Main' },];
 
 const SUBJECTS: Record<string, Subject[]> = {
   'JEE Main': [
