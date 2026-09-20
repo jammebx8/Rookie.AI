@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../../public/src/utils/supabase';
 import { syncStreakFromSupabase, readStreakFromLocal } from '../../../public/src/utils/streakUtils'; // adjust path
+import 'katex/dist/katex.min.css';
+import { InlineMath, BlockMath } from 'react-katex';
 
 
 
@@ -819,69 +821,129 @@ function ContinueSection({ isDark }: { isDark: boolean }) {
   );
 }
 
-// ─── RecommendedQuestionCard component (Phase 5/6 adaptive recommendation) ──
-// Fetches the actual next question to solve (via the get_next_recommended_question
-// RPC — see supabase/phase4_5_6.sql) instead of aggregating chapter stats.
-// Shows the question + its options as a preview; "Continue" hands off to the
-// Practice page which re-calls the same RPC after every answer.
+function renderLatex(text: string | null | undefined): React.ReactNode {
+  if (!text) return null;
+  return text.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/).map((part, i) => {
+    if (part.startsWith('$$') && part.endsWith('$$')) return <BlockMath key={i} math={part.slice(2, -2)} />;
+    if (part.startsWith('$') && part.endsWith('$'))   return <InlineMath key={i} math={part.slice(1, -1)} />;
+    return <span key={i}>{part}</span>;
+  });
+}
+
+function CheckIconSmall() {
+  return (
+    <svg width="13" height="10" viewBox="0 0 14 11" fill="none" style={{ flexShrink: 0 }}>
+      <path d="M1 5.5L5 9L13 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
-  const [question, setQuestion] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errored, setErrored] = useState(false);
+  const [question, setQuestion]               = useState<any | null>(null);
+  const [loading, setLoading]                 = useState(true);
+  const [errored, setErrored]                 = useState(false);
+  const [selectedOption, setSelectedOption]   = useState<string | null>(null);
+  const [isCorrect, setIsCorrect]             = useState<boolean | null>(null);
+  const [determiningAnswer, setDeterminingAnswer] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true);
-      setErrored(false);
+      setLoading(true); setErrored(false);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setLoading(false);
-          return;
-        }
-
+        if (!user) { setLoading(false); return; }
         const { data, error } = await supabase
-          .rpc('get_next_recommended_question', {
-            p_user_id: user.id,
-            p_exclude_question_ids: [],
-          })
+          .rpc('get_next_recommended_question', { p_user_id: user.id, p_exclude_question_ids: [] })
           .single();
-
         if (error) throw error;
         if (data) setQuestion(data);
       } catch (err) {
-        console.error('Error loading recommended question:', err);
+        console.error('Recommended question error:', err);
         setErrored(true);
       } finally {
         setLoading(false);
       }
     };
-
     load();
   }, []);
 
-  const cardBg = isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]';
-  const skeletonBg = isDark ? 'bg-[#1e2538]' : 'bg-gray-200';
+  const handleOptionClick = async (optKey: string) => {
+    if (selectedOption !== null || !question) return;
+    setSelectedOption(optKey);
+
+    let correctOpt: string | null = question.correct_option ?? null;
+
+    if (!correctOpt) {
+      setDeterminingAnswer(true);
+      try {
+        const axiosLib = await import('axios');
+        const res = await axiosLib.default.post('https://rookie-backend.vercel.app/api/solution', {
+          action: 'determine_answer',
+          question_text: question.question_text,
+          option_A: question.option_a, option_B: question.option_b,
+          option_C: question.option_c, option_D: question.option_d,
+          solution: question.solution,
+        });
+        const raw: string = res.data.correct_answer || '';
+        const normalised = raw.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase();
+        correctOpt = normalised || raw.trim();
+        await supabase.from('jee_mains').update({ correct_option: correctOpt }).eq('question_id', question.question_id);
+        setQuestion((prev: any) => ({ ...prev, correct_option: correctOpt }));
+      } catch {}
+      finally { setDeterminingAnswer(false); }
+    }
+
+    const normalize = (v: string | null) =>
+      v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? '';
+    setIsCorrect(normalize(optKey) === normalize(correctOpt));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('attempts').insert({
+          student_id: user.id,
+          question_id: question.question_id,
+          correct: normalize(optKey) === normalize(correctOpt),
+          time_taken_sec: 0,
+        });
+      }
+    } catch {}
+  };
+
+  const goToPractice = () => {
+    if (!question) return;
+    const params = new URLSearchParams({
+      mode: 'recommended',
+      qid: question.question_id,
+      subject: question.subject || '',
+      chapter: question.chapter || '',
+    });
+    router.push(`/practice?${params.toString()}`);
+  };
+
+  const cardBg   = isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]';
+  const skelBg   = isDark ? 'bg-[#1e2538]' : 'bg-gray-200';
+  const optIdle  = isDark
+    ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/50 text-white cursor-pointer'
+    : 'bg-white border-[#E5E7EB] hover:border-indigo-400 text-[#0f172a] cursor-pointer';
+  const optLabel = isDark ? 'bg-[#151B27] border-[#262F4C] text-slate-200' : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]';
 
   if (loading) {
     return (
       <div className="mb-6">
-        <h2 className={`text-base font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-         Recommended for you
+        <h2 className={`text-base font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          Recommended for you
         </h2>
-      
         <div className={`w-full p-5 rounded-2xl border animate-pulse ${cardBg}`}>
           <div className="flex items-center gap-2 mb-3">
-            <div className={`h-5 w-24 rounded-full ${skeletonBg}`} />
-            <div className={`h-5 w-16 rounded-full ${skeletonBg}`} />
+            <div className={`h-5 w-24 rounded-full ${skelBg}`} />
+            <div className={`h-5 w-16 rounded-full ${skelBg}`} />
           </div>
-          <div className={`h-4 rounded-lg mb-2 ${skeletonBg}`} style={{ width: '90%' }} />
-          <div className={`h-4 rounded-lg mb-4 ${skeletonBg}`} style={{ width: '70%' }} />
+          <div className={`h-4 rounded-lg mb-2 ${skelBg}`} style={{ width: '90%' }} />
+          <div className={`h-4 rounded-lg mb-4 ${skelBg}`} style={{ width: '70%' }} />
           <div className="space-y-2">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className={`h-10 rounded-xl ${skeletonBg}`} />
-            ))}
+            {[0, 1, 2, 3].map(i => <div key={i} className={`h-11 rounded-xl ${skelBg}`} />)}
           </div>
         </div>
       </div>
@@ -890,36 +952,23 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
 
   if (errored || !question) return null;
 
-  const options: { key: string; text: string | null }[] = [
-    { key: 'A', text: question.option_a },
-    { key: 'B', text: question.option_b },
-    { key: 'C', text: question.option_c },
-    { key: 'D', text: question.option_d },
-  ].filter((o) => !!o.text);
-
-  const goToPractice = () => {
-    const params = new URLSearchParams({
-      mode: 'recommended',
-      qid: question.question_id,
-      subject: question.subject || '',
-      chapter: question.chapter || '',
-    });
-    router.push(`/QuestionViewer?${params.toString()}`);
-  };
+  const opts = (['a','b','c','d'] as const).map(k => ({
+    key: k,
+    text: question[`option_${k}`] ?? null,
+    img:  question[`option_${k}_img`] ?? null,
+  })).filter(o => o.text || o.img);
 
   return (
     <div className="mb-6">
-      <h2 className={`text-base font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-      Recommended for you
+      <h2 className={`text-base font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+        Recommended for you
       </h2>
-   
 
       <div className={`w-full p-5 rounded-2xl border ${cardBg}`}>
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
+
+        <div className="flex flex-wrap items-center gap-2 mb-3">
           {question.chapter && (
-            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-              isDark ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-50 text-indigo-600'
-            }`}>
+            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${isDark ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
               {question.chapter}
             </span>
           )}
@@ -930,37 +979,96 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
           )}
         </div>
 
-        <p className={`text-sm leading-relaxed mb-4 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-          {question.question_text}
-        </p>
-
-        <div className="space-y-2 mb-5">
-          {options.map((opt) => (
-            <div
-              key={opt.key}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border text-sm ${
-                isDark ? 'border-[#1e2538] text-gray-300' : 'border-gray-200 text-gray-700'
-              }`}
-            >
-              <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-semibold flex-shrink-0 ${
-                isDark ? 'bg-[#1e2538] text-gray-300' : 'bg-gray-100 text-gray-600'
-              }`}>
-                {opt.key}
-              </span>
-              <span className="truncate">{opt.text}</span>
-            </div>
-          ))}
+        <div className={`text-sm leading-relaxed mb-4 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
+          {renderLatex(question.question_text)}
         </div>
+
+        {question.question_img_url && (
+          <div className={`rounded-xl border overflow-hidden flex items-center justify-center mb-4 max-h-52 ${isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-gray-50 border-gray-200'}`}>
+            <img src={question.question_img_url} alt="Question" className="max-h-44 max-w-full object-contain" />
+          </div>
+        )}
+
+        {selectedOption === null ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+            {opts.map(opt => (
+              <motion.button
+                key={opt.key} whileTap={{ scale: 0.98 }}
+                onClick={() => handleOptionClick(opt.key)}
+                className={`w-full text-left rounded-xl p-3.5 border flex items-start gap-3 transition-all ${optIdle}`}
+              >
+                <div className={`w-8 h-8 rounded-lg border flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${optLabel}`}>
+                  {opt.key}
+                </div>
+                <div className="flex-1 min-w-0 text-sm leading-relaxed pt-0.5">
+                  {opt.img
+                    ? <img src={opt.img} alt={`opt-${opt.key}`} className="max-h-16 rounded-lg" />
+                    : renderLatex(opt.text)}
+                </div>
+              </motion.button>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+            {opts.map(opt => {
+              const sel  = selectedOption === opt.key;
+              const storedCorr = (question.correct_option ?? '')
+                .replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase();
+              const corr = opt.key === storedCorr;
+              return (
+                <motion.div
+                  key={opt.key}
+                  initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                  className={`rounded-xl p-3.5 flex items-start gap-3 border-2 transition-colors ${
+                    corr ? 'bg-[#04271C] border-[#1DC97A]'
+                         : sel  ? 'bg-[#2D0A0A] border-[#DC2626]'
+                         : isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${
+                    corr ? 'bg-[#1DC97A] text-black'
+                         : sel  ? 'bg-[#DC2626] text-white'
+                         : optLabel
+                  }`}>
+                    {opt.key}
+                  </div>
+                  <div className={`flex-1 min-w-0 text-sm leading-relaxed pt-0.5 ${corr || sel ? 'text-white' : ''}`}>
+                    {opt.img
+                      ? <img src={opt.img} alt={`opt-${opt.key}`} className="max-h-16 rounded-lg" />
+                      : renderLatex(opt.text)}
+                  </div>
+                  {corr && <CheckIconSmall />}
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+
+        {determiningAnswer && (
+          <div className={`flex items-center gap-2 mb-3 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+            Checking answer…
+          </div>
+        )}
+
+        {isCorrect !== null && !determiningAnswer && (
+          <motion.p
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+            className={`text-xs font-semibold mb-3 ${isCorrect ? 'text-[#1DC97A]' : 'text-[#f87171]'}`}
+          >
+            {isCorrect ? '✓ Correct!' : '✗ Not quite — keep going'}
+          </motion.p>
+        )}
 
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={goToPractice}
           className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
-            isDark ? 'bg-white text-black' : 'bg-gray-900 text-white'
+            isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-gray-900 text-white hover:bg-gray-800'
           }`}
         >
-          Continue
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          {selectedOption ? 'See full solution' : 'Start solving'}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12h14M12 5l7 7-7 7" />
           </svg>
         </motion.button>
