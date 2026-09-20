@@ -1077,12 +1077,26 @@ export default function QuestionViewerClient() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+
+      // Write to user_activity (existing — streak/daily goal tracking)
       await supabase.from('user_activity').upsert({
         user_id: user.id, chapter_title: chapterTitle, subject_name: subject,
         image_key: imageKey, question_id: q.question_id, question_index: globalIndex,
         is_correct: correct, time_spent_seconds: timeSpent, buddy_id: buddyId,
         answered_at: new Date().toISOString(),
       }, { onConflict: 'user_id,chapter_title,question_id' })
+
+      // Also write to attempts (feeds the recommendation algorithm)
+      // Fire-and-forget — don't await so it never blocks the UI
+      supabase.from('attempts').insert({
+        student_id: user.id,
+        question_id: q.question_id,
+        correct,
+        time_taken_sec: timeSpent,
+      }).then(({ error }) => {
+        if (error) console.warn('attempts insert:', error.message)
+      })
+
       answeredThisSession.current.add(q.question_id)
     } catch {}
   }
