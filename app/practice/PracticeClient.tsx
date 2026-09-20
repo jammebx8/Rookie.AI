@@ -334,8 +334,8 @@ export default function PracticeClient() {
     page:        isDark ? 'bg-[#07090f] text-white'              : 'bg-[#F0F2FA] text-[#0f172a]',
     header:      isDark ? 'bg-[#07090f]/95 border-[#1e2538]'    : 'bg-white/95 border-[#E5E7EB]',
     card:        isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-white border-[#E5E7EB]',
-    optionIdle:  isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/50 text-white'
-                        : 'bg-white border-[#E5E7EB] hover:border-indigo-400 text-[#0f172a]',
+    optionIdle:  isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-white text-white'
+                        : 'bg-white border-[#E5E7EB] hover:border-black text-[#0f172a]',
     optionLabel: isDark ? 'bg-[#151B27] border-[#262F4C] text-slate-200'
                         : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]',
     input:       isDark ? 'bg-[#0d1117] border-[#1e2538] text-white placeholder-gray-500 focus:border-indigo-500'

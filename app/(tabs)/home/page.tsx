@@ -1597,12 +1597,16 @@ export default function HomePage() {
         <div className="h-4" />
         </div>
         {/* ── Desktop right rail: streak + daily goal, sticky while center scrolls ── */}
-        <aside className="hidden lg:block w-[280px] ">
-    <div className="fixed top-16 w-[300px] space-y-5">
-      <StreakCard isDark={isDark} />
-      <DailyGoalBar isDark={isDark} />
-    </div>
-  </aside>
+        <aside className="hidden lg:block w-[280px]">
+          <div className="fixed top-16 w-[300px] space-y-5">
+            <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={0}>
+              <StreakCard isDark={isDark} />
+            </motion.div>
+            <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={1}>
+              <DailyGoalBar isDark={isDark} />
+            </motion.div>
+          </div>
+        </aside>
         </div>
       </motion.div>
     </main>

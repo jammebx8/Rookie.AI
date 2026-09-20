@@ -369,8 +369,12 @@ function SimilarQuestionCard({
         action: 'determine_answer', question_text: q.question_text,
         option_A: q.option_a, option_B: q.option_b, option_C: q.option_c, option_D: q.option_d, solution: q.solution,
       })
-      const ans = res.data.correct_answer
+      const raw: string = res.data.correct_answer || ''
+      // Normalise to a single lowercase letter — same as main QuestionViewer
+      const normalised = raw.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
+      const ans = normalised || raw.trim()
       await supabase.from(DB_TABLE).update({ correct_option: ans }).eq('question_id', q.question_id)
+      q.correct_option = ans   // patch the in-memory object immediately
       return ans
     } catch { return null } finally { setDeterminingAnswer(false) }
   }
@@ -388,10 +392,11 @@ function SimilarQuestionCard({
     setSelectedOption(opt)
     let ans = q.correct_option
     if (!ans) ans = await determineAnswer()
-    const normalize = (v: string | null) => v?.replace('option_','').replace('_img','').trim().toUpperCase() ?? null
+    const normalize = (v: string | null) =>
+      v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? ''
     const correct = normalize(opt) === normalize(ans)
     // patch the local copy so the answer indicator renders correctly
-    q.correct_option = ans
+    if (ans) q.correct_option = ans
     setIsCorrect(correct)
     await postAnswer(correct, opt)
   }
@@ -499,7 +504,7 @@ function SimilarQuestionCard({
             const iv = q[`option_${opt}_img`] as string | null
             if (!tv && !iv) return null
             const sel  = selectedOption === opt
-            const corr = opt === q.correct_option?.toLowerCase().trim()
+            const corr = opt === (q.correct_option ?? '').replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
             return (
               <div key={opt} className={`rounded-xl p-3.5 flex items-center gap-3 border-2 transition-colors ${corr ? 'bg-[#04271C] border-[#1DC97A]' : sel ? 'bg-[#2D0A0A] border-[#DC2626]' : isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'}`}>
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-xs uppercase flex-shrink-0 ${corr ? 'bg-[#1DC97A] text-black' : sel ? 'bg-[#DC2626] text-white' : T.optionLabel}`}>{opt}</div>
@@ -1185,7 +1190,10 @@ export default function QuestionViewerClient() {
   }
 
   // ── Post-answer handler ───────────────────────────────────────────────────
-  const handlePostAnswer = async (correct: boolean, timeSpent: number, q: Question, optKey: string) => {
+  const handlePostAnswer = async (
+    correct: boolean, timeSpent: number, q: Question, optKey: string,
+    confirmedAnswer: string | null   // ← always pass the resolved correct answer
+  ) => {
     const coins = calcCoins(timeSpent, correct)
     addToast(correct ? `✓ Correct! +${coins} Coins earned` : '✗ Not quite — keep going!', correct ? 'coin' : 'error', 3500)
 
@@ -1208,6 +1216,12 @@ export default function QuestionViewerClient() {
     const activeBuddyId = buddyId
     setSolutionBuddyId(activeBuddyId)
     setSolutionRequested(true); setSolutionLoading(true)
+
+    // Ensure the in-memory question object has the confirmed answer before
+    // generateAISolution reads q.correct_option to pass to the backend prompt.
+    if (confirmedAnswer && !q.correct_option) {
+      q.correct_option = confirmedAnswer
+    }
 
     generateAISolution(q, activeBuddyId, AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]).then(aiSol => {
       setSolution(aiSol); setSolutionLoading(false)
@@ -1254,7 +1268,7 @@ export default function QuestionViewerClient() {
     }
     const correct = normalize(opt) === normalize(ans)
     setIsCorrect(correct)
-    handlePostAnswer(correct, timeSpent, q, opt)
+    handlePostAnswer(correct, timeSpent, q, opt, ans)
   }
 
   // ── Integer submit ────────────────────────────────────────────────────────
@@ -1267,7 +1281,7 @@ export default function QuestionViewerClient() {
     const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
     const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
     setIsCorrect(correct); setSelectedOption('INTEGER')
-    await handlePostAnswer(correct, timeSpent, q, 'INTEGER')
+    await handlePostAnswer(correct, timeSpent, q, 'INTEGER', ans)
   }
 
   // ── AI Followup (Simpler Explanation) ─────────────────────────────────────
