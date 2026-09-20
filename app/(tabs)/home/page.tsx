@@ -783,41 +783,95 @@ function ContinueSection({ isDark }: { isDark: boolean }) {
 
   return (
     <div className="mb-6">
-      <h2 className={`text-base font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-        Continue where you left off
-      </h2>
-      <button
-        onClick={() => {
-          if (!session.chapter_title) return;
-          const params = new URLSearchParams({
-            subject: session.subject_name || '',
-            chapter: session.chapter_title,
-            imageKey: session.image_key || '',
-            index: String(session.question_index || 0),
-            startIndex: String(session.question_index || 0),
-          });
-          router.push(`/QuestionViewer?${params.toString()}`);
-        }}
-        className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all ${
-          isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/40' : 'bg-white border-[#E5E7EB] hover:border-indigo-300'
-        }`}
-      >
-        <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3"/>
+    <h2 className={`text-sm font-medium mb-3 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+      Continue learning
+    </h2>
+  
+    <button
+      onClick={() => {
+        if (!session.chapter_title) return;
+  
+        const params = new URLSearchParams({
+          subject: session.subject_name || "",
+          chapter: session.chapter_title,
+          imageKey: session.image_key || "",
+          index: String(session.question_index || 0),
+          startIndex: String(session.question_index || 0),
+        });
+  
+        router.push(`/QuestionViewer?${params.toString()}`);
+      }}
+      className={`w-full rounded-2xl p-4 transition-all duration-200 border ${
+        isDark
+          ? "bg-[#111827] border-[#1F2937] hover:border-[#374151] hover:bg-[#151F32]"
+          : "bg-white border-[#E5E7EB] hover:border-[#CBD5E1] hover:shadow-sm"
+      }`}
+    >
+      <div className="flex items-center gap-4">
+        {/* Play icon */}
+        <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-md shadow-indigo-600/20 flex-shrink-0">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className="text-white ml-0.5"
+          >
+            <path d="M8 5v14l11-7z" />
           </svg>
         </div>
-        <div className="text-left flex-1 min-w-0">
-          <p className="font-semibold text-sm truncate">{session.chapter_title}</p>
-          <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            Question {session.question_index + 1} · {session.subject_name}
+  
+        {/* Content */}
+        <div className="flex-1 min-w-0 text-left">
+          <p className={`text-xs font-medium mb-1 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+            {session.subject_name}
           </p>
+  
+          <h3 className={`font-semibold truncate ${isDark ? "text-white" : "text-slate-900"}`}>
+            {session.chapter_title}
+          </h3>
+  
+          <div className="flex items-center gap-2 mt-2">
+            <div
+              className={`h-1.5 flex-1 rounded-full ${
+                isDark ? "bg-slate-700" : "bg-slate-200"
+              }`}
+            >
+              <div
+                className="h-full rounded-full bg-indigo-600"
+                style={{
+                  width: `${Math.min(((session.question_index + 1) / 30) * 100, 100)}%`,
+                }}
+              />
+            </div>
+  
+            <span
+              className={`text-[11px] font-medium ${
+                isDark ? "text-slate-400" : "text-slate-500"
+              }`}
+            >
+              Q{session.question_index + 1}
+            </span>
+          </div>
         </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 opacity-40">
-          <path d="M9 18l6-6-6-6"/>
+  
+        {/* Chevron */}
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={isDark ? "text-slate-500" : "text-slate-400"}
+        >
+          <path d="M9 18l6-6-6-6" />
         </svg>
-      </button>
-    </div>
+      </div>
+    </button>
+  </div>
   );
 }
 
@@ -925,8 +979,8 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
   const cardBg   = isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]';
   const skelBg   = isDark ? 'bg-[#1e2538]' : 'bg-gray-200';
   const optIdle  = isDark
-    ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/50 text-white cursor-pointer'
-    : 'bg-white border-[#E5E7EB] hover:border-indigo-400 text-[#0f172a] cursor-pointer';
+    ? 'bg-[#0d1117] border-[#1e2538] hover:border-white text-white cursor-pointer'
+    : 'bg-white border-[#E5E7EB] hover:border-black text-[#0f172a] cursor-pointer';
   const optLabel = isDark ? 'bg-[#151B27] border-[#262F4C] text-slate-200' : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]';
 
   if (loading) {
@@ -1060,18 +1114,29 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
           </motion.p>
         )}
 
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={goToPractice}
-          className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
-            isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-gray-900 text-white hover:bg-gray-800'
-          }`}
-        >
-          {selectedOption ? 'See full solution' : 'Start solving'}
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-        </motion.button>
+<motion.button
+    whileTap={{ scale: 0.98 }}
+    onClick={goToPractice}
+    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+      isDark
+        ? 'bg-white text-black hover:bg-gray-100'
+        : 'bg-gray-900 text-white hover:bg-gray-800'
+    }`}
+  >
+    {selectedOption ? 'See full solution' : 'Start solving'}
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5 12h14M12 5l7 7-7 7" />
+    </svg>
+  </motion.button>
       </div>
     </div>
   );
