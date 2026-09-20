@@ -868,11 +868,9 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
     return (
       <div className="mb-6">
         <h2 className={`text-base font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-          Your next question
+         Recommended for you
         </h2>
-        <p className={`text-xs mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-          Picked for where you are right now
-        </p>
+      
         <div className={`w-full p-5 rounded-2xl border animate-pulse ${cardBg}`}>
           <div className="flex items-center gap-2 mb-3">
             <div className={`h-5 w-24 rounded-full ${skeletonBg}`} />
@@ -912,11 +910,9 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
   return (
     <div className="mb-6">
       <h2 className={`text-base font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-        Your next question
+      Recommended for you
       </h2>
-      <p className={`text-xs mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-        Picked for where you are right now
-      </p>
+   
 
       <div className={`w-full p-5 rounded-2xl border ${cardBg}`}>
         <div className="flex items-center gap-2 mb-3 flex-wrap">

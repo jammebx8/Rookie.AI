@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense } from 'react'
-import PracticeClient from './PracticeClient'
+import PracticeClient from '../practice/PracticeClient'
 
 export default function PracticePage() {
   return (
