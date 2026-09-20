@@ -373,7 +373,7 @@ export default function OnboardingPage() {
     .nav {
       position: sticky; top: 0; z-index: 50;
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 5vw; height: 56px;
+      padding: 0 2vw; height: 56px;
       background: ${C.navBg};
       backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid ${C.border};
@@ -931,13 +931,11 @@ export default function OnboardingPage() {
 
         {/* ── Footer ──────────────────────────────────────────────── */}
         <footer className="foot">
-          <span className="foot-brand">RookieAI — quiet focus for competitive excellence.</span>
+          <span className="foot-brand">RookieAI — At the end it's all hardwork.....</span>
           <div className="foot-links">
-            <a href="#" className="foot-link">Support</a>
-            <a href="#" className="foot-link">Privacy</a>
-            <a href="#" className="foot-link">Terms</a>
+         
           </div>
-          <span className="foot-copy">© 2026 RookieAI</span>
+          <span className="foot-copy">Made with passion ❤️</span>
         </footer>
 
       </div>

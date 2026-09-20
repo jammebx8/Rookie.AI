@@ -19,6 +19,118 @@ type User = {
   [key: string]: any;
 };
 
+
+
+
+
+
+
+
+// ─── Motivational headlines ──────────────────────────────────────────────────
+// hl: true → gradient highlight | br: true → line break | {exam} → user's exam
+type Part = { t: string; hl?: boolean } | { br: true };
+
+const MOTIVATIONS: Part[][] = [
+  [{ t: 'Ready to crack' }, { br: true }, { t: '{exam}', hl: true }, { t: '?' }],
+  [{ t: 'Small steps' }, { t: ' daily', hl: true }, { br: true }, { t: 'build a ' }, { t: 'big rank', hl: true }, { t: '.' }],
+  [{ t: 'Discipline' , hl: true }, { t: ' beats' }, { br: true }, { t: 'motivation', hl: true }, { t: ', every time.' }],
+  [{ t: 'One more question.' }, { br: true }, { t: 'One step closer to ' }, { t: '{exam}', hl: true }, { t: '.' }],
+  [{ t: 'Your future self' }, { br: true }, { t: 'is ' }, { t: 'watching', hl: true }, { t: '. Make them proud.' }],
+  [{ t: "Don't wait for" }, { br: true }, { t: 'the perfect day. ' }, { t: 'Start today', hl: true }, { t: '.' }],
+  [{ t: 'Mistakes are' }, { br: true }, { t: 'proof', hl: true }, { t: ' you are ' }, { t: 'learning', hl: true }, { t: '.' }],
+  [{ t: 'Consistency' , hl: true }, { t: ' turns' }, { br: true }, { t: 'average into ' }, { t: 'unstoppable', hl: true }, { t: '.' }],
+  [{ t: 'Every topic you master' }, { br: true }, { t: 'is one less ' }, { t: 'fear', hl: true }, { t: ' on exam day.' }],
+  [{ t: 'Study now.' }, { br: true }, { t: 'Celebrate ' }, { t: 'later', hl: true }, { t: '.' }],
+  [{ t: 'PYQs' , hl: true }, { t: " don't lie." }, { br: true }, { t: 'Solve enough and the ' }, { t: 'patterns', hl: true }, { t: ' show up.' }],
+  [{ t: 'Stuck on a question?' }, { br: true }, { t: "That's your brain " }, { t: 'growing', hl: true }, { t: '.' }],
+  [{ t: "Don't just read the solution." }, { br: true }, { t: 'Fight for ' }, { t: '10 more minutes', hl: true }, { t: '.' }],
+  [{ t: 'Integration feels hard' }, { br: true }, { t: 'until you have done it ' }, { t: '100 times', hl: true }, { t: '.' }],
+  [{ t: 'Every numerical you solve' }, { br: true }, { t: 'makes the next one ' }, { t: 'easier', hl: true }, { t: '.' }],
+  [{ t: 'Solve it once, you ' }, { t: 'know', hl: true }, { t: ' it.' }, { br: true }, { t: 'Solve it thrice, you ' }, { t: 'own', hl: true }, { t: ' it.' }],
+  [{ t: 'Organic looks scary' }, { br: true }, { t: 'until you ' }, { t: 'practice', hl: true }, { t: ' the reactions.' }],
+
+  // ── Mocks, accuracy & exam-day thinking ──
+  [{ t: 'Bad mock score?' }, { br: true }, { t: 'Better it happens ' }, { t: 'here', hl: true }, { t: ', not on exam day.' }],
+  [{ t: 'Mocks are where your' }, { br: true }, { t: 'rank', hl: true }, { t: ' is ' }, { t: 'rehearsed', hl: true }, { t: '.' }],
+  [{ t: 'Accuracy', hl: true }, { t: ' wins papers.' }, { br: true }, { t: 'Speed can wait.' }],
+  [{ t: 'Every silly mistake you fix now' }, { br: true }, { t: 'is ' }, { t: 'marks saved', hl: true }, { t: ' in the hall.' }],
+  [{ t: 'Negative marking punishes' }, { br: true }, { t: 'guessing', hl: true }, { t: ' and rewards ' }, { t: 'clarity', hl: true }, { t: '.' }],
+  [{ t: 'Focus on the ' }, { t: 'next question', hl: true }, { t: ',' }, { br: true }, { t: 'not the whole ' }, { t: 'syllabus', hl: true }, { t: '.' }],
+
+  // ── Weak chapters & revision ──
+  [{ t: 'Ranks are lost in' }, { br: true }, { t: 'chapters', hl: false }, { t: 'you ' }, { t: 'skipped', hl: true }, { t: '.' }],
+  [{ t: 'Revise what you know.' }, { br: true }, { t: 'Attack what you ' }, { t: "don't", hl: true }, { t: '.' }],
+  [{ t: 'Your weakest chapter today' }, { br: true }, { t: 'can be your ' }, { t: 'strongest', hl: true }, { t: ' by next month.' }],
+  [{ t: 'Hard chapters' , hl: true }, { t: ' decide' }, { br: true }, { t: 'who gets the ' }, { t: 'top ranks', hl: true }, { t: '.' }],
+  [{ t: 'One chapter closed today' }, { br: true }, { t: 'is one ' }, { t: 'worry', hl: true }, { t: ' gone for good.' }],
+
+  // ── Focus & discipline ──
+  [{ t: '3 hours of ' }, { t: 'focus', hl: true }, { br: true }, { t: 'beat 8 hours of ' }, { t: 'scrolling', hl: true }, { t: '.' }],
+  [{ t: 'Your phone can wait.' }, { br: true }, { t: '{exam}', hl: true }, { t: " can't." }],
+  [{ t: 'Tricks help.' }, { br: true }, { t: 'Practice', hl: true }, { t: ' decides.' }],
+  [{ t: 'Missed yesterday?' }, { br: true }, { t: 'Fine. ' }, { t: 'Today', hl: true }, { t: ' still counts.' }],
+
+  // ── Big-picture / mindset ──
+  [{ t: 'The topper you admire' }, { br: true }, { t: 'once got the ' }, { t: 'same questions wrong', hl: true }, { t: '.' }],
+  [{ t: 'Your seat in a top college' }, { br: true }, { t: 'is being ' }, { t: 'decided', hl: true }, { t: ' right now.' }],
+  [{ t: 'Today\'s grind is the' }, { br: true }, { t: 'story you will ' }, { t: 'tell', hl: true }, { t: ' after results.' }],
+  [{ t: 'Everyone is hoping.' }, { br: true }, { t: 'Be the one who ' }, { t: 'earns', hl: true }, { t: ' it.' }],
+  [{ t: 'Somewhere, someone is solving' }, { br: true }, { t: 'one more ' }, { t: 'problem', hl: true }, { t: '. Be them.' }],
+  [{ t: 'Physics rewards those' }, { br: true }, { t: 'who ' }, { t: 'stay', hl: true }, { t: ' with the problem.' }],
+  [{ t: 'Beat your ' }, { t: 'yesterday', hl: true }, { t: ',' }, { br: true }, { t: 'not the whole batch.' }],
+];
+
+const ROTATE_MS = 8000;
+
+function MotivationHeadline({ exam }: { exam: string }) {
+  const [index, setIndex] = useState(0); // 0 on server + first render → no hydration mismatch
+
+  useEffect(() => {
+    // Start on a different line each day, then rotate
+    const dayOffset = Math.floor(Date.now() / 86_400_000) % MOTIVATIONS.length;
+    setIndex(dayOffset);
+    const id = setInterval(() => setIndex((i) => (i + 1) % MOTIVATIONS.length), ROTATE_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const examLabel = exam || 'your exam';
+
+  return (
+    <div className="min-h-[7.5rem]"> {/* fixed height so the page doesn't jump between lines */}
+      <AnimatePresence mode="wait">
+        <motion.h1
+          key={index}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.35 }}
+          className="text-3xl font-bold leading-tight tracking-tight"
+        >
+          {MOTIVATIONS[index].map((p, i) => {
+            if ('br' in p) return <br key={i} />;
+            const text = p.t.replace('{exam}', examLabel);
+            return p.hl ? (
+              <span
+                key={i}
+                className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-500"
+              >
+                {text}
+              </span>
+            ) : (
+              <React.Fragment key={i}>{text}</React.Fragment>
+            );
+          })}
+        </motion.h1>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+
+
+
+
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 const EXAM_OPTIONS = ['JEE Mains', 'NEET', 'JEE Advanced', 'Other'];
 const CLASS_OPTIONS = ['11th', '12th', 'Dropper', 'Other'];
@@ -312,7 +424,7 @@ function StreakCard({ isDark }: { isDark: boolean }) {
   const toggleBg = isDark ? 'bg-[#111827] border-[#1D2939] hover:border-gray-600' : 'bg-gray-50 border-gray-200 hover:border-gray-300';
 
   return (
-    <div className={`rounded-2xl border ${card} p-5`}>
+    <div className={`rounded-2xl border ${card} p-5 mt-4`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -502,7 +614,7 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="overflow-hidden mb-4"
+            className="overflow-hidden mb-4 "
           >
             <div className={`p-3 rounded-xl border ${toggleBg} border-opacity-50`}>
               <p className={`text-xs font-medium mb-2.5 ${subtext}`}>Questions per day</p>
@@ -707,15 +819,21 @@ function ContinueSection({ isDark }: { isDark: boolean }) {
   );
 }
 
-// ─── RecommendedSection component (updated) ─────────────────────────────────
-function RecommendedSection({ isDark }: { isDark: boolean }) {
-  const [recommended, setRecommended] = useState<any | null>(null);
+// ─── RecommendedQuestionCard component (Phase 5/6 adaptive recommendation) ──
+// Fetches the actual next question to solve (via the get_next_recommended_question
+// RPC — see supabase/phase4_5_6.sql) instead of aggregating chapter stats.
+// Shows the question + its options as a preview; "Continue" hands off to the
+// Practice page which re-calls the same RPC after every answer.
+function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
+  const [question, setQuestion] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
+      setErrored(false);
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
@@ -723,40 +841,18 @@ function RecommendedSection({ isDark }: { isDark: boolean }) {
           return;
         }
 
-        // Get topics the user has answered questions in
-        const { data: activity } = await supabase
-          .from('user_activity')
-          .select('chapter_title, subject_name, image_key, is_correct')
-          .eq('user_id', user.id)
-          .order('answered_at', { ascending: false })
-          .limit(50);
+        const { data, error } = await supabase
+          .rpc('get_next_recommended_question', {
+            p_user_id: user.id,
+            p_exclude_question_ids: [],
+          })
+          .single();
 
-        if (!activity?.length) {
-          setLoading(false);
-          return;
-        }
-
-        // Find chapter with most wrong answers (needs revision)
-        const chapterStats: Record<string, { total: number; wrong: number; subject: string; imageKey: string }> = {};
-        for (const row of activity) {
-          if (!chapterStats[row.chapter_title]) {
-            chapterStats[row.chapter_title] = { total: 0, wrong: 0, subject: row.subject_name || '', imageKey: row.image_key || '' };
-          }
-          chapterStats[row.chapter_title].total++;
-          if (!row.is_correct) chapterStats[row.chapter_title].wrong++;
-        }
-
-        // Pick chapter with highest wrong rate (min 3 questions answered)
-        let best = null, bestRate = -1;
-        for (const [title, stats] of Object.entries(chapterStats)) {
-          if (stats.total < 3) continue;
-          const rate = stats.wrong / stats.total;
-          if (rate > bestRate) { bestRate = rate; best = { title, ...stats }; }
-        }
-
-        if (best) setRecommended(best);
+        if (error) throw error;
+        if (data) setQuestion(data);
       } catch (err) {
-        console.error('Error loading recommendations:', err);
+        console.error('Error loading recommended question:', err);
+        setErrored(true);
       } finally {
         setLoading(false);
       }
@@ -765,84 +861,114 @@ function RecommendedSection({ isDark }: { isDark: boolean }) {
     load();
   }, []);
 
+  const cardBg = isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]';
+  const skeletonBg = isDark ? 'bg-[#1e2538]' : 'bg-gray-200';
+
   if (loading) {
     return (
       <div className="mb-6">
         <h2 className={`text-base font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-          Recommended for you
+          Your next question
         </h2>
         <p className={`text-xs mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-          Based on your recent activity
+          Picked for where you are right now
         </p>
-        {/* Skeleton loader */}
-        <div className={`w-full p-4 rounded-2xl border animate-pulse ${isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'}`}>
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 space-y-2">
-                <div className={`h-4 rounded-lg ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: '60%' }} />
-                <div className={`h-3 rounded-lg ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: '80%' }} />
-              </div>
-              <div className={`w-12 h-8 rounded-lg flex-shrink-0 ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} />
-            </div>
-            <div className={`h-2 rounded-full ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} />
+        <div className={`w-full p-5 rounded-2xl border animate-pulse ${cardBg}`}>
+          <div className="flex items-center gap-2 mb-3">
+            <div className={`h-5 w-24 rounded-full ${skeletonBg}`} />
+            <div className={`h-5 w-16 rounded-full ${skeletonBg}`} />
+          </div>
+          <div className={`h-4 rounded-lg mb-2 ${skeletonBg}`} style={{ width: '90%' }} />
+          <div className={`h-4 rounded-lg mb-4 ${skeletonBg}`} style={{ width: '70%' }} />
+          <div className="space-y-2">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className={`h-10 rounded-xl ${skeletonBg}`} />
+            ))}
           </div>
         </div>
       </div>
     );
   }
 
-  if (!recommended) return null;
+  if (errored || !question) return null;
 
-  const wrongPct = Math.round((recommended.wrong / recommended.total) * 100);
+  const options: { key: string; text: string | null }[] = [
+    { key: 'A', text: question.option_a },
+    { key: 'B', text: question.option_b },
+    { key: 'C', text: question.option_c },
+    { key: 'D', text: question.option_d },
+  ].filter((o) => !!o.text);
+
+  const goToPractice = () => {
+    const params = new URLSearchParams({
+      mode: 'recommended',
+      qid: question.question_id,
+      subject: question.subject || '',
+      chapter: question.chapter || '',
+    });
+    router.push(`/QuestionViewer?${params.toString()}`);
+  };
 
   return (
     <div className="mb-6">
       <h2 className={`text-base font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-        Recommended for you
+        Your next question
       </h2>
       <p className={`text-xs mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-        Based on your recent activity
+        Picked for where you are right now
       </p>
-      <button
-        onClick={() => {
-          const params = new URLSearchParams({
-            subject: recommended.subject || '',
-            chapter: recommended.title,
-            imageKey: recommended.imageKey || '',
-            index: '0',
-            startIndex: '0',
-          });
-          router.push(`/QuestionViewer?${params.toString()}`);
-        }}
-        className={`w-full p-4 rounded-2xl border text-left transition-all ${
-          isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-amber-500/40' : 'bg-white border-[#E5E7EB] hover:border-amber-300'
-        }`}
-      >
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 font-medium">
-                Needs Revision
-              </span>
-              <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{recommended.subject}</span>
-            </div>
-            <p className="font-semibold text-sm leading-snug">{recommended.title}</p>
-          </div>
-          <div className="text-right flex-shrink-0">
-            <p className="text-2xl font-bold text-amber-500">{wrongPct}%</p>
-            <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>error rate</p>
-          </div>
+
+      <div className={`w-full p-5 rounded-2xl border ${cardBg}`}>
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          {question.chapter && (
+            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+              isDark ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-50 text-indigo-600'
+            }`}>
+              {question.chapter}
+            </span>
+          )}
+          {question.subject && (
+            <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+              {question.subject}
+            </span>
+          )}
         </div>
-        <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-[#1e2538]' : 'bg-gray-100'}`}>
-          <div
-            className="h-full rounded-full bg-amber-500 transition-all"
-            style={{ width: `${wrongPct}%` }}
-          />
-        </div>
-        <p className={`text-xs mt-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-          {recommended.wrong} wrong out of {recommended.total} attempted
+
+        <p className={`text-sm leading-relaxed mb-4 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
+          {question.question_text}
         </p>
-      </button>
+
+        <div className="space-y-2 mb-5">
+          {options.map((opt) => (
+            <div
+              key={opt.key}
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border text-sm ${
+                isDark ? 'border-[#1e2538] text-gray-300' : 'border-gray-200 text-gray-700'
+              }`}
+            >
+              <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-semibold flex-shrink-0 ${
+                isDark ? 'bg-[#1e2538] text-gray-300' : 'bg-gray-100 text-gray-600'
+              }`}>
+                {opt.key}
+              </span>
+              <span className="truncate">{opt.text}</span>
+            </div>
+          ))}
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={goToPractice}
+          className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
+            isDark ? 'bg-white text-black' : 'bg-gray-900 text-white'
+          }`}
+        >
+          Continue
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        </motion.button>
+      </div>
     </div>
   );
 }
@@ -1050,8 +1176,12 @@ export default function HomePage() {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
-        className="max-w-2xl mx-auto px-4 sm:px-6 pb-10"
+        className="px-4 sm:px-6 pb-10 lg:px-8 lg:ml-12"
       >
+        {/* Desktop: center column scrolls, right rail (streak/rank) stays sticky.
+            Mobile: falls back to the original single stacked column. */}
+        <div className="lg:flex lg:gap-8 lg:items-start lg:max-w-6xl lg:mx-auto">
+        <div className="flex-1 min-w-0 max-w-2xl mx-auto lg:mx-0">
 
         {/* ── Greeting Hero ── */}
         <motion.section
@@ -1061,23 +1191,15 @@ export default function HomePage() {
           custom={0}
           className="pt-6"
         >
-          <div className="flex items-start justify-between">
-            <div>
-              <p className={`${subtext} text-sm mb-1`}>
-                {getGreeting()}{firstName ? `, ${firstName}` : ', learner'} 👋
-              </p>
-              <h1 className="text-3xl font-bold leading-tight tracking-tight">
-                Ready to crack
-                <br />
-               
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-500">
-                
-                  {exam || 'your exam'}?
-                </span>
-              </h1>
-            </div>
-         
-          </div>
+    <div className="flex items-start justify-between">
+  <div>
+    <p className={`${subtext} text-sm mb-1`}>
+      {getGreeting()}{firstName ? `, ${firstName}` : ', learner'} 👋
+    </p>
+
+    <MotivationHeadline exam={exam} />
+  </div>
+</div>
 
           {(cl || exam) && (
             <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -1102,12 +1224,13 @@ export default function HomePage() {
         </motion.section>
 
         {/* ── Streak & Daily Goal ── */}
+        {/* Mobile only — same cards are shown in the sticky right rail on desktop */}
         <motion.section
           variants={fadeUp}
           initial="hidden"
           animate="visible"
           custom={1}
-          className="mt-6 space-y-3"
+          className="mt-6 space-y-3 lg:hidden"
         >
           <StreakCard isDark={isDark} />
           <DailyGoalBar isDark={isDark} />
@@ -1132,7 +1255,7 @@ export default function HomePage() {
           custom={3}
           className="mt-2"
         >
-          <RecommendedSection isDark={isDark} />
+          <RecommendedQuestionCard isDark={isDark} />
         </motion.section>
 
         {/* ── Invite Friends ── */}
@@ -1303,6 +1426,15 @@ export default function HomePage() {
 
         {/* bottom nav spacer */}
         <div className="h-4" />
+        </div>
+        {/* ── Desktop right rail: streak + daily goal, sticky while center scrolls ── */}
+        <aside className="hidden lg:block w-[280px] ">
+    <div className="fixed top-16 w-[300px] space-y-5">
+      <StreakCard isDark={isDark} />
+      <DailyGoalBar isDark={isDark} />
+    </div>
+  </aside>
+        </div>
       </motion.div>
     </main>
   );
