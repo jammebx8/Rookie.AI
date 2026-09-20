@@ -465,7 +465,9 @@ export default function PracticeClient() {
   }
 
   // ── Generate AI solution ──────────────────────────────────────────────────
-  const generateAISolution = useCallback(async (q: Question, bId: string): Promise<string> => {
+  const generateAISolution = useCallback(async (
+    q: Question, bId: string, confirmedAnswer: string  // ← never null
+  ): Promise<string> => {
     const b = AI_BUDDIES[bId] ?? AI_BUDDIES[DEFAULT_BUDDY]
     const col = b.columnKey
     try {
@@ -484,7 +486,8 @@ export default function PracticeClient() {
         action: 'generate_solution',
         question_text: q.question_text, option_A: q.option_a, option_B: q.option_b,
         option_C: q.option_c, option_D: q.option_d, solution: q.solution,
-        correct_option: q.correct_option, buddy_id: bId, buddy_name: b.name,
+        correct_option: confirmedAnswer,   // always the resolved answer
+        buddy_id: bId, buddy_name: b.name,
         buddy_system_prompt: b.systemPrompt,
       })
       const aiSol = res.data.solution || q.solution || ''
@@ -546,7 +549,10 @@ export default function PracticeClient() {
   }
 
   // ── Post-answer handler ───────────────────────────────────────────────────
-  const handlePostAnswer = async (correct: boolean, timeSpent: number, q: Question, optKey: string) => {
+  const handlePostAnswer = async (
+    correct: boolean, timeSpent: number, q: Question, optKey: string,
+    confirmedAnswer: string   // ← resolved correct answer, never null
+  ) => {
     const coins = correct ? Math.min((timeSpent <= 30 ? 5 : timeSpent <= 60 ? 4 : timeSpent <= 90 ? 3 : timeSpent <= 120 ? 2 : 1) + 5, 10) : 0
 
     addToast(correct ? `✓ Correct! +${coins} Coins` : '✗ Not quite — check the solution', correct ? 'coin' : 'error', 3000)
@@ -572,13 +578,13 @@ export default function PracticeClient() {
     const newExcludes = [...excludeIds, q.question_id]
     setExcludeIds(newExcludes)
 
-    // generate solution
+    // generate solution — pass confirmedAnswer directly so backend never gets null
     const activeBuddy = buddyId
     setSolutionBuddyId(activeBuddy)
     setSolutionRequested(true)
     setSolutionLoading(true)
 
-    generateAISolution(q, activeBuddy).then(aiSol => {
+    generateAISolution(q, activeBuddy, confirmedAnswer).then(aiSol => {
       setSolution(aiSol)
       setSolutionLoading(false)
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150)
@@ -652,7 +658,7 @@ export default function PracticeClient() {
       v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? ''
     const correct = normalize(opt) === normalize(ans)
     setIsCorrect(correct)
-    handlePostAnswer(correct, timeSpent, question, opt)
+    handlePostAnswer(correct, timeSpent, question, opt, ans || '')
   }
 
   // ── Integer submit ─────────────────────────────────────────────────────────
@@ -664,7 +670,7 @@ export default function PracticeClient() {
     const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
     const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
     setIsCorrect(correct); setSelectedOption('INTEGER')
-    handlePostAnswer(correct, timeSpent, question, 'INTEGER')
+    handlePostAnswer(correct, timeSpent, question, 'INTEGER', ans || '')
   }
 
   // ── Simpler explanation ────────────────────────────────────────────────────

@@ -1021,7 +1021,7 @@ export default function QuestionViewerClient() {
         setSolution(cachedSol); setSolutionLoading(false)
       } else if (prev.solutionRequested && q) {
         setSolution(''); setSolutionLoading(true)
-        generateAISolution(q, buddyId, AI_BUDDIES[buddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]).then(aiSol => {
+        generateAISolution(q, buddyId, AI_BUDDIES[buddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID], q.correct_option || '').then(aiSol => {
           setSolution(aiSol); setSolutionLoading(false)
           saveSession({ solution: aiSol, solutionRequested: true, solutionBuddyId: savedBuddyId })
         })
@@ -1150,7 +1150,8 @@ export default function QuestionViewerClient() {
 
   // ── Generate AI solution ──────────────────────────────────────────────────
   const generateAISolution = async (
-    q: Question, activeBuddyId: string, activeBuddy: typeof AI_BUDDIES[string]
+    q: Question, activeBuddyId: string, activeBuddy: typeof AI_BUDDIES[string],
+    confirmedAnswer: string   // ← always the resolved correct answer, never null
   ): Promise<string> => {
     try {
       const col = activeBuddy.columnKey
@@ -1172,16 +1173,16 @@ export default function QuestionViewerClient() {
         return dbSol
       }
 
+      // Always use confirmedAnswer — never q.correct_option which may be null
       const res = await axios.post(`${API_BASE}/solution`, {
         action: 'generate_solution', question_text: q.question_text,
         option_A: q.option_a, option_B: q.option_b, option_C: q.option_c, option_D: q.option_d,
-        solution: q.solution, correct_option: q.correct_option,
+        solution: q.solution, correct_option: confirmedAnswer,
         buddy_id: activeBuddyId, buddy_name: activeBuddy.name,
         buddy_system_prompt: activeBuddy.systemPrompt,
       })
       const aiSol = res.data.solution || q.solution || ''
       saveAISolToCache(q.question_id, activeBuddyId, aiSol)
-      // Background write to unified table
       supabase.from(DB_TABLE).update({ [col]: aiSol }).eq('question_id', q.question_id).then(() => {
         setQuestions(prev => prev.map((item, i) => i === currentIndex ? { ...item, [col]: aiSol } : item))
       })
@@ -1217,13 +1218,14 @@ export default function QuestionViewerClient() {
     setSolutionBuddyId(activeBuddyId)
     setSolutionRequested(true); setSolutionLoading(true)
 
-    // Ensure the in-memory question object has the confirmed answer before
-    // generateAISolution reads q.correct_option to pass to the backend prompt.
-    if (confirmedAnswer && !q.correct_option) {
-      q.correct_option = confirmedAnswer
-    }
+    // Pass confirmedAnswer directly — never read q.correct_option which may still
+    // be null if this is the first attempt and Supabase write is in-flight.
+    const resolvedAnswer = confirmedAnswer || q.correct_option || ''
 
-    generateAISolution(q, activeBuddyId, AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]).then(aiSol => {
+    generateAISolution(
+      q, activeBuddyId, AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID],
+      resolvedAnswer
+    ).then(aiSol => {
       setSolution(aiSol); setSolutionLoading(false)
       saveSession({
         selectedOption: optKey, isCorrect: correct, solution: aiSol,
@@ -1236,6 +1238,11 @@ export default function QuestionViewerClient() {
   // ── Regenerate solution ───────────────────────────────────────────────────
   const handleRegenerateSolution = async () => {
     const q = questions[currentIndex]; if (!q) return
+    // By regen time correct_option is already in DB — but guard against edge case
+    if (!q.correct_option) {
+      const ans = await determineAnswer(q)
+      if (ans) q.correct_option = ans
+    }
     try { sessionStorage.removeItem(getAISolCacheKey(q.question_id, solutionBuddyId)) } catch {}
     setSolution(''); setAIFollowup(null); setSolutionLoading(true)
     try {
