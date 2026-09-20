@@ -294,6 +294,7 @@ function SimilarQuestionCard({
   isDark: boolean; addToast: (msg: string, type: ToastType, ms?: number) => void
 }) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
+  const [pendingOption, setPendingOption]   = useState<string | null>(null) // clicked, not yet resolved
   const [isCorrect, setIsCorrect]           = useState<boolean | null>(null)
   const [solution, setSolution]             = useState('')
   const [solutionLoading, setSolutionLoading] = useState(false)
@@ -303,6 +304,11 @@ function SimilarQuestionCard({
   const [imageModal, setImageModal]         = useState<string | null>(null)
   const [integerAnswer, setIntegerAnswer]   = useState('')
   const [determiningAnswer, setDeterminingAnswer] = useState(false)
+  // The question object for this card lives in local state so we can update
+  // correct_option immutably (mutating the `q` prop in place doesn't
+  // reliably re-render, and — more importantly — it doesn't respect the
+  // order colors should appear in: grey while resolving, THEN green/red).
+  const [localQ, setLocalQ] = useState<Question>(q)
   const questionStartTime = useRef(Date.now())
 
   const buddyId = (() => { try { const s = localStorage.getItem('selectedBuddy'); return (s && AI_BUDDIES[s]) ? s : DEFAULT_BUDDY_ID } catch { return DEFAULT_BUDDY_ID } })()
@@ -352,7 +358,7 @@ function SimilarQuestionCard({
         action: 'generate_solution',
         question_text: q.question_text, option_A: q.option_a, option_B: q.option_b,
         option_C: q.option_c, option_D: q.option_d, solution: q.solution,
-        correct_option: q.correct_option, buddy_id: buddyId,
+        correct_option: localQ.correct_option, buddy_id: buddyId,
         buddy_name: buddy.name, buddy_system_prompt: buddy.systemPrompt,
       })
       const aiSol = res.data.solution || q.solution || ''
@@ -373,8 +379,13 @@ function SimilarQuestionCard({
       // Normalise to a single lowercase letter — same as main QuestionViewer
       const normalised = raw.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
       const ans = normalised || raw.trim()
+      // Persist to Supabase FIRST, then update React state immutably.
+      // Mutating `q.correct_option` in place does not reliably trigger a
+      // re-render (and any later `{...q}` spread of a stale closure would
+      // silently drop it) — a proper setState call is what actually makes
+      // the resolved answer visible in the UI.
       await supabase.from(DB_TABLE).update({ correct_option: ans }).eq('question_id', q.question_id)
-      q.correct_option = ans   // patch the in-memory object immediately
+      setLocalQ(prev => ({ ...prev, correct_option: ans }))
       return ans
     } catch { return null } finally { setDeterminingAnswer(false) }
   }
@@ -386,30 +397,37 @@ function SimilarQuestionCard({
     setSolution(sol); setSolutionLoading(false)
   }
 
+  // Order of operations matters here:
+  // 1. Mark the option as "pending" → renders grey while we resolve the answer.
+  // 2. Resolve (and persist) the correct answer.
+  // 3. Only THEN reveal selectedOption/isCorrect, so the green/red render
+  //    branch never runs against a still-null correct_option.
+  // 4. Only after that do we create the solution.
   const handleOption = async (opt: string) => {
-    if (selectedOption !== null) return
+    if (selectedOption !== null || pendingOption !== null) return
     questionStartTime.current = Date.now()
-    setSelectedOption(opt)
-    let ans = q.correct_option
+    setPendingOption(opt)
+    let ans = localQ.correct_option
     if (!ans) ans = await determineAnswer()
     const normalize = (v: string | null) =>
       v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? ''
     const correct = normalize(opt) === normalize(ans)
-    // patch the local copy so the answer indicator renders correctly
-    if (ans) q.correct_option = ans
     setIsCorrect(correct)
+    setSelectedOption(opt)
+    setPendingOption(null)
     await postAnswer(correct, opt)
   }
 
   const handleIntegerSubmit = async () => {
     if (isCorrect !== null || !integerAnswer.trim()) return
-    setSelectedOption('INTEGER')
-    let ans = q.correct_option
+    setPendingOption('INTEGER')
+    let ans = localQ.correct_option
     if (!ans) ans = await determineAnswer()
     const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
     const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
-    q.correct_option = ans
     setIsCorrect(correct)
+    setSelectedOption('INTEGER')
+    setPendingOption(null)
     await postAnswer(correct, 'INTEGER')
   }
 
@@ -475,12 +493,12 @@ function SimilarQuestionCard({
           ) : (
             <div className={`rounded-xl p-3 border-2 ${isCorrect ? 'bg-[#04271C] border-[#1DC97A]' : 'bg-[#2D0A0A] border-[#DC2626]'}`}>
               <span className={`font-bold text-sm ${isCorrect ? 'text-[#1DC97A]' : 'text-[#DC2626]'}`}>{isCorrect ? '✓ Correct!' : '✗ Incorrect'}</span>
-              {!isCorrect && q.correct_option && <p className="text-xs text-gray-300 mt-1">Correct: <b className="text-[#1DC97A]">{q.correct_option}</b></p>}
+              {!isCorrect && localQ.correct_option && <p className="text-xs text-gray-300 mt-1">Correct: <b className="text-[#1DC97A]">{localQ.correct_option}</b></p>}
             </div>
           )}
           {determiningAnswer && <div className="flex items-center gap-2"><Spinner size={14} cls="border-white" /><span className={`text-xs ${T.muted}`}>Checking answer…</span></div>}
         </div>
-      ) : selectedOption === null ? (
+      ) : selectedOption === null && pendingOption === null ? (
         /* MCQ unanswered */
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {(['a','b','c','d'] as const).map(opt => {
@@ -496,15 +514,34 @@ function SimilarQuestionCard({
             )
           })}
         </div>
+      ) : selectedOption === null && pendingOption !== null ? (
+        /* MCQ pending — clicked, correct answer not resolved yet: grey, no verdict */
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {(['a','b','c','d'] as const).map(opt => {
+            const tv = q[`option_${opt}`] as string | null
+            const iv = q[`option_${opt}_img`] as string | null
+            if (!tv && !iv) return null
+            const sel = pendingOption === opt
+            return (
+              <div key={opt} className={`rounded-xl p-3.5 flex items-center gap-3 border-2 transition-colors ${
+                sel ? (isDark ? 'bg-[#1e2538] border-slate-500' : 'bg-gray-100 border-gray-400') : T.optionIdle
+              }`}>
+                <div className={`w-8 h-8 rounded-lg border flex items-center justify-center font-semibold text-xs uppercase flex-shrink-0 ${T.optionLabel}`}>{opt}</div>
+                <div className="flex-1 text-sm leading-relaxed">{iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-16 rounded-lg" /> : renderLatex(tv)}</div>
+                {sel && <Spinner size={14} cls={isDark ? 'border-white' : 'border-black'} />}
+              </div>
+            )
+          })}
+        </div>
       ) : (
-        /* MCQ answered */
+        /* MCQ answered — localQ.correct_option is guaranteed resolved by now */
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {(['a','b','c','d'] as const).map(opt => {
             const tv = q[`option_${opt}`] as string | null
             const iv = q[`option_${opt}_img`] as string | null
             if (!tv && !iv) return null
             const sel  = selectedOption === opt
-            const corr = opt === (q.correct_option ?? '').replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
+            const corr = opt === (localQ.correct_option ?? '').replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
             return (
               <div key={opt} className={`rounded-xl p-3.5 flex items-center gap-3 border-2 transition-colors ${corr ? 'bg-[#04271C] border-[#1DC97A]' : sel ? 'bg-[#2D0A0A] border-[#DC2626]' : isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'}`}>
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-xs uppercase flex-shrink-0 ${corr ? 'bg-[#1DC97A] text-black' : sel ? 'bg-[#DC2626] text-white' : T.optionLabel}`}>{opt}</div>
@@ -739,6 +776,7 @@ export default function QuestionViewerClient() {
   // ── Per-question UI state ──────────────────────────────────────────────────
   const [rookieCoins, setRookieCoins]           = useState(0)
   const [selectedOption, setSelectedOption]     = useState<string | null>(null)
+  const [pendingOption, setPendingOption]       = useState<string | null>(null) // clicked, not yet resolved
   const [isCorrect, setIsCorrect]               = useState<boolean | null>(null)
   const [motivation, setMotivation]             = useState('')
   const [timer, setTimer]                       = useState(0)
@@ -1141,9 +1179,18 @@ export default function QuestionViewerClient() {
         .slice(0, 1)
         .toLowerCase()
       const ans = normalised || raw.trim()
-      // Write back to unified table
+      // Write back to unified table FIRST, then update React state immutably.
+      // `q.correct_option = ans` was mutating the object in place — the DOM
+      // sometimes never picked it up because it depended on an unrelated
+      // setState call to happen to re-render afterward, and it broke down
+      // entirely on any path where `questions` got replaced/copied in
+      // between. A proper functional setQuestions call makes the resolved
+      // answer part of React's own state, which is what actually guarantees
+      // the "answered" view renders with a non-null correct_option.
       await supabase.from(DB_TABLE).update({ correct_option: ans }).eq('question_id', q.question_id)
-      q.correct_option = ans
+      setQuestions(prev => prev.map(item =>
+        item.question_id === q.question_id ? { ...item, correct_option: ans } : item
+      ))
       return ans
     } catch { return null } finally { setDeterminingAnswer(false) }
   }
@@ -1261,11 +1308,22 @@ export default function QuestionViewerClient() {
   }
 
   // ── MCQ click ─────────────────────────────────────────────────────────────
+  // Order of operations, deliberately:
+  //   1. setPendingOption(opt)   → renders the clicked option grey, nothing
+  //                                colored yet, because we don't know the
+  //                                answer yet.
+  //   2. await determineAnswer  → resolves + persists correct_option, and
+  //                                (via setQuestions) lands it in state.
+  //   3. setIsCorrect / setSelectedOption → NOW flip into the colored
+  //                                (green/red) render branch, once
+  //                                correct_option can no longer be null.
+  //   4. handlePostAnswer       → only now does solution generation start,
+  //                                using the confirmedAnswer we just resolved.
   const handleOptionClick = async (opt: string) => {
-    if (selectedOption !== null) return
+    if (selectedOption !== null || pendingOption !== null) return
     const q = questions[currentIndex]; if (!q) return
     const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000)
-    setSelectedOption(opt)
+    setPendingOption(opt)
     let ans = q.correct_option
     if (!ans) ans = await determineAnswer(q)
     // Normalise both sides to a single lowercase letter for comparison
@@ -1275,6 +1333,8 @@ export default function QuestionViewerClient() {
     }
     const correct = normalize(opt) === normalize(ans)
     setIsCorrect(correct)
+    setSelectedOption(opt)
+    setPendingOption(null)
     handlePostAnswer(correct, timeSpent, q, opt, ans)
   }
 
@@ -1313,7 +1373,7 @@ export default function QuestionViewerClient() {
     if (newLocal >= questions.length && newGlobal >= totalCount) return
     setCurrentIndex(newLocal)
     setGlobalIndex(newGlobal)
-    setTimer(0); setSelectedOption(null); setIsCorrect(null)
+    setTimer(0); setSelectedOption(null); setPendingOption(null); setIsCorrect(null)
     setSolution(''); setSolutionRequested(false); setAIFollowup(null)
     setIntegerAnswer('')
   }
@@ -1480,7 +1540,7 @@ export default function QuestionViewerClient() {
                 )}
               </div>
 
-            ) : selectedOption === null ? (
+            ) : selectedOption === null && pendingOption === null ? (
               /* ── MCQ unanswered ──────────────────────────────────────── */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(['a','b','c','d'] as const).map(opt => {
@@ -1499,8 +1559,33 @@ export default function QuestionViewerClient() {
                 })}
               </div>
 
+            ) : selectedOption === null && pendingOption !== null ? (
+              /* ── MCQ pending — clicked, correct_option not resolved yet ──
+                 Deliberately grey, no green/red verdict: we don't know the
+                 answer yet, so we must not guess at it visually. */
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {(['a','b','c','d'] as const).map(opt => {
+                  const tv = Q[`option_${opt}`] as string | null
+                  const iv = Q[`option_${opt}_img`] as string | null
+                  if (!tv && !iv) return null
+                  const sel = pendingOption === opt
+                  return (
+                    <div key={opt} className={`rounded-xl p-4 flex items-center gap-4 border-2 transition-colors ${
+                      sel ? (isDark ? 'bg-[#1e2538] border-slate-500' : 'bg-gray-100 border-gray-400')
+                          : isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
+                    }`}>
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${T.optionLabel}`}>{opt}</div>
+                      <div className="flex-1 text-sm leading-relaxed">
+                        {iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-20 rounded-lg" /> : renderLatex(tv)}
+                      </div>
+                      {sel && <Spinner size={16} cls={isDark ? 'border-white' : 'border-black'} />}
+                    </div>
+                  )
+                })}
+              </div>
+
             ) : (
-              /* ── MCQ answered ────────────────────────────────────────── */
+              /* ── MCQ answered — Q.correct_option is guaranteed resolved ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(['a','b','c','d'] as const).map(opt => {
                   const tv = Q[`option_${opt}`] as string | null
@@ -1527,14 +1612,6 @@ export default function QuestionViewerClient() {
                     </motion.div>
                   )
                 })}
-              </div>
-            )}
-
-            {/* Determining loader */}
-            {determiningAnswer && selectedOption !== null && (
-              <div className="flex items-center gap-3 py-1">
-                <Spinner size={16} cls="border-white" />
-                <span className={`text-sm ${T.muted}`}>Determining correct answer…</span>
               </div>
             )}
 

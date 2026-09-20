@@ -295,6 +295,7 @@ export default function PracticeClient() {
   const [loadingNext, setLoadingNext]       = useState(false)
 
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
+  const [pendingOption, setPendingOption]   = useState<string | null>(null) // clicked, not yet resolved
   const [isCorrect, setIsCorrect]           = useState<boolean | null>(null)
   const [solution, setSolution]             = useState('')
   const [solutionLoading, setSolutionLoading] = useState(false)
@@ -542,8 +543,16 @@ export default function PracticeClient() {
       const raw: string = res.data.correct_answer || ''
       const normalised = raw.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
       const ans = normalised || raw.trim()
+      // Persist first, then update React state immutably. `q.correct_option
+      // = ans` mutated the object referenced by `question` state in place —
+      // it happened to "work" only when nothing else touched `question` in
+      // between and only after some *other* state update forced a
+      // re-render. A proper functional setQuestion call is what actually
+      // guarantees the resolved answer reaches the UI (and never silently
+      // reverts if `question` gets swapped out from under it, e.g. by
+      // advanceToNext firing concurrently).
       await supabase.from(DB_TABLE).update({ correct_option: ans }).eq('question_id', q.question_id)
-      q.correct_option = ans
+      setQuestion(prev => (prev && prev.question_id === q.question_id) ? { ...prev, correct_option: ans } : prev)
       return ans
     } catch { return null } finally { setDeterminingAnswer(false) }
   }
@@ -642,22 +651,33 @@ export default function PracticeClient() {
   }
 
   const resetAnswerState = () => {
-    setSelectedOption(null); setIsCorrect(null)
+    setSelectedOption(null); setPendingOption(null); setIsCorrect(null)
     setSolution(''); setSolutionRequested(false); setAIFollowup(null)
     setIntegerAnswer(''); setTimer(0)
   }
 
   // ── MCQ click ─────────────────────────────────────────────────────────────
+  // Order of operations:
+  //   1. setPendingOption(opt) → grey state, no verdict yet.
+  //   2. await determineAnswer → resolves + persists correct_option, lands
+  //      it in `question` state via setQuestion.
+  //   3. setIsCorrect / setSelectedOption → only now do we render the
+  //      colored (green/red) view, so correct_option can never read as null
+  //      at that point.
+  //   4. handlePostAnswer → solution generation starts only after the
+  //      answer is confirmed.
   const handleOptionClick = async (opt: string) => {
-    if (selectedOption !== null || !question) return
+    if (selectedOption !== null || pendingOption !== null || !question) return
     const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000)
-    setSelectedOption(opt)
+    setPendingOption(opt)
     let ans = question.correct_option
     if (!ans) ans = await determineAnswer(question)
     const normalize = (v: string | null) =>
       v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? ''
     const correct = normalize(opt) === normalize(ans)
     setIsCorrect(correct)
+    setSelectedOption(opt)
+    setPendingOption(null)
     handlePostAnswer(correct, timeSpent, question, opt, ans || '')
   }
 
@@ -911,7 +931,7 @@ export default function PracticeClient() {
                 )}
               </div>
 
-            ) : selectedOption === null ? (
+            ) : selectedOption === null && pendingOption === null ? (
               /* ── MCQ unanswered ────────────────────────────────────────── */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(['a', 'b', 'c', 'd'] as const).map(opt => {
@@ -930,8 +950,32 @@ export default function PracticeClient() {
                 })}
               </div>
 
+            ) : selectedOption === null && pendingOption !== null ? (
+              /* ── MCQ pending — clicked, correct_option not resolved yet ──
+                 Grey only. We deliberately don't know green/red yet. */
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {(['a', 'b', 'c', 'd'] as const).map(opt => {
+                  const tv = Q[`option_${opt}`] as string | null
+                  const iv = Q[`option_${opt}_img`] as string | null
+                  if (!tv && !iv) return null
+                  const sel = pendingOption === opt
+                  return (
+                    <div key={opt} className={`rounded-xl p-4 flex items-center gap-4 border-2 transition-colors ${
+                      sel ? (isDark ? 'bg-[#1e2538] border-slate-500' : 'bg-gray-100 border-gray-400')
+                          : isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
+                    }`}>
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${T.optionLabel}`}>{opt}</div>
+                      <div className="flex-1 text-sm leading-relaxed">
+                        {iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-20 rounded-lg" /> : renderLatex(tv)}
+                      </div>
+                      {sel && <Spinner size={16} />}
+                    </div>
+                  )
+                })}
+              </div>
+
             ) : (
-              /* ── MCQ answered ──────────────────────────────────────────── */
+              /* ── MCQ answered — Q.correct_option is guaranteed resolved ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(['a', 'b', 'c', 'd'] as const).map(opt => {
                   const tv = Q[`option_${opt}`] as string | null
@@ -956,13 +1000,6 @@ export default function PracticeClient() {
                     </div>
                   )
                 })}
-              </div>
-            )}
-
-            {/* Determining loader */}
-            {determiningAnswer && selectedOption !== null && (
-              <div className="flex items-center gap-3 py-1">
-                <Spinner size={16} /><span className={`text-sm ${T.muted}`}>Determining answer…</span>
               </div>
             )}
 
