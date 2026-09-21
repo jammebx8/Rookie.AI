@@ -297,6 +297,11 @@ export default function PracticeClient() {
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [pendingOption, setPendingOption]   = useState<string | null>(null) // clicked, not yet resolved
   const [isCorrect, setIsCorrect]           = useState<boolean | null>(null)
+  // Set synchronously in handleOptionClick/handleIntegerSubmit the moment the
+  // answer is resolved — guaranteed non-null by the time selectedOption flips,
+  // so the answered-view render (below) never has to read a stale/null
+  // question.correct_option. Mirrors QuestionViewerClient's resolvedCorrectOption.
+  const [resolvedCorrectOption, setResolvedCorrectOption] = useState<string | null>(null)
   const [solution, setSolution]             = useState('')
   const [solutionLoading, setSolutionLoading] = useState(false)
   const [solutionRequested, setSolutionRequested] = useState(false)
@@ -665,6 +670,7 @@ export default function PracticeClient() {
 
   const resetAnswerState = () => {
     setSelectedOption(null); setPendingOption(null); setIsCorrect(null)
+    setResolvedCorrectOption(null)
     setSolution(''); setSolutionRequested(false); setAIFollowup(null)
     setIntegerAnswer(''); setTimer(0)
   }
@@ -688,6 +694,9 @@ export default function PracticeClient() {
     const normalize = (v: string | null) =>
       v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? ''
     const correct = normalize(opt) === normalize(ans)
+    // Set before selectedOption so the answered-view render never reads a
+    // stale/null question.correct_option on the very first paint.
+    setResolvedCorrectOption(ans || question.correct_option || null)
     setIsCorrect(correct)
     setSelectedOption(opt)
     setPendingOption(null)
@@ -702,6 +711,7 @@ export default function PracticeClient() {
     if (!ans) ans = await determineAnswer(question)
     const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
     const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
+    setResolvedCorrectOption(ans || question.correct_option || null)
     setIsCorrect(correct); setSelectedOption('INTEGER')
     handlePostAnswer(correct, timeSpent, question, 'INTEGER', ans || '')
   }
@@ -934,8 +944,8 @@ export default function PracticeClient() {
                     <span className={`font-bold text-base ${isCorrect ? 'text-[#1DC97A]' : 'text-[#DC2626]'}`}>
                       {isCorrect ? '✓ Correct!' : '✗ Incorrect'}
                     </span>
-                    {!isCorrect && Q.correct_option && (
-                      <p className="text-sm text-gray-300 mt-1">Correct: <b className="text-[#1DC97A]">{Q.correct_option}</b></p>
+                    {!isCorrect && (resolvedCorrectOption || Q.correct_option) && (
+                      <p className="text-sm text-gray-300 mt-1">Correct: <b className="text-[#1DC97A]">{resolvedCorrectOption || Q.correct_option}</b></p>
                     )}
                   </div>
                 )}
@@ -988,14 +998,16 @@ export default function PracticeClient() {
               </div>
 
             ) : (
-              /* ── MCQ answered — Q.correct_option is guaranteed resolved ── */
+              /* ── MCQ answered — resolvedCorrectOption is guaranteed set by
+                 handleOptionClick before this render fires, so never null on
+                 first attempt (same logic as QuestionViewerClient). ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(['a', 'b', 'c', 'd'] as const).map(opt => {
                   const tv = Q[`option_${opt}`] as string | null
                   const iv = Q[`option_${opt}_img`] as string | null
                   if (!tv && !iv) return null
                   const sel  = selectedOption === opt
-                  const storedCorr = (Q.correct_option ?? '')
+                  const storedCorr = (resolvedCorrectOption ?? Q.correct_option ?? '')
                     .replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
                   const corr = opt === storedCorr
                   return (
