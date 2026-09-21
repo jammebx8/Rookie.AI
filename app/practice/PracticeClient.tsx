@@ -542,19 +542,32 @@ export default function PracticeClient() {
       })
       const raw: string = res.data.correct_answer || ''
       const normalised = raw.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
-      const ans = normalised || raw.trim()
-      // Persist first, then update React state immutably. `q.correct_option
-      // = ans` mutated the object referenced by `question` state in place —
-      // it happened to "work" only when nothing else touched `question` in
-      // between and only after some *other* state update forced a
-      // re-render. A proper functional setQuestion call is what actually
-      // guarantees the resolved answer reaches the UI (and never silently
-      // reverts if `question` gets swapped out from under it, e.g. by
-      // advanceToNext firing concurrently).
-      await supabase.from(DB_TABLE).update({ correct_option: ans }).eq('question_id', q.question_id)
-      setQuestion(prev => (prev && prev.question_id === q.question_id) ? { ...prev, correct_option: ans } : prev)
+      const ans = normalised || raw.toLowerCase().trim()
+
+      if (!ans) {
+        console.warn('determineAnswer: empty answer from API, raw:', JSON.stringify(raw))
+        return null
+      }
+
+      // Fire-and-forget DB write — never await so a failed RLS write can't
+      // block returning the answer or corrupt the comparison result.
+      supabase.from(DB_TABLE)
+        .update({ correct_option: ans })
+        .eq('question_id', q.question_id)
+        .then(({ error }) => {
+          if (error) console.warn('determineAnswer: Supabase write failed:', error.message)
+          else setQuestion(prev =>
+            (prev && prev.question_id === q.question_id) ? { ...prev, correct_option: ans } : prev
+          )
+        })
+
       return ans
-    } catch { return null } finally { setDeterminingAnswer(false) }
+    } catch (err) {
+      console.error('determineAnswer failed:', err)
+      return null
+    } finally {
+      setDeterminingAnswer(false)
+    }
   }
 
   // ── Post-answer handler ───────────────────────────────────────────────────

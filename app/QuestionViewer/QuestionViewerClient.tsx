@@ -102,6 +102,27 @@ export const AI_BUDDIES: Record<string, {
 
 const DEFAULT_BUDDY_ID = '4'
 
+// ─── Answer-line reconciliation ───────────────────────────────────────────────
+// The "determine correct option" call and the "generate full solution" call
+// are two independent LLM requests fired in parallel (see handleOptionClick /
+// handleOption below). Each is capable of naming a correct option on its own,
+// so — rarely — they could disagree. This patches the solution text's final
+// "Answer: Option X" line to always match the confirmed answer from the fast
+// determine-answer call, so the visible text can never contradict the
+// green/red highlight colors, regardless of what the slower solution-writing
+// call guessed.
+function reconcileAnswerLine(text: string, confirmedAnswer: string | null): string {
+  if (!text) return text
+  if (!confirmedAnswer) return text
+  const letter = confirmedAnswer.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toUpperCase()
+  if (!letter) return text
+  const pattern = /Answer:\s*Option\s*[A-Da-d]?\.?/i
+  if (pattern.test(text)) {
+    return text.replace(pattern, `Answer: Option ${letter}`)
+  }
+  return `${text.trim()}\n\nAnswer: Option ${letter}`
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type Question = {
   id:                 number
@@ -368,67 +389,129 @@ function SimilarQuestionCard({
     } catch { return q.solution || '' }
   }
 
-  const determineAnswer = async (): Promise<string | null> => {
+  const determineAnswer = async (q: Question): Promise<string | null> => {
     setDeterminingAnswer(true)
+  
     try {
       const res = await axios.post(`${API_BASE}/solution`, {
-        action: 'determine_answer', question_text: q.question_text,
-        option_A: q.option_a, option_B: q.option_b, option_C: q.option_c, option_D: q.option_d, solution: q.solution,
+        action: "determine_answer",
+        question_text: q.question_text,
+        option_A: q.option_a,
+        option_B: q.option_b,
+        option_C: q.option_c,
+        option_D: q.option_d,
+        solution: q.solution,
       })
-      const raw: string = res.data.correct_answer || ''
-      // Normalise to a single lowercase letter — same as main QuestionViewer
-      const normalised = raw.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
-      const ans = normalised || raw.trim()
-      // Persist to Supabase FIRST, then update React state immutably.
-      // Mutating `q.correct_option` in place does not reliably trigger a
-      // re-render (and any later `{...q}` spread of a stale closure would
-      // silently drop it) — a proper setState call is what actually makes
-      // the resolved answer visible in the UI.
-      await supabase.from(DB_TABLE).update({ correct_option: ans }).eq('question_id', q.question_id)
+  
+      const raw = res.data.correct_answer || ""
+  
+      const ans = raw
+        .replace(/option_?/gi, "")
+        .replace(/[^a-dA-D]/g, "")
+        .slice(0, 1)
+        .toLowerCase()
+  
+      if (!ans) return null
+  
+      // Wait for Supabase
+      const { error } = await supabase
+        .from(DB_TABLE)
+        .update({ correct_option: ans })
+        .eq("question_id", q.question_id)
+  
+      if (error) {
+        console.error(error)
+        return null
+      }
+  
+      // Update this card's own local copy immediately. (Previously this
+      // called a `setQuestions` that doesn't exist in this component's
+      // scope — a ReferenceError that threw on every resolve, silently
+      // rejecting this promise and leaving the clicked option stuck grey
+      // forever with no error shown to the user.)
       setLocalQ(prev => ({ ...prev, correct_option: ans }))
+  
       return ans
-    } catch { return null } finally { setDeterminingAnswer(false) }
+    } catch (err) {
+      console.error('determineAnswer failed:', err)
+      return null
+    } finally {
+      setDeterminingAnswer(false)
+    }
   }
 
-  const postAnswer = async (correct: boolean, opt: string) => {
-    setSolutionRequested(true); setSolutionLoading(true)
+  // NOTE: solution generation is fired in parallel with the answer check
+  // (see handleOption / handleIntegerSubmit below), so by the time we get
+  // here the solution is either already done or already in flight — we
+  // just report the result and let the caller plug the solution in.
+  const postAnswerMeta = (correct: boolean) => {
     addToast(correct ? `✓ Correct! Keep going!` : '✗ Not quite — check the solution', correct ? 'coin' : 'error', 3000)
-    const sol = await generateSolution()
-    setSolution(sol); setSolutionLoading(false)
   }
 
-  // Order of operations matters here:
-  // 1. Mark the option as "pending" → renders grey while we resolve the answer.
-  // 2. Resolve (and persist) the correct answer.
-  // 3. Only THEN reveal selectedOption/isCorrect, so the green/red render
-  //    branch never runs against a still-null correct_option.
-  // 4. Only after that do we create the solution.
+  // Order of operations, deliberately:
+  //   1. setPendingOption(opt)         → renders the clicked option grey.
+  //   2. Fire determineAnswer() AND generateSolution() AT THE SAME TIME —
+  //      the answer check is cheap/fast, the solution generation is the
+  //      expensive call. Making the solution call wait for the answer
+  //      check to finish first (the old flow) doubled the wait before the
+  //      solution card was ready, for no reason — neither call depends on
+  //      the other's result.
+  //   3. As soon as the (fast) answer check resolves, reveal
+  //      selectedOption/isCorrect — the user gets green/red feedback
+  //      quickly, without waiting on the (slow) solution text.
+  //   4. When the (already in-flight) solution promise resolves, plug it
+  //      in. We reconcile its final "Answer: Option X" line against the
+  //      confirmed answer so the two independent LLM calls can never
+  //      contradict the highlight colors.
   const handleOption = async (opt: string) => {
     if (selectedOption !== null || pendingOption !== null) return
     questionStartTime.current = Date.now()
     setPendingOption(opt)
-    let ans = localQ.correct_option
-    if (!ans) ans = await determineAnswer()
+
+    const answerPromise: Promise<string | null> = localQ.correct_option
+      ? Promise.resolve(localQ.correct_option)
+      : determineAnswer(q)
+
+    setSolutionRequested(true); setSolutionLoading(true)
+    const solutionPromise = generateSolution()
+
     const normalize = (v: string | null) =>
       v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? ''
+
+    const ans = await answerPromise
     const correct = normalize(opt) === normalize(ans)
     setIsCorrect(correct)
     setSelectedOption(opt)
     setPendingOption(null)
-    await postAnswer(correct, opt)
+    postAnswerMeta(correct)
+
+    const sol = await solutionPromise
+    setSolution(reconcileAnswerLine(sol, ans))
+    setSolutionLoading(false)
   }
 
   const handleIntegerSubmit = async () => {
     if (isCorrect !== null || !integerAnswer.trim()) return
     setPendingOption('INTEGER')
-    let ans = localQ.correct_option
-    if (!ans) ans = await determineAnswer()
+
+    const answerPromise: Promise<string | null> = localQ.correct_option
+      ? Promise.resolve(localQ.correct_option)
+      : determineAnswer(q)
+
+    setSolutionRequested(true); setSolutionLoading(true)
+    const solutionPromise = generateSolution()
+
+    const ans = await answerPromise
     const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
     const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
     setIsCorrect(correct)
     setSelectedOption('INTEGER')
     setPendingOption(null)
-    await postAnswer(correct, 'INTEGER')
+    postAnswerMeta(correct)
+
+    const sol = await solutionPromise
+    setSolution(reconcileAnswerLine(sol, ans))
+    setSolutionLoading(false)
   }
 
   const handleFollowup = async () => {
@@ -777,6 +860,7 @@ export default function QuestionViewerClient() {
   const [rookieCoins, setRookieCoins]           = useState(0)
   const [selectedOption, setSelectedOption]     = useState<string | null>(null)
   const [pendingOption, setPendingOption]       = useState<string | null>(null) // clicked, not yet resolved
+  const [resolvedCorrectOption, setResolvedCorrectOption] = useState<string | null>(null) // confirmed correct answer for current Q
   const [isCorrect, setIsCorrect]               = useState<boolean | null>(null)
   const [motivation, setMotivation]             = useState('')
   const [timer, setTimer]                       = useState(0)
@@ -1046,6 +1130,8 @@ export default function QuestionViewerClient() {
     if (prev) {
       setSelectedOption(prev.selectedOption || null)
       setIsCorrect(prev.isCorrect ?? null)
+      // Restore resolved correct option — use saved value or fall back to what's in the question
+      setResolvedCorrectOption(q?.correct_option || null)
       setMotivation(prev.motivation || '')
       setSolutionRequested(prev.solutionRequested || false)
       setSolutionBuddyId(prev.solutionBuddyId || buddyId)
@@ -1172,27 +1258,38 @@ export default function QuestionViewerClient() {
         solution: q.solution,
       })
       const raw: string = res.data.correct_answer || ''
-      // Normalise to a single lowercase letter: "A" → "a", "option_A" → "a", "Option A" → "a"
       const normalised = raw
         .replace(/option_?/gi, '')
         .replace(/[^a-dA-D]/g, '')
         .slice(0, 1)
         .toLowerCase()
-      const ans = normalised || raw.trim()
-      // Write back to unified table FIRST, then update React state immutably.
-      // `q.correct_option = ans` was mutating the object in place — the DOM
-      // sometimes never picked it up because it depended on an unrelated
-      // setState call to happen to re-render afterward, and it broke down
-      // entirely on any path where `questions` got replaced/copied in
-      // between. A proper functional setQuestions call makes the resolved
-      // answer part of React's own state, which is what actually guarantees
-      // the "answered" view renders with a non-null correct_option.
-      await supabase.from(DB_TABLE).update({ correct_option: ans }).eq('question_id', q.question_id)
-      setQuestions(prev => prev.map(item =>
-        item.question_id === q.question_id ? { ...item, correct_option: ans } : item
-      ))
+      const ans = normalised || raw.toLowerCase().trim()
+
+      if (!ans) {
+        console.warn('determineAnswer: empty answer from API, raw was:', JSON.stringify(raw))
+        return null
+      }
+
+      // Write to Supabase — don't let a failed DB write block returning the answer
+      supabase.from(DB_TABLE)
+        .update({ correct_option: ans })
+        .eq('question_id', q.question_id)
+        .then(({ error }) => {
+          if (error) console.warn('determineAnswer: Supabase write failed:', error.message)
+          else {
+            setQuestions(prev => prev.map(item =>
+              item.question_id === q.question_id ? { ...item, correct_option: ans } : item
+            ))
+          }
+        })
+
       return ans
-    } catch { return null } finally { setDeterminingAnswer(false) }
+    } catch (err) {
+      console.error('determineAnswer failed:', err)
+      return null
+    } finally {
+      setDeterminingAnswer(false)
+    }
   }
 
   // ── Generate AI solution ──────────────────────────────────────────────────
@@ -1237,11 +1334,11 @@ export default function QuestionViewerClient() {
     } catch { return questions[currentIndex]?.solution || '' }
   }
 
-  // ── Post-answer handler ───────────────────────────────────────────────────
-  const handlePostAnswer = async (
-    correct: boolean, timeSpent: number, q: Question, optKey: string,
-    confirmedAnswer: string | null   // ← always pass the resolved correct answer
-  ) => {
+  // ── Post-answer bookkeeping (coins / streak / toast) ─────────────────────
+  // Solution generation is fired in parallel elsewhere (see handleOptionClick
+  // / handleIntegerSubmit below) — this only handles the side effects that
+  // depend on knowing whether the user was right, not the solution text.
+  const handlePostAnswerMeta = (correct: boolean, timeSpent: number, q: Question) => {
     const coins = calcCoins(timeSpent, correct)
     addToast(correct ? `✓ Correct! +${coins} Coins earned` : '✗ Not quite — keep going!', correct ? 'coin' : 'error', 3500)
 
@@ -1260,26 +1357,6 @@ export default function QuestionViewerClient() {
       localStorage.setItem('questionsMonth', String((parseInt(localStorage.getItem('questionsMonth') || '0') + 1)))
       saveUserActivity(q, correct, timeSpent)
     }
-
-    const activeBuddyId = buddyId
-    setSolutionBuddyId(activeBuddyId)
-    setSolutionRequested(true); setSolutionLoading(true)
-
-    // Pass confirmedAnswer directly — never read q.correct_option which may still
-    // be null if this is the first attempt and Supabase write is in-flight.
-    const resolvedAnswer = confirmedAnswer || q.correct_option || ''
-
-    generateAISolution(
-      q, activeBuddyId, AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID],
-      resolvedAnswer
-    ).then(aiSol => {
-      setSolution(aiSol); setSolutionLoading(false)
-      saveSession({
-        selectedOption: optKey, isCorrect: correct, solution: aiSol,
-        solutionRequested: true, solutionBuddyId: activeBuddyId,
-      })
-      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150)
-    })
   }
 
   // ── Regenerate solution ───────────────────────────────────────────────────
@@ -1309,46 +1386,97 @@ export default function QuestionViewerClient() {
 
   // ── MCQ click ─────────────────────────────────────────────────────────────
   // Order of operations, deliberately:
-  //   1. setPendingOption(opt)   → renders the clicked option grey, nothing
-  //                                colored yet, because we don't know the
-  //                                answer yet.
-  //   2. await determineAnswer  → resolves + persists correct_option, and
-  //                                (via setQuestions) lands it in state.
-  //   3. setIsCorrect / setSelectedOption → NOW flip into the colored
-  //                                (green/red) render branch, once
-  //                                correct_option can no longer be null.
-  //   4. handlePostAnswer       → only now does solution generation start,
-  //                                using the confirmedAnswer we just resolved.
-  const handleOptionClick = async (opt: string) => {
+  //   1. setPendingOption(opt)          → renders the clicked option grey.
+  //   2. Fire determineAnswer() AND generateAISolution() AT THE SAME TIME.
+  //      determineAnswer is a cheap call (max_tokens: 10); generateAISolution
+  //      is the expensive one (max_tokens: 2000). The old flow awaited
+  //      determineAnswer, THEN started generateAISolution — paying both
+  //      latencies back to back for no reason, since neither call needs the
+  //      other's result up front (the backend now infers the correct option
+  //      itself from `solution` when we don't pass one — see route.ts).
+  //   3. The moment the (fast) answerPromise resolves, reveal
+  //      selectedOption/isCorrect — green/red shows up without waiting on
+  //      the (slow) solution text.
+  //   4. When the already in-flight solutionPromise resolves, plug it in,
+  //      after reconciling its final "Answer: Option X" line against the
+  //      confirmed answer so the two independent LLM calls can never
+  //      contradict the highlight colors.
+  const handleOptionClick = (opt: string) => {
     if (selectedOption !== null || pendingOption !== null) return
     const q = questions[currentIndex]; if (!q) return
     const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000)
     setPendingOption(opt)
-    let ans = q.correct_option
-    if (!ans) ans = await determineAnswer(q)
+
+    const activeBuddyId = buddyId
+    const activeBuddy = AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
+
+    const answerPromise: Promise<string | null> = q.correct_option
+      ? Promise.resolve(q.correct_option)
+      : determineAnswer(q)
+
+    setSolutionBuddyId(activeBuddyId)
+    setSolutionRequested(true); setSolutionLoading(true)
+    const solutionPromise = generateAISolution(q, activeBuddyId, activeBuddy, q.correct_option || '')
+
     // Normalise both sides to a single lowercase letter for comparison
     const normalize = (v: string | null): string => {
       if (!v) return ''
       return v.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
     }
-    const correct = normalize(opt) === normalize(ans)
-    setIsCorrect(correct)
-    setSelectedOption(opt)
-    setPendingOption(null)
-    handlePostAnswer(correct, timeSpent, q, opt, ans)
+
+    answerPromise.then(ans => {
+      const correct = normalize(opt) === normalize(ans)
+      setIsCorrect(correct)
+      setSelectedOption(opt)
+      setResolvedCorrectOption(ans)
+      setPendingOption(null)
+      handlePostAnswerMeta(correct, timeSpent, q)
+
+      solutionPromise.then(aiSol => {
+        const reconciled = reconcileAnswerLine(aiSol, ans)
+        setSolution(reconciled); setSolutionLoading(false)
+        saveSession({
+          selectedOption: opt, isCorrect: correct, solution: reconciled,
+          solutionRequested: true, solutionBuddyId: activeBuddyId,
+        })
+        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150)
+      })
+    })
   }
 
   // ── Integer submit ────────────────────────────────────────────────────────
-  const handleIntegerSubmit = async () => {
+  const handleIntegerSubmit = () => {
     if (isCorrect !== null) return
     const q = questions[currentIndex]; if (!q || !integerAnswer.trim()) return
     const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000)
-    let ans = q.correct_option
-    if (!ans) ans = await determineAnswer(q)
-    const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
-    const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
-    setIsCorrect(correct); setSelectedOption('INTEGER')
-    await handlePostAnswer(correct, timeSpent, q, 'INTEGER', ans)
+
+    const activeBuddyId = buddyId
+    const activeBuddy = AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
+
+    const answerPromise: Promise<string | null> = q.correct_option
+      ? Promise.resolve(q.correct_option)
+      : determineAnswer(q)
+
+    setSolutionBuddyId(activeBuddyId)
+    setSolutionRequested(true); setSolutionLoading(true)
+    const solutionPromise = generateAISolution(q, activeBuddyId, activeBuddy, q.correct_option || '')
+
+    answerPromise.then(ans => {
+      const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
+      const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
+      setIsCorrect(correct); setSelectedOption('INTEGER')
+      setResolvedCorrectOption(ans || q.correct_option || null)
+      handlePostAnswerMeta(correct, timeSpent, q)
+
+      solutionPromise.then(aiSol => {
+        const reconciled = reconcileAnswerLine(aiSol, ans)
+        setSolution(reconciled); setSolutionLoading(false)
+        saveSession({
+          selectedOption: 'INTEGER', isCorrect: correct, solution: reconciled,
+          solutionRequested: true, solutionBuddyId: activeBuddyId,
+        })
+      })
+    })
   }
 
   // ── AI Followup (Simpler Explanation) ─────────────────────────────────────
@@ -1374,6 +1502,7 @@ export default function QuestionViewerClient() {
     setCurrentIndex(newLocal)
     setGlobalIndex(newGlobal)
     setTimer(0); setSelectedOption(null); setPendingOption(null); setIsCorrect(null)
+    setResolvedCorrectOption(null)
     setSolution(''); setSolutionRequested(false); setAIFollowup(null)
     setIntegerAnswer('')
   }
@@ -1530,8 +1659,8 @@ export default function QuestionViewerClient() {
                       {isCorrect ? '✓ Correct!' : '✗ Incorrect'}
                     </span>
                     <p className="text-sm text-gray-300 mt-1">Your answer: <b className="text-white">{integerAnswer}</b></p>
-                    {!isCorrect && Q.correct_option && (
-                      <p className="text-sm text-gray-300 mt-0.5">Correct: <b className="text-[#1DC97A]">{Q.correct_option}</b></p>
+                    {!isCorrect && (resolvedCorrectOption || Q.correct_option) && (
+                      <p className="text-sm text-gray-300 mt-0.5">Correct: <b className="text-[#1DC97A]">{resolvedCorrectOption || Q.correct_option}</b></p>
                     )}
                   </motion.div>
                 )}
@@ -1592,8 +1721,9 @@ export default function QuestionViewerClient() {
                   const iv = Q[`option_${opt}_img`] as string | null
                   if (!tv && !iv) return null
                   const sel  = selectedOption === opt
-                  // Normalise stored correct_option to single lowercase letter
-                  const storedCorr = (Q.correct_option ?? '')
+                  // Use resolvedCorrectOption — guaranteed set by handleOptionClick
+                  // before this render fires, so never null on first attempt.
+                  const storedCorr = (resolvedCorrectOption ?? Q.correct_option ?? '')
                     .replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0,1).toLowerCase()
                   const corr = opt === storedCorr
                   return (
