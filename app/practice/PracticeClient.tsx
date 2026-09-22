@@ -932,23 +932,13 @@ export default function PracticeClient() {
           {/* Title + session count */}
           <div className="flex-1 mx-3 min-w-0 text-center">
             <h1 className="text-sm font-bold">
-              {isReviewing ? `Review · Q${historyIndex + 1} of ${history.length}` : 'Adaptive Practice'}
+              {isReviewing ? `Review · Q${historyIndex + 1} of ${history.length}` : 'Daily Practice'}
             </h1>
-            <p className={`text-[10px] ${T.muted}`}>
-              {isReviewing
-                ? 'tap → to return to current question'
-                : `${sessionCount} answered${loadingNext ? ' · loading next…' : ''}`}
-            </p>
+            
             {/* Weak-topic chip */}
             {!isReviewing && weakTopics.length > 0 && !loadingNext && selectedOption === null && (
               <div className="flex items-center justify-center gap-1 mt-0.5">
-                <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold truncate max-w-[160px] ${
-                  isDark
-                    ? 'bg-rose-500/15 text-rose-400 border border-rose-500/25'
-                    : 'bg-rose-50 text-rose-600 border border-rose-200'
-                }`}>
-                  🎯 {weakTopics[0].chapter.replace(/\.$/, '')}
-                </span>
+               
                 {(() => {
                   const lbl = abilityLabel(
                     weakTopics[0].total > 0
@@ -1008,25 +998,7 @@ export default function PracticeClient() {
             exit={{ opacity: 0, x: isReviewing ? 14 : -14 }}
             className="space-y-4"
           >
-            {/* ── Review mode banner ──────────────────────────────────────── */}
-            {isReviewing && reviewEntry && (
-              <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs font-medium ${
-                isDark ? 'bg-[#111827] border-[#1D2939] text-slate-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
-              }`}>
-                <span>
-                  {reviewEntry.isCorrect ? '✓ You got this right' : '✗ You got this wrong'}
-                  <span className={`ml-2 font-bold ${reviewEntry.isCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {reviewEntry.isCorrect ? '' : `· correct: ${(reviewEntry.resolvedCorrect ?? '').toUpperCase()}`}
-                  </span>
-                </span>
-                <button
-                  onClick={() => setHistoryIndex(-1)}
-                  className="underline underline-offset-2 opacity-70 hover:opacity-100"
-                >
-                  Back to current →
-                </button>
-              </div>
-            )}
+           
 
             {/* ── Question card ───────────────────────────────────────────── */}
             <div className={`rounded-2xl border p-5 sm:p-6 transition-colors duration-300 ${T.card}`}>
@@ -1311,7 +1283,7 @@ export default function PracticeClient() {
             whileTap={{ scale: 0.97 }} onClick={goForward}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'}`}
           >
-            {historyIndex < history.length - 1 ? 'Forward' : 'Current'}
+            {historyIndex < history.length - 1 ? 'Next' : 'Next'}
             <FiArrowRight size={15} />
           </motion.button>
         ) : selectedOption !== null ? (

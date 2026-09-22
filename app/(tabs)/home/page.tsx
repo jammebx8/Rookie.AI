@@ -787,97 +787,91 @@ function ContinueSection({ isDark }: { isDark: boolean }) {
 
   return (
     <div className="mb-6">
-    <h2 className={`text-sm font-medium mb-3 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-      Continue learning
-    </h2>
+      <h2 className={`text-sm font-medium mb-3 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+        Continue learning
+      </h2>
   
-    <button
-      onClick={() => {
-        if (!session.chapter_title) return;
+      <button
+        onClick={() => {
+          if (!session.chapter_title) return;
   
-        const params = new URLSearchParams({
-          subject: session.subject_name || "",
-          chapter: session.chapter_title,
-          imageKey: session.image_key || "",
-          index: String(session.question_index || 0),
-          startIndex: String(session.question_index || 0),
-        });
+          const params = new URLSearchParams({
+            subject: session.subject_name || "",
+            chapter: session.chapter_title,
+            imageKey: session.image_key || "",
+            index: String(session.question_index || 0),
+            startIndex: String(session.question_index || 0),
+          });
   
-        router.push(`/QuestionViewer?${params.toString()}`);
-      }}
-      className={`w-full rounded-2xl p-4 transition-all duration-200 border ${
-        isDark
-          ? "bg-[#111827] border-[#1F2937] hover:border-[#374151] hover:bg-[#151F32]"
-          : "bg-white border-[#E5E7EB] hover:border-[#CBD5E1] hover:shadow-sm"
-      }`}
-    >
-      <div className="flex items-center gap-4">
-        {/* Play icon */}
-        <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-md shadow-indigo-600/20 flex-shrink-0">
+          router.push(`/QuestionViewer?${params.toString()}`);
+        }}
+        className={`w-full rounded-xl p-3.5 transition-colors border ${
+          isDark
+            ? "bg-[#111827] border-[#1F2937] hover:border-[#2A3441]"
+            : "bg-white border-[#E5E7EB] hover:border-[#D1D5DB]"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          {/* Icon */}
           <svg
-            width="18"
-            height="18"
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
-            fill="currentColor"
-            className="text-white ml-0.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`flex-shrink-0 ${isDark ? "text-slate-500" : "text-slate-400"}`}
           >
-            <path d="M8 5v14l11-7z" />
+            <circle cx="12" cy="12" r="10" />
+            <path d="M10 8l6 4-6 4V8z" fill="currentColor" stroke="none" />
+          </svg>
+  
+          {/* Content */}
+          <div className="flex-1 min-w-0 text-left">
+            <p className={`text-xs mb-0.5 ${isDark ? "text-slate-500" : "text-slate-500"}`}>
+              {session.subject_name}
+            </p>
+  
+            <h3 className={`text-sm font-medium truncate ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+              {session.chapter_title}
+            </h3>
+  
+            <div className="flex items-center gap-2 mt-1.5">
+              <div className={`h-1 flex-1 rounded-full ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
+                <div
+                  className={`h-full rounded-full ${isDark ? "bg-slate-500" : "bg-slate-400"}`}
+                  style={{
+                    width: `${Math.min(((session.question_index + 1) / 30) * 100, 100)}%`,
+                  }}
+                />
+              </div>
+  
+              <span className={`text-[11px] ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                Q{session.question_index + 1}
+              </span>
+            </div>
+          </div>
+  
+          {/* Chevron */}
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={isDark ? "text-slate-600" : "text-slate-300"}
+          >
+            <path d="M9 18l6-6-6-6" />
           </svg>
         </div>
-  
-        {/* Content */}
-        <div className="flex-1 min-w-0 text-left">
-          <p className={`text-xs font-medium mb-1 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-            {session.subject_name}
-          </p>
-  
-          <h3 className={`font-semibold truncate ${isDark ? "text-white" : "text-slate-900"}`}>
-            {session.chapter_title}
-          </h3>
-  
-          <div className="flex items-center gap-2 mt-2">
-            <div
-              className={`h-1.5 flex-1 rounded-full ${
-                isDark ? "bg-slate-700" : "bg-slate-200"
-              }`}
-            >
-              <div
-                className="h-full rounded-full bg-indigo-600"
-                style={{
-                  width: `${Math.min(((session.question_index + 1) / 30) * 100, 100)}%`,
-                }}
-              />
-            </div>
-  
-            <span
-              className={`text-[11px] font-medium ${
-                isDark ? "text-slate-400" : "text-slate-500"
-              }`}
-            >
-              Q{session.question_index + 1}
-            </span>
-          </div>
-        </div>
-  
-        {/* Chevron */}
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={isDark ? "text-slate-500" : "text-slate-400"}
-        >
-          <path d="M9 18l6-6-6-6" />
-        </svg>
-      </div>
-    </button>
-  </div>
+      </button>
+    </div>
   );
-}
 
 function renderLatex(text: string | null | undefined): React.ReactNode {
   if (!text) return null;
@@ -1040,8 +1034,8 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
   // ── Theme shortcuts ──────────────────────────────────────────────────────
   const skelBg  = isDark ? 'bg-[#1e2538]' : 'bg-gray-200';
   const optIdle = isDark
-    ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/60 text-white cursor-pointer'
-    : 'bg-white border-[#E5E7EB] hover:border-indigo-400 text-[#0f172a] cursor-pointer';
+    ? 'bg-[#0d1117] border-[#1e2538] hover:border-white text-white cursor-pointer'
+    : 'bg-white border-[#E5E7EB] hover:border-black text-[#0f172a] cursor-pointer';
   const optLabel = isDark
     ? 'bg-[#151B27] border-[#262F4C] text-slate-200'
     : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]';
@@ -1138,16 +1132,19 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
 
               {/* Bookmark button — top right */}
               <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={handleBookmark}
-                className={`w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center border transition-all ${
-                  bookmarked
-                    ? isDark ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-indigo-600 border-indigo-600 text-white'
-                    : isDark ? 'bg-[#111827] border-[#1e2538] text-slate-400 hover:border-indigo-500/50 hover:text-indigo-400'
-                             : 'bg-white border-gray-200 text-gray-400 hover:border-indigo-400 hover:text-indigo-500'
-                }`}
-                title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
-              >
+  whileTap={{ scale: 0.9 }}
+  onClick={handleBookmark}
+  className={`w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center border transition-all ${
+    bookmarked
+      ? isDark
+        ? 'bg-white border-white text-indigo-600'
+        : 'bg-indigo-600 border-indigo-600 text-white'
+      : isDark
+        ? 'bg-[#111827] border-[#1e2538] text-slate-400 hover:border-indigo-500/50 hover:text-indigo-400'
+        : 'bg-white border-gray-200 text-gray-400 hover:border-indigo-400 hover:text-indigo-500'
+  }`}
+  title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
+>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill={bookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
                 </svg>
@@ -1273,7 +1270,7 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
                     })}
                   </div>
                   <span className={`text-xs font-medium ${mutedCls}`}>
-                    <span className={`font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{attemptCount}</span> have attempted
+                    <span className={`font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{attemptCount}</span> People have attempted
                   </span>
                 </div>
               ) : (
