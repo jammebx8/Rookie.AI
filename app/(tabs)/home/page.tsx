@@ -872,6 +872,7 @@ function ContinueSection({ isDark }: { isDark: boolean }) {
       </button>
     </div>
   );
+}
 
 function renderLatex(text: string | null | undefined): React.ReactNode {
   if (!text) return null;
