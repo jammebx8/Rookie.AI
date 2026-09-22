@@ -14,6 +14,7 @@ import { supabase } from '../../public/src/utils/supabase'
 import 'katex/dist/katex.min.css'
 import { InlineMath, BlockMath } from 'react-katex'
 import { updateStreak } from '../../public/src/utils/streakUtils'
+import { updateAbilityVector } from '../../lib/recommendation'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const API_BASE       = 'https://rookie-backend.vercel.app/api'
@@ -1215,7 +1216,8 @@ export default function QuestionViewerClient() {
         answered_at: new Date().toISOString(),
       }, { onConflict: 'user_id,chapter_title,question_id' })
 
-      // Also write to attempts (feeds the recommendation algorithm)
+      // Also write to attempts (raw history — NOT what drives recommendations
+      // on its own; see updateAbilityVector call below)
       // Fire-and-forget — don't await so it never blocks the UI
       supabase.from('attempts').insert({
         student_id: user.id,
@@ -1225,6 +1227,12 @@ export default function QuestionViewerClient() {
       }).then(({ error }) => {
         if (error) console.warn('attempts insert:', error.message)
       })
+
+      // Update the embedding-based ability vector (fire-and-forget) — this is
+      // what actually drives the recommendation algorithm for future sessions.
+      // Mirrors PracticeClient's writeAttempt so questions solved here count
+      // toward recommendations too, not just Practice-page questions.
+      updateAbilityVector(user.id, q.question_id, correct)
 
       answeredThisSession.current.add(q.question_id)
     } catch {}
