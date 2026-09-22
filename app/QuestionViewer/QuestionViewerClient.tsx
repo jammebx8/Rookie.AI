@@ -14,7 +14,6 @@ import { supabase } from '../../public/src/utils/supabase'
 import 'katex/dist/katex.min.css'
 import { InlineMath, BlockMath } from 'react-katex'
 import { updateStreak } from '../../public/src/utils/streakUtils'
-import { updateAbilityVector } from '../../lib/recommendation'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const API_BASE       = 'https://rookie-backend.vercel.app/api'
@@ -103,32 +102,25 @@ export const AI_BUDDIES: Record<string, {
 
 const DEFAULT_BUDDY_ID = '4'
 
-// All per-buddy cached-solution columns, in no particular priority order.
-const BUDDY_COLUMNS = Object.values(AI_BUDDIES).map(b => b.columnKey)
-
-// Every cached buddy solution is generated from a template that ALWAYS ends
-// with a literal "Answer: Option X" line (see generate_solution's prompt in
-// route.ts — that line is written by string interpolation of the already-
-// resolved correct_option, never guessed by the LLM). So if ANY cached buddy
-// text exists for a question, we can read the correct answer back out of it
-// directly — for free, instantly, and with zero risk of a fresh hallucination.
-function extractAnswerFromCachedText(text?: string | null): string | null {
-  if (!text) return null
-  const m = text.match(/Answer:\s*Option\s*([A-Da-d])\b/)
-  return m ? m[1].toLowerCase() : null
-}
-
-// Best available reference text to hand the "determine_answer" AI call so it
-// never has to guess purely from the question + options (which is where
-// hallucination risk on JEE-level questions comes in). Prefers the raw
-// solution column, falls back to any cached buddy explanation — both are
-// genuine worked solutions, just written in a different voice.
-function getReferenceSolutionText(q: Question): string | null {
-  if (q.solution?.trim()) return q.solution
-  for (const col of BUDDY_COLUMNS) {
-    if ((q as any)[col]?.trim()) return (q as any)[col]
+// ─── Answer-line reconciliation ───────────────────────────────────────────────
+// The "determine correct option" call and the "generate full solution" call
+// are two independent LLM requests fired in parallel (see handleOptionClick /
+// handleOption below). Each is capable of naming a correct option on its own,
+// so — rarely — they could disagree. This patches the solution text's final
+// "Answer: Option X" line to always match the confirmed answer from the fast
+// determine-answer call, so the visible text can never contradict the
+// green/red highlight colors, regardless of what the slower solution-writing
+// call guessed.
+function reconcileAnswerLine(text: string, confirmedAnswer: string | null): string {
+  if (!text) return text
+  if (!confirmedAnswer) return text
+  const letter = confirmedAnswer.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toUpperCase()
+  if (!letter) return text
+  const pattern = /Answer:\s*Option\s*[A-Da-d]?\.?/i
+  if (pattern.test(text)) {
+    return text.replace(pattern, `Answer: Option ${letter}`)
   }
-  return null
+  return `${text.trim()}\n\nAnswer: Option ${letter}`
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -399,37 +391,8 @@ function SimilarQuestionCard({
 
   const determineAnswer = async (q: Question): Promise<string | null> => {
     setDeterminingAnswer(true)
-
-    const persist = async (ans: string) => {
-      const { error } = await supabase
-        .from(DB_TABLE)
-        .update({ correct_option: ans })
-        .eq("question_id", q.question_id)
-      if (error) console.warn('determineAnswer: Supabase write failed:', error.message)
-      // This card is self-contained (no shared `questions` list in scope like
-      // the main viewer has) — update its own local copy instead.
-      setLocalQ(prev => ({ ...prev, correct_option: ans }))
-    }
-
+  
     try {
-      // 1. Zero-hallucination fast path — any cached buddy explanation already
-      //    has the resolved answer baked into its final line. Read it back
-      //    instead of asking an LLM to redetermine it.
-      for (const col of BUDDY_COLUMNS) {
-        const cachedAns = extractAnswerFromCachedText((q as any)[col])
-        if (cachedAns) { await persist(cachedAns); return cachedAns }
-      }
-
-      // 2. No cached text at all — we need a genuine worked solution to ground
-      //    the LLM. Guessing from question + options alone is exactly the
-      //    hallucination risk we want to avoid on JEE-level questions, so if
-      //    there's nothing to reference, bail out rather than fabricate one.
-      const referenceSolution = getReferenceSolutionText(q)
-      if (!referenceSolution) {
-        console.warn('determineAnswer: no solution or cached buddy text for', q.question_id)
-        return null
-      }
-
       const res = await axios.post(`${API_BASE}/solution`, {
         action: "determine_answer",
         question_text: q.question_text,
@@ -437,20 +400,37 @@ function SimilarQuestionCard({
         option_B: q.option_b,
         option_C: q.option_c,
         option_D: q.option_d,
-        solution: referenceSolution,
+        solution: q.solution,
       })
-
+  
       const raw = res.data.correct_answer || ""
-
+  
       const ans = raw
         .replace(/option_?/gi, "")
         .replace(/[^a-dA-D]/g, "")
         .slice(0, 1)
         .toLowerCase()
-
+  
       if (!ans) return null
-
-      await persist(ans)
+  
+      // Wait for Supabase
+      const { error } = await supabase
+        .from(DB_TABLE)
+        .update({ correct_option: ans })
+        .eq("question_id", q.question_id)
+  
+      if (error) {
+        console.error(error)
+        return null
+      }
+  
+      // Update this card's own local copy immediately. (Previously this
+      // called a `setQuestions` that doesn't exist in this component's
+      // scope — a ReferenceError that threw on every resolve, silently
+      // rejecting this promise and leaving the clicked option stuck grey
+      // forever with no error shown to the user.)
+      setLocalQ(prev => ({ ...prev, correct_option: ans }))
+  
       return ans
     } catch (err) {
       console.error('determineAnswer failed:', err)
@@ -460,63 +440,78 @@ function SimilarQuestionCard({
     }
   }
 
-  const postAnswer = async (correct: boolean, opt: string) => {
-    setSolutionRequested(true); setSolutionLoading(true)
+  // NOTE: solution generation is fired in parallel with the answer check
+  // (see handleOption / handleIntegerSubmit below), so by the time we get
+  // here the solution is either already done or already in flight — we
+  // just report the result and let the caller plug the solution in.
+  const postAnswerMeta = (correct: boolean) => {
     addToast(correct ? `✓ Correct! Keep going!` : '✗ Not quite — check the solution', correct ? 'coin' : 'error', 3000)
-    const sol = await generateSolution()
-    setSolution(sol); setSolutionLoading(false)
   }
 
-  // Order of operations matters here:
-  // 1. Mark the option as "pending" → renders grey while we resolve the answer.
-  // 2. Resolve (and persist) the correct answer.
-  // 3. Only THEN reveal selectedOption/isCorrect, so the green/red render
-  //    branch never runs against a still-null correct_option.
-  // 4. Only after that do we create the solution.
+  // Order of operations, deliberately:
+  //   1. setPendingOption(opt)         → renders the clicked option grey.
+  //   2. Fire determineAnswer() AND generateSolution() AT THE SAME TIME —
+  //      the answer check is cheap/fast, the solution generation is the
+  //      expensive call. Making the solution call wait for the answer
+  //      check to finish first (the old flow) doubled the wait before the
+  //      solution card was ready, for no reason — neither call depends on
+  //      the other's result.
+  //   3. As soon as the (fast) answer check resolves, reveal
+  //      selectedOption/isCorrect — the user gets green/red feedback
+  //      quickly, without waiting on the (slow) solution text.
+  //   4. When the (already in-flight) solution promise resolves, plug it
+  //      in. We reconcile its final "Answer: Option X" line against the
+  //      confirmed answer so the two independent LLM calls can never
+  //      contradict the highlight colors.
   const handleOption = async (opt: string) => {
     if (selectedOption !== null || pendingOption !== null) return
     questionStartTime.current = Date.now()
     setPendingOption(opt)
-    let ans = localQ.correct_option
-    if (!ans) ans = await determineAnswer(localQ)
 
-    if (!ans) {
-      // Could not resolve a correct answer at all — do NOT fall through and
-      // grade every option as wrong. Reset to idle so the user can retry.
-      setPendingOption(null)
-      addToast("Couldn't verify the answer — try again in a moment.", 'error', 4000)
-      return
-    }
+    const answerPromise: Promise<string | null> = localQ.correct_option
+      ? Promise.resolve(localQ.correct_option)
+      : determineAnswer(q)
+
+    setSolutionRequested(true); setSolutionLoading(true)
+    const solutionPromise = generateSolution()
 
     const normalize = (v: string | null) =>
       v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? ''
+
+    const ans = await answerPromise
     const correct = normalize(opt) === normalize(ans)
     setIsCorrect(correct)
     setSelectedOption(opt)
-    setLocalQ(prev => ({ ...prev, correct_option: ans }))
     setPendingOption(null)
-    await postAnswer(correct, opt)
+    postAnswerMeta(correct)
+
+    const sol = await solutionPromise
+    setSolution(reconcileAnswerLine(sol, ans))
+    setSolutionLoading(false)
   }
 
   const handleIntegerSubmit = async () => {
     if (isCorrect !== null || !integerAnswer.trim()) return
     setPendingOption('INTEGER')
-    let ans = localQ.correct_option
-    if (!ans) ans = await determineAnswer(localQ)
 
-    if (!ans) {
-      setPendingOption(null)
-      addToast("Couldn't verify the answer — try again in a moment.", 'error', 4000)
-      return
-    }
+    const answerPromise: Promise<string | null> = localQ.correct_option
+      ? Promise.resolve(localQ.correct_option)
+      : determineAnswer(q)
 
-    const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans)
-    const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === ans.trim()
+    setSolutionRequested(true); setSolutionLoading(true)
+    const solutionPromise = generateSolution()
+
+    const ans = await answerPromise
+    const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
+    const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
     setIsCorrect(correct)
     setSelectedOption('INTEGER')
-    setLocalQ(prev => ({ ...prev, correct_option: ans }))
     setPendingOption(null)
-    await postAnswer(correct, 'INTEGER')
+    postAnswerMeta(correct)
+
+    const sol = await solutionPromise
+    setSolution(reconcileAnswerLine(sol, ans))
+    setSolutionLoading(false)
   }
 
   const handleFollowup = async () => {
@@ -1212,7 +1207,7 @@ export default function QuestionViewerClient() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Write to user_activity (streak / daily goal tracking)
+      // Write to user_activity (existing — streak/daily goal tracking)
       await supabase.from('user_activity').upsert({
         user_id: user.id, chapter_title: chapterTitle, subject_name: subject,
         image_key: imageKey, question_id: q.question_id, question_index: globalIndex,
@@ -1220,7 +1215,7 @@ export default function QuestionViewerClient() {
         answered_at: new Date().toISOString(),
       }, { onConflict: 'user_id,chapter_title,question_id' })
 
-      // Write to attempts (feeds the recommendation algorithm)
+      // Also write to attempts (feeds the recommendation algorithm)
       // Fire-and-forget — don't await so it never blocks the UI
       supabase.from('attempts').insert({
         student_id: user.id,
@@ -1230,10 +1225,6 @@ export default function QuestionViewerClient() {
       }).then(({ error }) => {
         if (error) console.warn('attempts insert:', error.message)
       })
-
-      // Update the embedding-based ability vector so QuestionViewer sessions
-      // also feed the recommendation system (fire-and-forget)
-      updateAbilityVector(user.id, q.question_id, correct)
 
       answeredThisSession.current.add(q.question_id)
     } catch {}
@@ -1261,42 +1252,10 @@ export default function QuestionViewerClient() {
   const determineAnswer = async (q: Question): Promise<string | null> => {
     setDeterminingAnswer(true)
     try {
-      // 1. Zero-hallucination fast path. Every cached buddy explanation was
-      //    generated from a template that always ends "Answer: Option X" —
-      //    that letter was written in by string interpolation of the
-      //    already-resolved correct_option at generation time, never guessed
-      //    freehand by the LLM. So if a cached buddy column exists (even if
-      //    the raw `solution` column is empty, which is what was happening
-      //    here), we can read the answer back out for free instead of
-      //    re-asking an LLM and risking a fresh hallucination.
-      for (const col of BUDDY_COLUMNS) {
-        const cachedAns = extractAnswerFromCachedText((q as any)[col])
-        if (cachedAns) {
-          supabase.from(DB_TABLE).update({ correct_option: cachedAns }).eq('question_id', q.question_id)
-            .then(({ error }) => {
-              if (error) console.warn('determineAnswer: Supabase write failed:', error.message)
-              else setQuestions(prev => prev.map(item =>
-                item.question_id === q.question_id ? { ...item, correct_option: cachedAns } : item
-              ))
-            })
-          return cachedAns
-        }
-      }
-
-      // 2. Nothing cached — we still need a genuine worked solution to
-      //    ground the LLM. Letting it guess from question + options alone is
-      //    exactly the hallucination risk we want to avoid on JEE-level
-      //    questions, so bail out rather than fabricate an answer.
-      const referenceSolution = getReferenceSolutionText(q)
-      if (!referenceSolution) {
-        console.warn('determineAnswer: no solution or cached buddy text for', q.question_id)
-        return null
-      }
-
       const res = await axios.post(`${API_BASE}/solution`, {
         action: 'determine_answer', question_text: q.question_text,
         option_A: q.option_a, option_B: q.option_b, option_C: q.option_c, option_D: q.option_d,
-        solution: referenceSolution,
+        solution: q.solution,
       })
       const raw: string = res.data.correct_answer || ''
       const normalised = raw
@@ -1375,11 +1334,11 @@ export default function QuestionViewerClient() {
     } catch { return questions[currentIndex]?.solution || '' }
   }
 
-  // ── Post-answer handler ───────────────────────────────────────────────────
-  const handlePostAnswer = async (
-    correct: boolean, timeSpent: number, q: Question, optKey: string,
-    confirmedAnswer: string | null   // ← always pass the resolved correct answer
-  ) => {
+  // ── Post-answer bookkeeping (coins / streak / toast) ─────────────────────
+  // Solution generation is fired in parallel elsewhere (see handleOptionClick
+  // / handleIntegerSubmit below) — this only handles the side effects that
+  // depend on knowing whether the user was right, not the solution text.
+  const handlePostAnswerMeta = (correct: boolean, timeSpent: number, q: Question) => {
     const coins = calcCoins(timeSpent, correct)
     addToast(correct ? `✓ Correct! +${coins} Coins earned` : '✗ Not quite — keep going!', correct ? 'coin' : 'error', 3500)
 
@@ -1398,26 +1357,6 @@ export default function QuestionViewerClient() {
       localStorage.setItem('questionsMonth', String((parseInt(localStorage.getItem('questionsMonth') || '0') + 1)))
       saveUserActivity(q, correct, timeSpent)
     }
-
-    const activeBuddyId = buddyId
-    setSolutionBuddyId(activeBuddyId)
-    setSolutionRequested(true); setSolutionLoading(true)
-
-    // Pass confirmedAnswer directly — never read q.correct_option which may still
-    // be null if this is the first attempt and Supabase write is in-flight.
-    const resolvedAnswer = confirmedAnswer || q.correct_option || ''
-
-    generateAISolution(
-      q, activeBuddyId, AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID],
-      resolvedAnswer
-    ).then(aiSol => {
-      setSolution(aiSol); setSolutionLoading(false)
-      saveSession({
-        selectedOption: optKey, isCorrect: correct, solution: aiSol,
-        solutionRequested: true, solutionBuddyId: activeBuddyId,
-      })
-      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150)
-    })
   }
 
   // ── Regenerate solution ───────────────────────────────────────────────────
@@ -1447,65 +1386,97 @@ export default function QuestionViewerClient() {
 
   // ── MCQ click ─────────────────────────────────────────────────────────────
   // Order of operations, deliberately:
-  //   1. setPendingOption(opt)   → renders the clicked option grey, nothing
-  //                                colored yet, because we don't know the
-  //                                answer yet.
-  //   2. await determineAnswer  → resolves + persists correct_option, and
-  //                                (via setQuestions) lands it in state.
-  //   3. setIsCorrect / setSelectedOption → NOW flip into the colored
-  //                                (green/red) render branch, once
-  //                                correct_option can no longer be null.
-  //   4. handlePostAnswer       → only now does solution generation start,
-  //                                using the confirmedAnswer we just resolved.
-  const handleOptionClick = async (opt: string) => {
+  //   1. setPendingOption(opt)          → renders the clicked option grey.
+  //   2. Fire determineAnswer() AND generateAISolution() AT THE SAME TIME.
+  //      determineAnswer is a cheap call (max_tokens: 10); generateAISolution
+  //      is the expensive one (max_tokens: 2000). The old flow awaited
+  //      determineAnswer, THEN started generateAISolution — paying both
+  //      latencies back to back for no reason, since neither call needs the
+  //      other's result up front (the backend now infers the correct option
+  //      itself from `solution` when we don't pass one — see route.ts).
+  //   3. The moment the (fast) answerPromise resolves, reveal
+  //      selectedOption/isCorrect — green/red shows up without waiting on
+  //      the (slow) solution text.
+  //   4. When the already in-flight solutionPromise resolves, plug it in,
+  //      after reconciling its final "Answer: Option X" line against the
+  //      confirmed answer so the two independent LLM calls can never
+  //      contradict the highlight colors.
+  const handleOptionClick = (opt: string) => {
     if (selectedOption !== null || pendingOption !== null) return
     const q = questions[currentIndex]; if (!q) return
     const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000)
     setPendingOption(opt)
-    let ans = q.correct_option
-    if (!ans) ans = await determineAnswer(q)
 
-    if (!ans) {
-      // Couldn't resolve a correct answer at all (no solution, no cached
-      // buddy text, and/or the AI call failed). Do NOT fall through and
-      // grade every possible option as wrong — reset to idle instead so the
-      // click didn't silently get recorded as an incorrect answer.
-      setPendingOption(null)
-      addToast("Couldn't verify the answer for this question — try again in a moment.", 'error', 4000)
-      return
-    }
+    const activeBuddyId = buddyId
+    const activeBuddy = AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
+
+    const answerPromise: Promise<string | null> = q.correct_option
+      ? Promise.resolve(q.correct_option)
+      : determineAnswer(q)
+
+    setSolutionBuddyId(activeBuddyId)
+    setSolutionRequested(true); setSolutionLoading(true)
+    const solutionPromise = generateAISolution(q, activeBuddyId, activeBuddy, q.correct_option || '')
 
     // Normalise both sides to a single lowercase letter for comparison
     const normalize = (v: string | null): string => {
       if (!v) return ''
       return v.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
     }
-    const correct = normalize(opt) === normalize(ans)
-    setIsCorrect(correct)
-    setSelectedOption(opt)
-    setResolvedCorrectOption(ans)
-    setPendingOption(null)
-    handlePostAnswer(correct, timeSpent, q, opt, ans)
+
+    answerPromise.then(ans => {
+      const correct = normalize(opt) === normalize(ans)
+      setIsCorrect(correct)
+      setSelectedOption(opt)
+      setResolvedCorrectOption(ans)
+      setPendingOption(null)
+      handlePostAnswerMeta(correct, timeSpent, q)
+
+      solutionPromise.then(aiSol => {
+        const reconciled = reconcileAnswerLine(aiSol, ans)
+        setSolution(reconciled); setSolutionLoading(false)
+        saveSession({
+          selectedOption: opt, isCorrect: correct, solution: reconciled,
+          solutionRequested: true, solutionBuddyId: activeBuddyId,
+        })
+        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150)
+      })
+    })
   }
 
   // ── Integer submit ────────────────────────────────────────────────────────
-  const handleIntegerSubmit = async () => {
+  const handleIntegerSubmit = () => {
     if (isCorrect !== null) return
     const q = questions[currentIndex]; if (!q || !integerAnswer.trim()) return
     const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000)
-    let ans = q.correct_option
-    if (!ans) ans = await determineAnswer(q)
 
-    if (!ans) {
-      addToast("Couldn't verify the answer for this question — try again in a moment.", 'error', 4000)
-      return
-    }
+    const activeBuddyId = buddyId
+    const activeBuddy = AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
 
-    const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans)
-    const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === ans.trim()
-    setIsCorrect(correct); setSelectedOption('INTEGER')
-    setResolvedCorrectOption(ans)
-    await handlePostAnswer(correct, timeSpent, q, 'INTEGER', ans)
+    const answerPromise: Promise<string | null> = q.correct_option
+      ? Promise.resolve(q.correct_option)
+      : determineAnswer(q)
+
+    setSolutionBuddyId(activeBuddyId)
+    setSolutionRequested(true); setSolutionLoading(true)
+    const solutionPromise = generateAISolution(q, activeBuddyId, activeBuddy, q.correct_option || '')
+
+    answerPromise.then(ans => {
+      const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
+      const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
+      setIsCorrect(correct); setSelectedOption('INTEGER')
+      setResolvedCorrectOption(ans || q.correct_option || null)
+      handlePostAnswerMeta(correct, timeSpent, q)
+
+      solutionPromise.then(aiSol => {
+        const reconciled = reconcileAnswerLine(aiSol, ans)
+        setSolution(reconciled); setSolutionLoading(false)
+        saveSession({
+          selectedOption: 'INTEGER', isCorrect: correct, solution: reconciled,
+          solutionRequested: true, solutionBuddyId: activeBuddyId,
+        })
+      })
+    })
   }
 
   // ── AI Followup (Simpler Explanation) ─────────────────────────────────────
