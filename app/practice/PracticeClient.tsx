@@ -15,6 +15,13 @@ import 'katex/dist/katex.min.css'
 import { InlineMath, BlockMath } from 'react-katex'
 import { updateStreak } from '../../public/src/utils/streakUtils'
 import { AI_BUDDIES, type Question } from '../QuestionViewer/QuestionViewerClient'
+import {
+  fetchRecommended as fetchRecommendedQ,
+  updateAbilityVector,
+  getWeakTopics,
+  abilityLabel,
+  type WeakChapter,
+} from '../../lib/recommendation'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const API_BASE      = 'https://rookie-backend.vercel.app/api'
@@ -225,10 +232,10 @@ function SessionSummary({ results, isDark, onContinue, onHome }: {
           </h1>
           <p className={`text-sm ${T.muted} text-center`}>
             {pct >= 70
-              ? 'You\'re getting stronger. The algorithm will push you harder next time.'
+              ? 'Strong session. Next questions will push into harder territory.'
               : pct < 40
-              ? 'Tough questions — the system will ease up a bit next session.'
-              : 'Solid practice. Keep at it and the concepts will click.'}
+              ? 'Tough questions — the system will stay close to your weak chapters until they improve.'
+              : 'Solid practice. The algorithm is tracking your gaps and will focus there next.'}
           </p>
         </div>
 
@@ -237,7 +244,9 @@ function SessionSummary({ results, isDark, onContinue, onHome }: {
           <div className={`rounded-2xl border p-5 mb-6 ${T.card}`}>
             <p className="text-sm font-bold mb-4">Chapter breakdown</p>
             <div className="space-y-3">
-              {Object.entries(byChapter).map(([ch, s]) => {
+              {Object.entries(byChapter)
+                .sort(([, a], [, b]) => (a.correct / a.total) - (b.correct / b.total)) // worst first
+                .map(([ch, s]) => {
                 const chPct = Math.round((s.correct / s.total) * 100)
                 return (
                   <div key={ch}>
@@ -328,6 +337,11 @@ export default function PracticeClient() {
   const [userId, setUserId]                 = useState<string | null>(null)
   const [showSummary, setShowSummary]       = useState(false)
 
+  // recommendation context
+  const [weakTopics, setWeakTopics]         = useState<WeakChapter[]>([])
+  // stable ref so callbacks always have the latest userId without stale closure
+  const userIdRef = useRef<string | null>(null)
+
   const timerRef          = useRef<number | null>(null)
   const questionStartTime = useRef(Date.now())
   const scrollRef         = useRef<HTMLDivElement | null>(null)
@@ -375,27 +389,22 @@ export default function PracticeClient() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
       setUserId(user.id)
+      userIdRef.current = user.id
       supabase.from('users').select('rookieCoinsEarned').eq('id', user.id).single()
         .then(({ data }) => { if (data) setRookieCoins(data.rookieCoinsEarned || 0) })
+      // Load weak topics for header context chip (non-blocking)
+      getWeakTopics(user.id, 2).then(topics => setWeakTopics(topics))
     })
   }, [])
 
-  // ── Fetch recommended question from RPC ───────────────────────────────────
+  // ── Fetch recommended question ────────────────────────────────────────────
+  // Uses lib/recommendation.ts which calls the embedding-based Supabase RPC.
+  // Falls back to a random unseen question on any error so the session never
+  // gets stuck.
   const fetchRecommended = useCallback(async (excludes: string[]): Promise<Question | null> => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
-
-      const { data, error } = await supabase
-        .rpc('get_next_recommended_question', {
-          p_user_id: user.id,
-          p_exclude_question_ids: excludes,
-        })
-        .single()
-
-      if (error || !data) return null
-      return data as Question
-    } catch { return null }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+    return fetchRecommendedQ(user.id, excludes)
   }, [])
 
   // ── Load first question ───────────────────────────────────────────────────
@@ -503,21 +512,30 @@ export default function PracticeClient() {
     } catch { return q.solution || '' }
   }, [])
 
-  // ── Write attempt to DB ───────────────────────────────────────────────────
+  // ── Write attempt to DB + update ability vector ──────────────────────────
   const writeAttempt = async (q: Question, correct: boolean, timeSec: number) => {
     try {
       // Always resolve from auth directly — never rely on userId state which
       // may still be null if the user answers before the init useEffect resolves.
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      // Also update local userId state if it wasn't set yet
+      // Keep refs in sync
       if (!userId) setUserId(user.id)
+      userIdRef.current = user.id
+
       await supabase.from('attempts').insert({
         student_id: user.id,
         question_id: q.question_id,
         correct,
         time_taken_sec: timeSec,
       })
+
+      // ── Update the embedding-based ability vector (fire-and-forget) ──────
+      // This is what drives the recommendation algorithm for future sessions.
+      // We call this AFTER the attempts insert so it never blocks returning
+      // the answer feedback to the student.
+      updateAbilityVector(user.id, q.question_id, correct)
+
     } catch (e) {
       console.error('Failed to write attempt:', e)
     }
@@ -600,6 +618,10 @@ export default function PracticeClient() {
     ]
     setSessionResults(newResults)
     setSessionCount(c => c + 1)
+
+    // Refresh weak topics in background so the header chip stays up to date
+    const uid = userIdRef.current
+    if (uid) getWeakTopics(uid, 2).then(topics => setWeakTopics(topics))
 
     // add to exclude list and start prefetching the one AFTER next
     const newExcludes = [...excludeIds, q.question_id]
@@ -845,6 +867,30 @@ export default function PracticeClient() {
               {sessionCount} answered this session
               {loadingNext && <span className="ml-1.5 opacity-50">· loading next…</span>}
             </p>
+            {/* Weak-topic chip — shows the chapter the algo is targeting */}
+            {weakTopics.length > 0 && !loadingNext && selectedOption === null && (
+              <div className="flex items-center justify-center gap-1 mt-0.5">
+                <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold truncate max-w-[160px] ${
+                  isDark
+                    ? 'bg-rose-500/15 text-rose-400 border border-rose-500/25'
+                    : 'bg-rose-50 text-rose-600 border border-rose-200'
+                }`}>
+                  🎯 {weakTopics[0].chapter.replace(/\.$/, '')}
+                </span>
+                {(() => {
+                  const lbl = abilityLabel(
+                    weakTopics[0].total > 0
+                      ? (weakTopics[0].total - weakTopics[0].wrong) / weakTopics[0].total
+                      : 0
+                  )
+                  return (
+                    <span className="text-[9px] font-semibold" style={{ color: lbl.color }}>
+                      {lbl.emoji}
+                    </span>
+                  )
+                })()}
+              </div>
+            )}
           </div>
 
           {/* Buddy avatar */}

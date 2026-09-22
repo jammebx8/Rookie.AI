@@ -8,6 +8,13 @@ import { supabase } from '../../../public/src/utils/supabase';
 import { syncStreakFromSupabase, readStreakFromLocal } from '../../../public/src/utils/streakUtils'; // adjust path
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
+import {
+  fetchRecommended as fetchRecommendedQ,
+  updateAbilityVector,
+  getAbilitySnapshot,
+  abilityLabel,
+  type AbilitySnapshot,
+} from '../../../lib/recommendation';
 
 
 
@@ -893,12 +900,14 @@ function CheckIconSmall() {
 }
 
 function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
-  const [question, setQuestion]               = useState<any | null>(null);
-  const [loading, setLoading]                 = useState(true);
-  const [errored, setErrored]                 = useState(false);
-  const [selectedOption, setSelectedOption]   = useState<string | null>(null);
-  const [isCorrect, setIsCorrect]             = useState<boolean | null>(null);
+  const [question, setQuestion]                   = useState<any | null>(null);
+  const [loading, setLoading]                     = useState(true);
+  const [errored, setErrored]                     = useState(false);
+  const [selectedOption, setSelectedOption]       = useState<string | null>(null);
+  const [isCorrect, setIsCorrect]                 = useState<boolean | null>(null);
   const [determiningAnswer, setDeterminingAnswer] = useState(false);
+  // ability snapshot drives the context row beneath the card title
+  const [snapshot, setSnapshot]                   = useState<AbilitySnapshot | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -907,11 +916,16 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { setLoading(false); return; }
-        const { data, error } = await supabase
-          .rpc('get_next_recommended_question', { p_user_id: user.id, p_exclude_question_ids: [] })
-          .single();
-        if (error) throw error;
-        if (data) setQuestion(data);
+
+        // Fetch question + ability snapshot in parallel
+        const [q, snap] = await Promise.all([
+          fetchRecommendedQ(user.id, []),
+          getAbilitySnapshot(user.id),
+        ]);
+
+        if (q) setQuestion(q);
+        else setErrored(true);
+        setSnapshot(snap);
       } catch (err) {
         console.error('Recommended question error:', err);
         setErrored(true);
@@ -950,17 +964,21 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
 
     const normalize = (v: string | null) =>
       v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? '';
-    setIsCorrect(normalize(optKey) === normalize(correctOpt));
+    const correct = normalize(optKey) === normalize(correctOpt);
+    setIsCorrect(correct);
 
+    // Record attempt + update ability vector (both fire-and-forget)
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase.from('attempts').insert({
-          student_id: user.id,
-          question_id: question.question_id,
-          correct: normalize(optKey) === normalize(correctOpt),
+        supabase.from('attempts').insert({
+          student_id:    user.id,
+          question_id:   question.question_id,
+          correct,
           time_taken_sec: 0,
-        });
+        }).then(() => {});
+        // Update the embedding-based ability vector so next recommendation improves
+        updateAbilityVector(user.id, question.question_id, correct);
       }
     } catch {}
   };
@@ -968,27 +986,34 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
   const goToPractice = () => {
     if (!question) return;
     const params = new URLSearchParams({
-      mode: 'recommended',
-      qid: question.question_id,
+      mode:    'recommended',
+      qid:     question.question_id,
       subject: question.subject || '',
-      chapter: question.chapter || '',
+      chapter: question.chapter  || '',
     });
     router.push(`/practice?${params.toString()}`);
   };
 
+  // ── Theme shortcuts ───────────────────────────────────────────────────────
   const cardBg   = isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]';
   const skelBg   = isDark ? 'bg-[#1e2538]' : 'bg-gray-200';
   const optIdle  = isDark
     ? 'bg-[#0d1117] border-[#1e2538] hover:border-white text-white cursor-pointer'
     : 'bg-white border-[#E5E7EB] hover:border-black text-[#0f172a] cursor-pointer';
-  const optLabel = isDark ? 'bg-[#151B27] border-[#262F4C] text-slate-200' : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]';
+  const optLabel = isDark
+    ? 'bg-[#151B27] border-[#262F4C] text-slate-200'
+    : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]';
+  const mutedCls = isDark ? 'text-slate-500' : 'text-slate-400';
 
+  // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="mb-6">
-        <h2 className={`text-base font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-          Recommended for you
-        </h2>
+        {/* Title row skeleton */}
+        <div className="flex items-center justify-between mb-3">
+          <div className={`h-5 w-36 rounded-lg animate-pulse ${skelBg}`} />
+          <div className={`h-4 w-20 rounded-full animate-pulse ${skelBg}`} />
+        </div>
         <div className={`w-full p-5 rounded-2xl border animate-pulse ${cardBg}`}>
           <div className="flex items-center gap-2 mb-3">
             <div className={`h-5 w-24 rounded-full ${skelBg}`} />
@@ -1008,41 +1033,119 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
 
   const opts = (['a','b','c','d'] as const).map(k => ({
     key: k,
-    text: question[`option_${k}`] ?? null,
+    text: question[`option_${k}`]     ?? null,
     img:  question[`option_${k}_img`] ?? null,
   })).filter(o => o.text || o.img);
 
+  // Ability label for the small accuracy chip in the title row
+  const accLabel = snapshot && snapshot.totalAttempts >= 3
+    ? abilityLabel(snapshot.accuracy)
+    : null;
+
+  // Top weak chapter (if any) for the "why this question" hint
+  const topWeak = snapshot?.weakChapters?.[0] ?? null;
+
+  // Is this question from a weak chapter?
+  const isWeakChapter = topWeak
+    && question.chapter
+    && topWeak.chapter.replace(/\.$/, '').toLowerCase() === question.chapter.replace(/\.$/, '').toLowerCase();
+
   return (
     <div className="mb-6">
-      <h2 className={`text-base font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-        Recommended for you
-      </h2>
 
+      {/* ── Title row ──────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          Recommended for you
+        </h2>
+        {accLabel && (
+          <span
+            className="text-[10px] font-bold px-2.5 py-1 rounded-full border"
+            style={{
+              color:            accLabel.color,
+              borderColor:      accLabel.color + '44',
+              backgroundColor:  accLabel.color + '18',
+            }}
+          >
+            {accLabel.emoji} {accLabel.label}
+          </span>
+        )}
+      </div>
+
+      {/* ── Weak-chapter hint ─────────────────────────────────────────────── */}
+      {topWeak && snapshot && snapshot.totalAttempts >= 5 && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`flex items-center gap-2 px-3 py-2 rounded-xl mb-3 text-xs font-medium border ${
+            isDark
+              ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+              : 'bg-rose-50 border-rose-200 text-rose-700'
+          }`}
+        >
+          {/* Target icon */}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+          </svg>
+          <span>
+            Targeting your weak area:{' '}
+            <strong>{topWeak.chapter.replace(/\.$/, '')}</strong>
+            {' '}—{' '}
+            {Math.round((1 - topWeak.accuracy) * 100)}% wrong in {topWeak.total} attempts
+          </span>
+        </motion.div>
+      )}
+
+      {/* ── Question card ─────────────────────────────────────────────────── */}
       <div className={`w-full p-5 rounded-2xl border ${cardBg}`}>
 
+        {/* Chapter + subject badges */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {question.chapter && (
-            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${isDark ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
-              {question.chapter}
+            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+              isWeakChapter
+                ? isDark
+                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/25'
+                  : 'bg-rose-50 text-rose-600 border border-rose-200'
+                : isDark
+                  ? 'bg-indigo-500/15 text-indigo-400'
+                  : 'bg-indigo-50 text-indigo-600'
+            }`}>
+              {isWeakChapter && '🎯 '}{question.chapter}
             </span>
           )}
           {question.subject && (
-            <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+            <span className={`text-xs ${mutedCls}`}>
               {question.subject}
+            </span>
+          )}
+          {/* Cold-start chip when not enough data yet */}
+          {snapshot && snapshot.totalAttempts < 5 && (
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+              isDark
+                ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                : 'bg-indigo-50 border-indigo-200 text-indigo-600'
+            }`}>
+              Warming up…
             </span>
           )}
         </div>
 
+        {/* Question text */}
         <div className={`text-sm leading-relaxed mb-4 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
           {renderLatex(question.question_text)}
         </div>
 
+        {/* Question image */}
         {question.question_img_url && (
-          <div className={`rounded-xl border overflow-hidden flex items-center justify-center mb-4 max-h-52 ${isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-gray-50 border-gray-200'}`}>
+          <div className={`rounded-xl border overflow-hidden flex items-center justify-center mb-4 max-h-52 ${
+            isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-gray-50 border-gray-200'
+          }`}>
             <img src={question.question_img_url} alt="Question" className="max-h-44 max-w-full object-contain" />
           </div>
         )}
 
+        {/* ── MCQ options ─────────────────────────────────────────────────── */}
         {selectedOption === null ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
             {opts.map(opt => (
@@ -1065,7 +1168,7 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
             {opts.map(opt => {
-              const sel  = selectedOption === opt.key;
+              const sel        = selectedOption === opt.key;
               const storedCorr = (question.correct_option ?? '')
                 .replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase();
               const corr = opt.key === storedCorr;
@@ -1075,13 +1178,13 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
                   initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                   className={`rounded-xl p-3.5 flex items-start gap-3 border-2 transition-colors ${
                     corr ? 'bg-[#04271C] border-[#1DC97A]'
-                         : sel  ? 'bg-[#2D0A0A] border-[#DC2626]'
+                         : sel ? 'bg-[#2D0A0A] border-[#DC2626]'
                          : isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
                   }`}
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${
                     corr ? 'bg-[#1DC97A] text-black'
-                         : sel  ? 'bg-[#DC2626] text-white'
+                         : sel ? 'bg-[#DC2626] text-white'
                          : optLabel
                   }`}>
                     {opt.key}
@@ -1098,45 +1201,48 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
           </div>
         )}
 
+        {/* Determining answer spinner */}
         {determiningAnswer && (
-          <div className={`flex items-center gap-2 mb-3 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          <div className={`flex items-center gap-2 mb-3 text-xs ${mutedCls}`}>
             <div className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
             Checking answer…
           </div>
         )}
 
+        {/* Verdict */}
         {isCorrect !== null && !determiningAnswer && (
-          <motion.p
+          <motion.div
             initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-            className={`text-xs font-semibold mb-3 ${isCorrect ? 'text-[#1DC97A]' : 'text-[#f87171]'}`}
+            className="mb-3"
           >
-            {isCorrect ? '✓ Correct!' : '✗ Not quite — keep going'}
-          </motion.p>
+            <p className={`text-xs font-semibold ${isCorrect ? 'text-[#1DC97A]' : 'text-[#f87171]'}`}>
+              {isCorrect ? '✓ Correct!' : '✗ Not quite — keep going'}
+            </p>
+            {/* After answering, show the adaptation hint */}
+            {topWeak && snapshot && snapshot.totalAttempts >= 3 && (
+              <p className={`text-[10px] mt-1 ${mutedCls}`}>
+                Algorithm updated · next question stays close to your weak areas
+              </p>
+            )}
+          </motion.div>
         )}
 
-<motion.button
-    whileTap={{ scale: 0.98 }}
-    onClick={goToPractice}
-    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-      isDark
-        ? 'bg-white text-black hover:bg-gray-100'
-        : 'bg-gray-900 text-white hover:bg-gray-800'
-    }`}
-  >
-    {selectedOption ? 'See full solution' : 'Start solving'}
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 12h14M12 5l7 7-7 7" />
-    </svg>
-  </motion.button>
+        {/* CTA button */}
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={goToPractice}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            isDark
+              ? 'bg-white text-black hover:bg-gray-100'
+              : 'bg-gray-900 text-white hover:bg-gray-800'
+          }`}
+        >
+          {selectedOption ? 'See full solution' : 'Start solving'}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        </motion.button>
+
       </div>
     </div>
   );
