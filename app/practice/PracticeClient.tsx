@@ -342,6 +342,23 @@ export default function PracticeClient() {
   // stable ref so callbacks always have the latest userId without stale closure
   const userIdRef = useRef<string | null>(null)
 
+  // ── Back-navigation history ───────────────────────────────────────────────
+  // Stores the full answered state for each past question so the student can
+  // swipe back and review their previous answer + solution.
+  interface HistoryEntry {
+    question:        Question
+    selectedOption:  string
+    resolvedCorrect: string | null
+    isCorrect:       boolean
+    solution:        string
+    aiFollowup:      string | null
+    solutionBuddyId: string
+  }
+  const [history, setHistory]           = useState<HistoryEntry[]>([])
+  const [historyIndex, setHistoryIndex] = useState<number>(-1)
+  // -1 means "showing current live question"; ≥0 means reviewing history[historyIndex]
+  const isReviewing = historyIndex >= 0
+
   const timerRef          = useRef<number | null>(null)
   const questionStartTime = useRef(Date.now())
   const scrollRef         = useRef<HTMLDivElement | null>(null)
@@ -619,6 +636,19 @@ export default function PracticeClient() {
     setSessionResults(newResults)
     setSessionCount(c => c + 1)
 
+    // ── Push to back-navigation history ──────────────────────────────────
+    // We push before the solution resolves; the entry's solution is updated
+    // in the generateAISolution .then() below via setHistory.
+    setHistory(prev => [...prev, {
+      question:        q,
+      selectedOption:  optKey,
+      resolvedCorrect: confirmedAnswer || null,
+      isCorrect:       correct,
+      solution:        '',      // filled in once AI solution resolves
+      aiFollowup:      null,
+      solutionBuddyId: buddyId,
+    }])
+
     // Refresh weak topics in background so the header chip stays up to date
     const uid = userIdRef.current
     if (uid) getWeakTopics(uid, 2).then(topics => setWeakTopics(topics))
@@ -636,6 +666,13 @@ export default function PracticeClient() {
     generateAISolution(q, activeBuddy, confirmedAnswer).then(aiSol => {
       setSolution(aiSol)
       setSolutionLoading(false)
+      // Persist solution into the last history entry
+      setHistory(prev => {
+        if (prev.length === 0) return prev
+        const updated = [...prev]
+        updated[updated.length - 1] = { ...updated[updated.length - 1], solution: aiSol }
+        return updated
+      })
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150)
     })
 
@@ -654,8 +691,36 @@ export default function PracticeClient() {
 
   const beyondRef = useRef<Question | null>(null)
 
+  // ── Go back to previous question (read-only review) ───────────────────────
+  const goBack = () => {
+    if (isReviewing) {
+      // Already in history — go one further back, or exit review if at start
+      if (historyIndex === 0) {
+        setHistoryIndex(-1)  // shouldn't happen via UI but guard anyway
+      } else {
+        setHistoryIndex(historyIndex - 1)
+      }
+    } else {
+      // Viewing live question — enter review at the last history entry
+      if (history.length > 0) setHistoryIndex(history.length - 1)
+    }
+  }
+
+  const goForward = () => {
+    if (!isReviewing) return
+    if (historyIndex < history.length - 1) {
+      setHistoryIndex(historyIndex + 1)
+    } else {
+      // Reached the most recent → return to live question
+      setHistoryIndex(-1)
+    }
+  }
+
   // ── Advance to next question ───────────────────────────────────────────────
   const advanceToNext = async () => {
+    // If reviewing a past question, "Next" returns to live question first
+    if (isReviewing) { setHistoryIndex(-1); return }
+
     // After 10 questions offer a summary (but let user continue)
     if (sessionCount > 0 && sessionCount % 10 === 0) {
       setShowSummary(true)
@@ -823,6 +888,10 @@ export default function PracticeClient() {
 
   const Q = question
 
+  // ── Resolve what to show: live question or a history entry ────────────────
+  const reviewEntry = isReviewing ? history[historyIndex] : null
+  const displayQ    = reviewEntry ? reviewEntry.question : Q
+
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className={`min-h-screen pb-24 transition-colors duration-300 ${T.page}`}>
@@ -862,13 +931,16 @@ export default function PracticeClient() {
 
           {/* Title + session count */}
           <div className="flex-1 mx-3 min-w-0 text-center">
-            <h1 className="text-sm font-bold">Adaptive Practice</h1>
+            <h1 className="text-sm font-bold">
+              {isReviewing ? `Review · Q${historyIndex + 1} of ${history.length}` : 'Adaptive Practice'}
+            </h1>
             <p className={`text-[10px] ${T.muted}`}>
-              {sessionCount} answered this session
-              {loadingNext && <span className="ml-1.5 opacity-50">· loading next…</span>}
+              {isReviewing
+                ? 'tap → to return to current question'
+                : `${sessionCount} answered${loadingNext ? ' · loading next…' : ''}`}
             </p>
-            {/* Weak-topic chip — shows the chapter the algo is targeting */}
-            {weakTopics.length > 0 && !loadingNext && selectedOption === null && (
+            {/* Weak-topic chip */}
+            {!isReviewing && weakTopics.length > 0 && !loadingNext && selectedOption === null && (
               <div className="flex items-center justify-center gap-1 mt-0.5">
                 <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold truncate max-w-[160px] ${
                   isDark
@@ -930,37 +1002,56 @@ export default function PracticeClient() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-7 pb-8">
         <AnimatePresence mode="wait">
           <motion.div
-            key={Q.question_id}
-            initial={{ opacity: 0, x: 14 }}
+            key={isReviewing ? `history-${historyIndex}` : (Q?.question_id ?? 'empty')}
+            initial={{ opacity: 0, x: isReviewing ? -14 : 14 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -14 }}
+            exit={{ opacity: 0, x: isReviewing ? 14 : -14 }}
             className="space-y-4"
           >
+            {/* ── Review mode banner ──────────────────────────────────────── */}
+            {isReviewing && reviewEntry && (
+              <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs font-medium ${
+                isDark ? 'bg-[#111827] border-[#1D2939] text-slate-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+              }`}>
+                <span>
+                  {reviewEntry.isCorrect ? '✓ You got this right' : '✗ You got this wrong'}
+                  <span className={`ml-2 font-bold ${reviewEntry.isCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {reviewEntry.isCorrect ? '' : `· correct: ${(reviewEntry.resolvedCorrect ?? '').toUpperCase()}`}
+                  </span>
+                </span>
+                <button
+                  onClick={() => setHistoryIndex(-1)}
+                  className="underline underline-offset-2 opacity-70 hover:opacity-100"
+                >
+                  Back to current →
+                </button>
+              </div>
+            )}
 
             {/* ── Question card ───────────────────────────────────────────── */}
             <div className={`rounded-2xl border p-5 sm:p-6 transition-colors duration-300 ${T.card}`}>
               <div className="flex flex-wrap items-center gap-2 mb-4">
-                {Q.exam_shift && (
+                {(displayQ ?? Q)?.exam_shift && (
                   <span className={`inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full ${T.examBadge}`}>
-                    {parseShift(Q.exam_shift)}
+                    {parseShift((displayQ ?? Q)!.exam_shift)}
                   </span>
                 )}
-                {Q.chapter && (
+                {(displayQ ?? Q)?.chapter && (
                   <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${isDark ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
-                    {Q.chapter}
+                    {(displayQ ?? Q)!.chapter}
                   </span>
                 )}
               </div>
 
-              <div className="font-medium leading-relaxed">{renderLatex(Q.question_text)}</div>
+              <div className="font-medium leading-relaxed">{renderLatex((displayQ ?? Q)!.question_text)}</div>
 
-              {Q.question_img_url && (
+              {(displayQ ?? Q)!.question_img_url && (
                 <div className="mt-4 relative group">
                   <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-64 ${T.imgWrapper}`}>
-                    <img src={Q.question_img_url} alt="Q"
+                    <img src={(displayQ ?? Q)!.question_img_url!} alt="Q"
                       className="max-h-56 max-w-full object-contain cursor-zoom-in select-none"
-                      onClick={() => setImageModal(Q.question_img_url!)} />
-                    <button onClick={() => setImageModal(Q.question_img_url!)}
+                      onClick={() => setImageModal((displayQ ?? Q)!.question_img_url!)} />
+                    <button onClick={() => setImageModal((displayQ ?? Q)!.question_img_url!)}
                       className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/70 text-white flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity">
                       <FiZoomIn size={14} />
                     </button>
@@ -970,10 +1061,20 @@ export default function PracticeClient() {
             </div>
 
             {/* ── Integer input ───────────────────────────────────────────── */}
-            {isIntegerQ(Q) ? (
+            {isIntegerQ(displayQ ?? Q!) ? (
               <div className={`rounded-2xl border p-5 space-y-4 ${T.card}`}>
                 <p className={`text-sm font-medium ${T.muted}`}>Enter your integer answer:</p>
-                {isCorrect === null ? (
+                {/* In review mode, show the past result read-only */}
+                {isReviewing && reviewEntry ? (
+                  <div className={`rounded-xl p-4 border-2 ${reviewEntry.isCorrect ? 'bg-[#04271C] border-[#1DC97A]' : 'bg-[#2D0A0A] border-[#DC2626]'}`}>
+                    <span className={`font-bold text-base ${reviewEntry.isCorrect ? 'text-[#1DC97A]' : 'text-[#DC2626]'}`}>
+                      {reviewEntry.isCorrect ? '✓ Correct!' : '✗ Incorrect'}
+                    </span>
+                    {!reviewEntry.isCorrect && reviewEntry.resolvedCorrect && (
+                      <p className="text-sm text-gray-300 mt-1">Correct: <b className="text-[#1DC97A]">{reviewEntry.resolvedCorrect}</b></p>
+                    )}
+                  </div>
+                ) : isCorrect === null ? (
                   <div className="flex gap-3">
                     <input type="number" value={integerAnswer} onChange={e => setIntegerAnswer(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') handleIntegerSubmit() }}
@@ -990,8 +1091,8 @@ export default function PracticeClient() {
                     <span className={`font-bold text-base ${isCorrect ? 'text-[#1DC97A]' : 'text-[#DC2626]'}`}>
                       {isCorrect ? '✓ Correct!' : '✗ Incorrect'}
                     </span>
-                    {!isCorrect && (resolvedCorrectOption || Q.correct_option) && (
-                      <p className="text-sm text-gray-300 mt-1">Correct: <b className="text-[#1DC97A]">{resolvedCorrectOption || Q.correct_option}</b></p>
+                    {!isCorrect && (resolvedCorrectOption || (displayQ ?? Q)!.correct_option) && (
+                      <p className="text-sm text-gray-300 mt-1">Correct: <b className="text-[#1DC97A]">{resolvedCorrectOption || (displayQ ?? Q)!.correct_option}</b></p>
                     )}
                   </div>
                 )}
@@ -1000,12 +1101,41 @@ export default function PracticeClient() {
                 )}
               </div>
 
+            ) : isReviewing && reviewEntry ? (
+              /* ── Review mode: show answered state from history ─────────── */
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {(['a', 'b', 'c', 'd'] as const).map(opt => {
+                  const dq = reviewEntry.question
+                  const tv = dq[`option_${opt}`] as string | null
+                  const iv = dq[`option_${opt}_img`] as string | null
+                  if (!tv && !iv) return null
+                  const sel  = reviewEntry.selectedOption === opt
+                  const corrLetter = (reviewEntry.resolvedCorrect ?? dq.correct_option ?? '')
+                    .replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
+                  const corr = opt === corrLetter
+                  return (
+                    <div key={opt} className={`rounded-xl p-4 flex items-center gap-4 border-2 transition-colors ${
+                      corr ? 'bg-[#04271C] border-[#1DC97A]' : sel ? 'bg-[#2D0A0A] border-[#DC2626]'
+                           : isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
+                    }`}>
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-sm uppercase flex-shrink-0 ${
+                        corr ? 'bg-[#1DC97A] text-black' : sel ? 'bg-[#DC2626] text-white' : T.optionLabel
+                      }`}>{opt}</div>
+                      <div className={`flex-1 text-sm leading-relaxed ${corr || sel ? 'text-white' : ''}`}>
+                        {iv ? <img src={iv} alt={`opt-${opt}`} className="max-h-20 rounded-lg" /> : renderLatex(tv)}
+                      </div>
+                      {corr && <CheckIcon />}
+                    </div>
+                  )
+                })}
+              </div>
+
             ) : selectedOption === null && pendingOption === null ? (
               /* ── MCQ unanswered ────────────────────────────────────────── */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(['a', 'b', 'c', 'd'] as const).map(opt => {
-                  const tv = Q[`option_${opt}`] as string | null
-                  const iv = Q[`option_${opt}_img`] as string | null
+                  const tv = Q![`option_${opt}`] as string | null
+                  const iv = Q![`option_${opt}_img`] as string | null
                   if (!tv && !iv) return null
                   return (
                     <motion.button key={opt} whileTap={{ scale: 0.98 }} onClick={() => handleOptionClick(opt)}
@@ -1020,12 +1150,11 @@ export default function PracticeClient() {
               </div>
 
             ) : selectedOption === null && pendingOption !== null ? (
-              /* ── MCQ pending — clicked, correct_option not resolved yet ──
-                 Grey only. We deliberately don't know green/red yet. */
+              /* ── MCQ pending ───────────────────────────────────────────── */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(['a', 'b', 'c', 'd'] as const).map(opt => {
-                  const tv = Q[`option_${opt}`] as string | null
-                  const iv = Q[`option_${opt}_img`] as string | null
+                  const tv = Q![`option_${opt}`] as string | null
+                  const iv = Q![`option_${opt}_img`] as string | null
                   if (!tv && !iv) return null
                   const sel = pendingOption === opt
                   return (
@@ -1044,16 +1173,14 @@ export default function PracticeClient() {
               </div>
 
             ) : (
-              /* ── MCQ answered — resolvedCorrectOption is guaranteed set by
-                 handleOptionClick before this render fires, so never null on
-                 first attempt (same logic as QuestionViewerClient). ── */
+              /* ── MCQ answered ──────────────────────────────────────────── */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(['a', 'b', 'c', 'd'] as const).map(opt => {
-                  const tv = Q[`option_${opt}`] as string | null
-                  const iv = Q[`option_${opt}_img`] as string | null
+                  const tv = Q![`option_${opt}`] as string | null
+                  const iv = Q![`option_${opt}_img`] as string | null
                   if (!tv && !iv) return null
                   const sel  = selectedOption === opt
-                  const storedCorr = (resolvedCorrectOption ?? Q.correct_option ?? '')
+                  const storedCorr = (resolvedCorrectOption ?? Q!.correct_option ?? '')
                     .replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
                   const corr = opt === storedCorr
                   return (
@@ -1075,20 +1202,26 @@ export default function PracticeClient() {
             )}
 
             {/* ── Post-answer section ─────────────────────────────────────── */}
-            {selectedOption !== null && (
+            {(selectedOption !== null || isReviewing) && (
               <>
-                {/* Solution card */}
-                {solutionRequested && (
+                {/* Solution card — show live solution or review history solution */}
+                {(solutionRequested || isReviewing) && (
                   <div ref={scrollRef} className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
                     <div className="flex items-center gap-2.5 mb-4">
-                      <img src={solutionBuddy.image} alt={solutionBuddy.name} className="w-10 h-10 rounded-full object-cover" />
+                      <img
+                        src={AI_BUDDIES[isReviewing ? (reviewEntry?.solutionBuddyId ?? solutionBuddyId) : solutionBuddyId]?.image ?? solutionBuddy.image}
+                        alt="buddy"
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
                       <div>
                         <h3 className="font-bold text-sm">Solution</h3>
-                        <p className={`text-[11px] ${T.muted}`}>Explained by {solutionBuddy.name}</p>
+                        <p className={`text-[11px] ${T.muted}`}>
+                          Explained by {AI_BUDDIES[isReviewing ? (reviewEntry?.solutionBuddyId ?? solutionBuddyId) : solutionBuddyId]?.name ?? solutionBuddy.name}
+                        </p>
                       </div>
                     </div>
 
-                    {solutionLoading ? (
+                    {solutionLoading && !isReviewing ? (
                       <div className="space-y-2.5 py-2">
                         {[100, 88, 94, 72, 83, 90, 65].map((w, i) => (
                           <div key={i} className={`h-3 rounded-full animate-pulse ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: `${w}%` }} />
@@ -1097,14 +1230,14 @@ export default function PracticeClient() {
                     ) : (
                       <>
                         <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-                          {renderLatex(solution)}
+                          {renderLatex(isReviewing ? (reviewEntry?.solution || 'Solution not available.') : solution)}
                         </div>
-                        {Q.solution_image_url && (
+                        {(displayQ ?? Q)!.solution_image_url && (
                           <div className="mt-4 relative group">
                             <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-64 ${T.imgWrapper}`}>
-                              <img src={Q.solution_image_url} alt="Solution"
+                              <img src={(displayQ ?? Q)!.solution_image_url!} alt="Solution"
                                 className="max-h-56 max-w-full object-contain cursor-zoom-in select-none"
-                                onClick={() => setImageModal(Q.solution_image_url!)} />
+                                onClick={() => setImageModal((displayQ ?? Q)!.solution_image_url!)} />
                             </div>
                           </div>
                         )}
@@ -1139,24 +1272,49 @@ export default function PracticeClient() {
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <div className={`fixed bottom-0 left-0 right-0 h-16 backdrop-blur-sm border-t flex items-center justify-between px-4 sm:px-6 z-40 transition-colors ${T.footer}`}>
-        {/* Bookmark */}
-        <motion.button whileTap={{ scale: 0.97 }} onClick={handleBookmark}
+        {/* Back — goes to previous answered question for review */}
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={isReviewing && historyIndex === 0 ? () => setHistoryIndex(-1) : goBack}
+          disabled={history.length === 0 && !isReviewing}
           className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${
-            bookmarked
-              ? isDark ? 'bg-white text-black border-white' : 'bg-[#0f172a] text-white border-[#0f172a]'
+            history.length === 0 && !isReviewing
+              ? `opacity-25 ${T.btnSecondary}`
               : T.btnSecondary
-          }`}>
-          {bookmarked ? <IoBookmark size={17} /> : <FiBookmark size={17} />}
+          }`}
+          title="Previous question"
+        >
+          <FiChevronLeft size={18} />
         </motion.button>
 
-        {/* Session summary trigger */}
-        <motion.button whileTap={{ scale: 0.97 }} onClick={() => setShowSummary(true)}
-          className={`text-xs font-medium px-3 py-2 rounded-xl border transition-colors ${T.btnSecondary}`}>
-          {sessionCount} done · Summary
-        </motion.button>
+        {/* Centre: bookmark + summary */}
+        <div className="flex items-center gap-2">
+          <motion.button whileTap={{ scale: 0.97 }} onClick={handleBookmark}
+            className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${
+              bookmarked
+                ? isDark ? 'bg-white text-black border-white' : 'bg-[#0f172a] text-white border-[#0f172a]'
+                : T.btnSecondary
+            }`}>
+            {bookmarked ? <IoBookmark size={17} /> : <FiBookmark size={17} />}
+          </motion.button>
 
-        {/* Next question */}
-        {selectedOption !== null ? (
+          <motion.button whileTap={{ scale: 0.97 }} onClick={() => setShowSummary(true)}
+            className={`text-xs font-medium px-3 py-2 rounded-xl border transition-colors ${T.btnSecondary}`}>
+            {sessionCount} done
+          </motion.button>
+        </div>
+
+        {/* Next / Forward */}
+        {isReviewing ? (
+          /* In review — forward arrow goes toward present */
+          <motion.button
+            whileTap={{ scale: 0.97 }} onClick={goForward}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'}`}
+          >
+            {historyIndex < history.length - 1 ? 'Forward' : 'Current'}
+            <FiArrowRight size={15} />
+          </motion.button>
+        ) : selectedOption !== null ? (
           <motion.button whileTap={{ scale: 0.97 }} onClick={advanceToNext}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'}`}>
             Next <FiArrowRight size={15} />
