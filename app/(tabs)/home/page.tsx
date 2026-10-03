@@ -549,7 +549,6 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
   const [goal, setGoal] = useState<number | null>(null);
   const [solved, setSolved] = useState(0);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
-  const [tempGoal, setTempGoal] = useState(20);
 
   useEffect(() => {
     const refresh = () => {
@@ -560,10 +559,8 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
       } catch {}
     };
     refresh();
-    // Re-read when the tab becomes visible again (user returns from QuestionViewer)
     const onVisible = () => { if (!document.hidden) refresh(); };
     document.addEventListener('visibilitychange', onVisible);
-    // Also re-read if another tab writes to localStorage
     const onStorage = (e: StorageEvent) => {
       if (e.key?.startsWith('questionsToday')) refresh();
     };
@@ -575,34 +572,85 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
   }, []);
 
   const saveGoal = (g: number) => {
-    try {
-      localStorage.setItem(DAILY_GOAL_KEY, String(g));
-    } catch {}
+    try { localStorage.setItem(DAILY_GOAL_KEY, String(g)); } catch {}
     setGoal(g);
     setShowGoalPicker(false);
   };
 
-
   const progress = goal ? Math.min(solved / goal, 1) : 0;
   const pct = Math.round(progress * 100);
 
-  // 5 milestone icons at 0%, 25%, 50%, 75%, 100%
-  const milestones = [0, 0.25, 0.5, 0.75, 1];
-
-  const card = isDark ? 'bg-[#0A0E17] border-[#1D2939]' : 'bg-white border-gray-200';
-  const text = isDark ? 'text-white' : 'text-gray-900';
-  const subtext = isDark ? 'text-gray-400' : 'text-gray-500';
-  const trackBg = isDark ? 'bg-[#1D2939]' : 'bg-gray-100';
+  const card     = isDark ? 'bg-[#0A0E17] border-[#1D2939]' : 'bg-white border-gray-200';
+  const text     = isDark ? 'text-white' : 'text-gray-900';
+  const subtext  = isDark ? 'text-gray-400' : 'text-gray-500';
+  const trackBg  = isDark ? 'bg-[#1D2939]' : 'bg-gray-100';
   const toggleBg = isDark ? 'bg-[#111827] border-[#1D2939]' : 'bg-gray-50 border-gray-200';
+
+  // Red → yellow → green gradient stops interpolated from pct
+  // We use a fixed gradient and mask it with clip-path via width
+  // so the visible portion always looks like it transitions as it fills.
+
+  // Milestone 5 SVG icons — fully inline, no PNG/Image dependency
+  const MilestoneIcon = ({ index, reached }: { index: number; reached: boolean }) => {
+    const col = reached
+      ? (isDark ? '#f97316' : '#ea580c')   // orange when reached
+      : (isDark ? '#334155' : '#94a3b8');  // muted when not
+
+    if (index === 0) return (
+      // Person standing — start
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="5" r="2.5"/>
+        <path d="M12 9v7M9 11h6M10 16l-2 5M14 16l2 5"/>
+      </svg>
+    );
+    if (index === 1) return (
+      // Person walking — 25%
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="13" cy="4.5" r="2"/>
+        <path d="M11 8l-2 4h4l2 5M9 12l-1 4M15 12l1 4"/>
+      </svg>
+    );
+    if (index === 2) return (
+      // Person running — 50%
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="14" cy="4" r="2"/>
+        <path d="M12 7l-3 4 3 1-1 5M12 7l4 2-1 4M6 9l2-1M16 17l2 1"/>
+      </svg>
+    );
+    if (index === 3) return (
+      // Person sprinting — 75%
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="15" cy="3.5" r="2"/>
+        <path d="M13 7l-4 3 3 2-2 6M13 7l5 1-1 5M5 8l3-1M17 18l2 1"/>
+      </svg>
+    );
+    // Checkered flag — 100%
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 21V4" stroke={col} strokeWidth="1.8"/>
+        <path d="M4 4h16l-3 5 3 5H4" fill={reached ? col : 'none'} fillOpacity={reached ? 0.25 : 0} stroke={col} strokeWidth="1.8"/>
+        <rect x="8" y="4" width="4" height="4" fill={col} opacity="0.4"/>
+        <rect x="12" y="8" width="4" height="4" fill={col} opacity="0.4"/>
+        <rect x="8" y="8" width="4" height="4" fill={col} opacity="0.15"/>
+        <rect x="12" y="4" width="4" height="4" fill={col} opacity="0.15"/>
+      </svg>
+    );
+  };
+
+  const milestones = [0, 0.25, 0.5, 0.75, 1];
 
   return (
     <div className={`rounded-2xl border ${card} p-5`}>
+      {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <div>
+        <div className="flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#f97316' : '#ea580c'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+          </svg>
           <span className={`text-sm font-semibold ${text}`}>Daily Goal</span>
           {goal && (
-            <span className={`ml-2 text-sm font-bold text-orange-500`}>
-              ({solved}/{goal} Qs)
+            <span className="text-sm font-bold text-orange-500 tabular-nums">
+              {solved}/{goal}
             </span>
           )}
         </div>
@@ -613,11 +661,12 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
         >
           {goal ? 'Change' : 'Set goal'}
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M1 3l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <path d={showGoalPicker ? 'M1 7l4-4 4 4' : 'M1 3l4 4 4-4'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
         </motion.button>
       </div>
 
+      {/* Goal picker */}
       <AnimatePresence>
         {showGoalPicker && (
           <motion.div
@@ -625,23 +674,22 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="overflow-hidden mb-4 "
+            className="overflow-hidden mb-4"
           >
-            <div className={`p-3 rounded-xl border ${toggleBg} border-opacity-50`}>
+            <div className={`p-3 rounded-xl border ${toggleBg}`}>
               <p className={`text-xs font-medium mb-2.5 ${subtext}`}>Questions per day</p>
               <div className="flex gap-2 flex-wrap">
                 {DAILY_GOAL_OPTIONS.map((g) => (
                   <motion.button
-                    key={g}
-                    whileTap={{ scale: 0.95 }}
+                    key={g} whileTap={{ scale: 0.95 }}
                     onClick={() => saveGoal(g)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all
-                      ${goal === g
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      goal === g
                         ? 'bg-orange-500 text-white border-orange-500'
                         : isDark
                           ? 'border-[#1D2939] text-gray-400 hover:border-orange-500/40 hover:text-orange-400'
                           : 'border-gray-200 text-gray-600 hover:border-orange-400 hover:text-orange-500'
-                      }`}
+                    }`}
                   >
                     {g} Qs
                   </motion.button>
@@ -654,21 +702,34 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
 
       {goal ? (
         <div className="relative">
-          {/* Track */}
-          <div className={`relative h-2 rounded-full ${trackBg} overflow-visible`}>
-            {/* Fill */}
+          {/* Track + gradient fill */}
+          <div className={`relative h-2.5 rounded-full overflow-hidden ${trackBg}`}>
+            {/* Full gradient strip — always red→yellow→green across 100% width */}
+            <div
+              className="absolute inset-y-0 left-0 right-0 rounded-full"
+              style={{
+                background: 'linear-gradient(to right, #ef4444, #f59e0b, #22c55e)',
+                opacity: isDark ? 0.25 : 0.15,
+              }}
+            />
+            {/* Animated fill that reveals the gradient */}
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${pct}%` }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
+              transition={{ duration: 0.7, ease: 'easeOut' }}
+              className="absolute inset-y-0 left-0 rounded-full"
+              style={{
+                background: 'linear-gradient(to right, #ef4444, #f59e0b 50%, #22c55e)',
+                backgroundSize: `${Math.max(pct, 1)}% 100%`,
+                backgroundRepeat: 'no-repeat',
+              }}
             />
           </div>
 
           {/* Milestone icons */}
-          <div className="relative flex items-center mt-3">
+          <div className="relative flex items-center mt-4">
             {milestones.map((m, i) => {
-              const reached = progress >= m;
+              const reached = progress >= m - 0.01;
               const isLast = i === milestones.length - 1;
               return (
                 <div
@@ -676,51 +737,40 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
                   className="absolute flex flex-col items-center"
                   style={{ left: `${m * 100}%`, transform: 'translateX(-50%)' }}
                 >
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300
-                      ${reached
-                        ? isLast ? 'bg-orange-500/20 border-2 border-orange-500' : 'bg-orange-500/10'
-                        : isDark ? 'bg-[#1D2939]' : 'bg-gray-100'
-                      }`}
-                  >
-                    {/* SVG icons – placeholders, user will replace from /public */}
-                    {i === 0 && (
-                    <Image src= "standing-man.svg" alt="Coins" width={13} height={13}  className={reached ? 'text-orange-500' : subtext }  />
-                    )}
-                    {i === 1 && (
-                   <Image src= "athletics.svg" alt="Coins" width={16} height={16}  className={reached ? 'text-orange-500' : subtext} />
-                    )}
-                    {i === 2 && (
-                     <Image src= "sprinter.svg" alt="Coins" width={16} height={16}  className={reached ? 'text-orange-500' : subtext} />
-                    )}
-                    {i === 3 && (
-                     <Image src= "sprint.svg" alt="Coins" width={16} height={16}  className={reached ? 'text-orange-500' : subtext} />
-                    )}
-                    {i === 4 && (
-                     <Image src= "checkered-flag.svg" alt="Coins" width={18} height={18}  className={reached ? 'text-orange-500' : subtext} />
-                    )}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
+                    reached
+                      ? isLast
+                        ? isDark ? 'bg-orange-500/20 ring-2 ring-orange-500/60' : 'bg-orange-100 ring-2 ring-orange-400'
+                        : isDark ? 'bg-orange-500/15' : 'bg-orange-50'
+                      : isDark ? 'bg-[#1D2939]' : 'bg-gray-100'
+                  }`}>
+                    <MilestoneIcon index={i} reached={reached} />
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {/* Spacer for milestone icons */}
           <div className="h-10" />
 
           {pct >= 100 && (
-            <motion.p
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-xs text-center font-semibold text-orange-500 mt-1"
+            <motion.div
+              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+              className="flex items-center justify-center gap-1.5 mt-1"
             >
-              🎉 Daily goal complete!
-            </motion.p>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>
+              </svg>
+              <span className="text-xs font-semibold text-green-500">Daily goal complete</span>
+            </motion.div>
           )}
         </div>
       ) : (
-        <div
-          className={`flex flex-col items-center justify-center py-4 rounded-xl border border-dashed text-center gap-1
-            ${isDark ? 'border-[#1D2939]' : 'border-gray-200'}`}
-        >
+        <div className={`flex flex-col items-center justify-center py-5 rounded-xl border border-dashed text-center gap-1.5 ${isDark ? 'border-[#1D2939]' : 'border-gray-200'}`}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#334155' : '#94a3b8'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill={isDark ? '#334155' : '#94a3b8'}/>
+          </svg>
           <p className={`text-sm font-medium ${subtext}`}>Set a daily goal to track progress</p>
           <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Stay consistent, crack your exam.</p>
         </div>
@@ -1318,9 +1368,17 @@ function HomeSurveyModal({ isDark, userId, onDone }: {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
 
-  const chipActive = isDark ? 'bg-white text-[#0f172a] border-white' : 'bg-[#0f172a] text-white border-[#0f172a]'
-  const chipIdle   = isDark ? 'bg-[#111827] text-slate-300 border-[#1D2939] hover:border-slate-500'
-                            : 'bg-white text-slate-600 border-[#E5E7EB] hover:border-slate-400'
+  // Exact same tokens as the profile modal
+  const modalBg    = isDark ? 'bg-[#0A0E17] border-[#1D2939]' : 'bg-white border-gray-200'
+  const text       = isDark ? 'text-white' : 'text-gray-900'
+  const subtext    = isDark ? 'text-gray-400' : 'text-gray-500'
+  const border     = isDark ? 'border-[#1D2939]' : 'border-gray-200'
+  const pillActive = isDark ? 'bg-white text-black border-white' : 'bg-gray-900 text-white border-gray-900'
+  const pillInactive = isDark
+    ? 'bg-transparent border-[#1D2939] text-gray-400 hover:border-gray-500'
+    : 'bg-transparent border-gray-200 text-gray-500 hover:border-gray-400'
+  const chipIdle   = isDark ? 'bg-[#111827] border-[#1D2939] text-gray-400 hover:border-gray-500'
+                            : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-400'
 
   const subjectLabel: Record<string, string> = { physics: 'Physics', chemistry: 'Chemistry', maths: 'Maths' }
   const chaptersForSubject = ALL_SURVEY_CHAPTERS.filter(c => c.subject === activeSubject)
@@ -1339,92 +1397,106 @@ function HomeSurveyModal({ isDark, userId, onDone }: {
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm px-2 sm:px-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
     >
       <motion.div
-        initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-        className={`w-full max-w-lg rounded-t-3xl sm:rounded-3xl border overflow-hidden flex flex-col ${
-          isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
-        }`}
+        initial={{ scale: 0.96, opacity: 0, y: 12 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.96, opacity: 0 }}
+        className={`w-full max-w-md ${modalBg} border rounded-2xl overflow-hidden flex flex-col`}
         style={{ maxHeight: '88vh' }}
+        onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className={`px-5 pt-5 pb-4 border-b flex-shrink-0 ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
-          <div className="flex items-center gap-2 mb-0.5">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className={isDark ? 'text-slate-400' : 'text-slate-500'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        {/* Header — same structure as profile modal */}
+        <div className="p-6 pb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={subtext}>
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
             </svg>
-            <h2 className="font-bold text-lg">Chapters you've studied</h2>
+            <h3 className={`${text} text-lg font-bold`}>Chapters you've studied</h3>
           </div>
-          <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          <p className={`text-sm ${subtext}`}>
             Pick what you've covered — we'll focus your practice there.
           </p>
         </div>
 
-        {/* Subject filter chips */}
-        <div className={`flex gap-2 px-4 pt-3 pb-3 flex-shrink-0 border-b ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
-          {subjects.map(s => (
-            <motion.button key={s} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-              onClick={() => setActiveSubject(s)}
-              className={`flex-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-200 ${
-                activeSubject === s ? chipActive : chipIdle
-              }`}
-            >
-              {subjectLabel[s]}
-            </motion.button>
-          ))}
-        </div>
-
-        {/* Chapter grid */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 grid grid-cols-2 gap-2 content-start" style={{ scrollbarWidth: 'none' }}>
-          {chaptersForSubject.map(c => {
-            const active = selected.has(c.chapter)
-            return (
-              <motion.button key={c.chapter} whileTap={{ scale: 0.97 }} onClick={() => toggle(c.chapter)}
-                className={`p-3 rounded-xl border text-left text-xs font-medium leading-tight transition-all flex items-start gap-2 ${
-                  active
-                    ? isDark ? 'bg-[#111827] border-white text-white' : 'bg-[#0f172a] border-[#0f172a] text-white'
-                    : isDark ? 'bg-[#111827] border-[#1e2538] text-slate-300 hover:border-slate-500' : 'bg-gray-50 border-[#E5E7EB] text-gray-700 hover:border-gray-400'
+        {/* Subject tabs — pill style matching profile modal's class/exam selectors */}
+        <div className={`px-6 pb-4 border-b ${border}`}>
+          <p className={`text-xs font-semibold ${subtext} uppercase tracking-wider mb-2`}>Subject</p>
+          <div className="flex flex-wrap gap-2">
+            {subjects.map(s => (
+              <motion.button key={s} whileTap={{ scale: 0.96 }}
+                onClick={() => setActiveSubject(s)}
+                className={`px-4 py-2 rounded-full text-sm font-medium border transition-all ${
+                  activeSubject === s ? pillActive : pillInactive
                 }`}
               >
-                <span className={`mt-0.5 flex-shrink-0 w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all ${
-                  active
-                    ? isDark ? 'border-white bg-white/20' : 'border-white bg-white/10'
-                    : isDark ? 'border-[#2a3548]' : 'border-gray-300'
-                }`}>
-                  {active && (
-                    <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                      <path d="M1 3l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  )}
-                </span>
-                <span className="flex-1">{c.chapter}</span>
+                {subjectLabel[s]}
               </motion.button>
-            )
-          })}
+            ))}
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className={`px-4 py-4 border-t flex items-center gap-3 flex-shrink-0 ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
-          <span className={`text-xs flex-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            {selected.size} selected
-          </span>
-          <motion.button whileTap={{ scale: 0.97 }} onClick={onDone}
-            className={`px-4 py-2 rounded-full text-xs font-semibold border transition-all duration-200 ${chipIdle}`}
-          >
-            Skip
-          </motion.button>
-          <motion.button whileTap={{ scale: 0.97 }} onClick={handleSave} disabled={saving || selected.size === 0}
-            className={`px-5 py-2 rounded-full text-xs font-bold transition-all duration-200 disabled:opacity-30 flex items-center gap-1.5 border ${chipActive}`}
-          >
-            {saving ? 'Saving' : 'Save'}
-            {!saving && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7"/>
-              </svg>
-            )}
-          </motion.button>
+        {/* Chapter grid — compact, two columns */}
+        <div className="flex-1 overflow-y-auto px-6 py-4" style={{ scrollbarWidth: 'none' }}>
+          <p className={`text-xs font-semibold ${subtext} uppercase tracking-wider mb-3`}>Chapters</p>
+          <div className="grid grid-cols-2 gap-2">
+            {chaptersForSubject.map(c => {
+              const active = selected.has(c.chapter)
+              return (
+                <motion.button key={c.chapter} whileTap={{ scale: 0.97 }}
+                  onClick={() => toggle(c.chapter)}
+                  className={`px-3 py-2 rounded-xl border text-left text-xs font-medium leading-tight transition-all flex items-center gap-2 ${
+                    active ? pillActive : chipIdle
+                  }`}
+                >
+                  {/* SVG checkbox */}
+                  <span className={`flex-shrink-0 w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all ${
+                    active ? 'border-current bg-current/20' : isDark ? 'border-[#334155]' : 'border-gray-300'
+                  }`}>
+                    {active && (
+                      <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                        <path d="M1 3l2 2 4-4" stroke={isDark ? '#000' : '#fff'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
+                  <span className="flex-1 leading-tight">{c.chapter}</span>
+                </motion.button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Footer — same button layout as profile modal */}
+        <div className={`px-6 py-4 border-t ${border}`}>
+          <div className="flex items-center justify-between mb-0">
+            <span className={`text-xs ${subtext}`}>
+              {selected.size} chapter{selected.size !== 1 ? 's' : ''} selected
+            </span>
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <button
+              onClick={onDone}
+              className={`px-4 py-2 rounded-xl text-sm ${subtext} border ${border} hover:border-gray-500 transition-colors`}
+            >
+              Skip
+            </button>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={handleSave}
+              disabled={saving || selected.size === 0}
+              className={`flex items-center gap-1.5 px-5 py-2 rounded-xl text-sm font-bold disabled:opacity-40 transition-all ${
+                isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-gray-900 text-white hover:bg-gray-800'
+              }`}
+            >
+              {saving ? 'Saving' : 'Save'}
+              {!saving && (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              )}
+            </motion.button>
+          </div>
         </div>
       </motion.div>
     </motion.div>

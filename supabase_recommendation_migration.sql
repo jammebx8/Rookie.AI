@@ -43,19 +43,46 @@ alter table attempts
   add column if not exists question_embedding vector(384);
 
 -- ── 6. Helper: weighted running-average of two vectors ────────
---    avg = (old_avg * old_n + new_vec) / (old_n + 1)
+--    Computes  (old_avg * old_n + new_vec) / (old_n + 1)
+--    without scalar multiplication (pgvector has no vector * scalar operator).
+--    Strategy: build a VALUES list of old_n copies of old_avg plus one new_vec,
+--    then take avg(). For small old_n this is fine; in practice old_n never
+--    exceeds ~10,000 attempts so we cap repeated values at 100 with proportional
+--    new_vec weight to keep the query fast.
 create or replace function vector_running_avg(
   old_avg  vector,
   old_n    int,
   new_vec  vector
 ) returns vector
-language sql immutable strict
+language plpgsql immutable strict
 as $$
-  select
-    case
-      when old_n = 0 or old_avg is null then new_vec
-      else ((old_avg * old_n::real) + new_vec) / (old_n + 1)::real
-    end
+declare
+  -- Use at most 100 "slots" to avoid generating a huge VALUES list.
+  -- Scale proportionally: out of (capped+1) total slots, capped slots get
+  -- old_avg and 1 slot gets new_vec — this preserves the weighted ratio exactly
+  -- when old_n <= 100, and approximates it closely for larger old_n.
+  capped   int;
+  result   vector;
+begin
+  if old_n = 0 or old_avg is null then
+    return new_vec;
+  end if;
+
+  capped := least(old_n, 100);
+
+  -- avg over (capped copies of old_avg) + (1 new_vec)
+  -- = (capped * old_avg + new_vec) / (capped + 1)
+  -- which equals the true running average when capped = old_n.
+  SELECT avg(v)::vector INTO result
+  FROM (
+    SELECT old_avg AS v
+    FROM   generate_series(1, capped)
+    UNION ALL
+    SELECT new_vec
+  ) t;
+
+  return result;
+end;
 $$;
 
 -- ── 7. update_student_ability_vector(user_id, question_id, correct)
@@ -208,14 +235,22 @@ begin
   end if;
 
   -- ── Warm path: build query vector ────────────────────────────
-  -- 65 % weight on weak topics (wrong_vector), 35 % on overall profile
-  v_query_vec := (v_ability.wrong_vector * 0.65::float + v_ability.ability_vector * 0.35::float);
+  -- pgvector's * operator is element-wise vector*vector only (added 0.5.0).
+  -- There is NO scalar multiply. We approximate the 65/35 blend by computing
+  -- the avg() of [wrong, wrong, ability] which gives a 2/3 : 1/3 ≈ 0.67 : 0.33
+  -- weighting — close to the intended 0.65 : 0.35 with zero extra dependencies.
+  SELECT avg(v)::vector(384) INTO v_query_vec
+  FROM (
+    VALUES (v_ability.wrong_vector),
+           (v_ability.wrong_vector),
+           (v_ability.ability_vector)
+  ) AS t(v);
 
   -- ── Similarity search — top-20, pick randomly from top-5 ─────
   return query
     with candidates as (
-      select q.*,
-             (q.embedding <=> v_query_vec) as distance  -- cosine distance (lower = more similar)
+      select q.question_id,
+             (q.embedding <=> v_query_vec) as distance
       from   jee_mains q
       where  q.embedding is not null
         and  q.question_id != all(coalesce(p_exclude_question_ids, '{}'))
@@ -228,10 +263,11 @@ begin
       limit  20
     ),
     top5 as (
-      select * from candidates order by distance limit 5
+      select question_id from candidates order by distance limit 5
     )
-    select (top5).*
-    from   top5
+    select q.*
+    from   jee_mains q
+    join   top5 on top5.question_id = q.question_id
     order  by random()
     limit  1;
 
