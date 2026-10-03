@@ -36,7 +36,6 @@ type BookmarkedQuestion = {
   exam_shift: string;
   source_url: string;
   solution: string;
-  sol_ai?: string;
   year?: number | string;
   question_img_url?: string | null;
   option_a_img?: string | null;
@@ -317,9 +316,11 @@ function QuestionCard({
       });
     }
 
-    // AI solution
+    // AI solution — use cached solution from sessionStorage or generate fresh
     try {
-      let aiSolution = q.sol_ai ?? '';
+      const cacheKey = `rookie_bookmark_sol_${q.question_id}`
+      let aiSolution: string = ''
+      try { aiSolution = sessionStorage.getItem(cacheKey) || '' } catch {}
       if (!aiSolution) {
         const res = await axios.post(`${API_BASE}/solution`, {
           action: 'generate_solution',
@@ -332,7 +333,7 @@ function QuestionCard({
           correct_option: q.correct_option,
         });
         aiSolution = res.data.solution ?? q.solution;
-        q.sol_ai = aiSolution;
+        try { sessionStorage.setItem(cacheKey, aiSolution) } catch {}
       }
       patch({ solution: aiSolution, solutionLoading: false, hasTyped: false });
     } catch {
@@ -379,9 +380,11 @@ function QuestionCard({
       });
     }
 
-    // AI solution
+    // AI solution — use cached solution from sessionStorage or generate fresh
     try {
-      let aiSolution = q.sol_ai ?? '';
+      const cacheKey = `rookie_bookmark_sol_${q.question_id}`
+      let aiSolution: string = ''
+      try { aiSolution = sessionStorage.getItem(cacheKey) || '' } catch {}
       if (!aiSolution) {
         const res = await axios.post(`${API_BASE}/solution`, {
           action: 'generate_solution',
@@ -390,7 +393,7 @@ function QuestionCard({
           correct_option: q.correct_option,
         });
         aiSolution = res.data.solution ?? q.solution;
-        q.sol_ai = aiSolution;
+        try { sessionStorage.setItem(cacheKey, aiSolution) } catch {}
       }
       patch({ solution: aiSolution, solutionLoading: false, hasTyped: false });
     } catch {

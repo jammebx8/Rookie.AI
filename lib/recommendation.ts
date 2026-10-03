@@ -85,6 +85,10 @@ export async function updateAbilityVector(
 /**
  * Fetch the next recommended question for a student.
  *
+ * The embedding-based RPC `get_next_recommended_question` may not be deployed
+ * yet — if it's missing we fall back directly to `fallbackRandom` so the
+ * session never breaks.
+ *
  * @param userId      Supabase auth UUID
  * @param excludeIds  question_ids to skip this session (already seen / answered)
  * @returns           A Question row or null if none available
@@ -102,27 +106,25 @@ export async function fetchRecommended(
       .single()
 
     if (error) {
-      console.warn('[recommendation] fetchRecommended RPC error:', error.message)
+      // RPC not deployed or other DB error — use simple random fallback
       return await fallbackRandom(userId, excludeIds)
     }
 
     return (data as Question) ?? null
-  } catch (err) {
-    console.warn('[recommendation] fetchRecommended exception:', err)
+  } catch {
     return await fallbackRandom(userId, excludeIds)
   }
 }
 
 /**
- * Hard fallback: if the RPC fails entirely, just pull any unseen random question.
- * This keeps the practice session alive even if the recommendation system breaks.
+ * Hard fallback: pull any unseen random question from jee_mains.
+ * Keeps the session alive even if the embedding RPC is not deployed.
  */
 async function fallbackRandom(
   userId:     string,
   excludeIds: string[],
 ): Promise<Question | null> {
   try {
-    // Get a list of already-attempted question ids
     const { data: attempted } = await supabase
       .from('attempts')
       .select('question_id')
@@ -133,16 +135,27 @@ async function fallbackRandom(
       ...(attempted?.map((r: { question_id: string }) => r.question_id) ?? []),
     ]
 
-    const { data } = await supabase
+    // Build NOT-IN clause — Supabase needs the list non-empty
+    let q = supabase
       .from('jee_mains')
-      .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,sol_ai,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
-      .not('question_id', 'in', `(${doneIds.map(id => `"${id}"`).join(',')})`)
-      .limit(50)
+      .select(
+        'id,question,question_id,question_text,' +
+        'option_a,option_b,option_c,option_d,correct_option,' +
+        'exam_shift,source_url,solution,question_img_url,solution_image_url,' +
+        'option_a_img,option_b_img,option_c_img,option_d_img,' +
+        'option_a_percent,option_b_percent,option_c_percent,option_d_percent,' +
+        'subject,chapter,' +
+        'buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha'
+      )
+
+    if (doneIds.length > 0) {
+      q = q.not('question_id', 'in', `(${doneIds.map(id => `"${id}"`).join(',')})`)
+    }
+
+    const { data } = await q.limit(50)
 
     if (!data || data.length === 0) return null
-
-    // Pick a random one from the 50
-    return data[Math.floor(Math.random() * data.length)] as Question
+    return data[Math.floor(Math.random() * data.length)] as unknown as Question
   } catch {
     return null
   }
