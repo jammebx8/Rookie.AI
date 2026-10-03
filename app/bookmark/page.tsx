@@ -245,8 +245,8 @@ function QuestionCard({
       ? 'bg-[#0d1117] border-[#1e2538]'
       : 'bg-white border-[#E5E7EB]',
     optionIdle: isDark
-      ? 'bg-[#0d1117] border-[#1e2538] hover:border-indigo-500/50 text-white'
-      : 'bg-white border-[#E5E7EB] hover:border-indigo-400 text-[#0f172a]',
+      ? 'bg-[#0d1117] border-[#1e2538] hover:border-white/70 text-white'
+      : 'bg-white border-[#E5E7EB] hover:border-black text-[#0f172a]',
     optionLabel: isDark
       ? 'bg-[#151B27] border-[#262F4C] text-slate-200'
       : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]',
@@ -467,7 +467,7 @@ function QuestionCard({
           )}
           {q._autoBookmark && (
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 flex-shrink-0">
-              ✗ Wrong
+              Wrong
             </span>
           )}
         </div>
@@ -841,11 +841,11 @@ export default function BookmarkPage() {
     btnSecondary: isDark
       ? 'bg-[#111827] border-[#1D2939] text-white hover:bg-[#1a2235]'
       : 'bg-white border-[#D1D5DB] text-[#0f172a] hover:bg-gray-50',
-    tabActive: (color: string) => ({
-      backgroundColor: color,
-      borderColor: color,
-    }),
-    tabInactive: isDark
+    // Filter chips (subject)
+    filterActive: isDark
+      ? 'bg-white text-black border-white'
+      : 'bg-[#0f172a] text-white border-[#0f172a]',
+    filterIdle: isDark
       ? 'bg-transparent border-[#1D2939] text-gray-400 hover:border-gray-500'
       : 'bg-transparent border-[#D1D5DB] text-gray-600 hover:border-gray-400',
     emptyState: isDark
@@ -887,15 +887,17 @@ export default function BookmarkPage() {
           </div>
         </div>
 
-        {/* ── Subject filter tabs ── */}
+        {/* ── Subject filter chips ── */}
         {bookmarks.length > 0 && (
-          <div
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.18, duration: 0.35 }}
             className="px-4 pb-3 flex gap-2 overflow-x-auto"
             style={{ scrollbarWidth: 'none' }}
           >
             {subjects.map((subject) => {
               const isActive = activeSubject === subject;
-              const color = subjectColor(subject);
               const count =
                 subject === 'All'
                   ? bookmarks.length
@@ -904,29 +906,21 @@ export default function BookmarkPage() {
               return (
                 <motion.button
                   key={subject}
-                  whileTap={{ scale: 0.95 }}
                   onClick={() => setActiveSubject(subject)}
-                  className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all duration-200 ${
-                    isActive ? 'text-black' : T.tabInactive
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-all duration-200 ${
+                    isActive ? T.filterActive : T.filterIdle
                   }`}
-                  style={isActive ? T.tabActive(color) : {}}
                 >
                   {subject}
-                  <span
-                    className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                      isActive
-                        ? 'bg-black/20 text-white'
-                        : isDark
-                        ? 'bg-[#151B27] text-gray-500'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
+                  <span className={`tabular-nums ${isActive ? 'opacity-60' : 'opacity-50'}`}>
                     {count}
                   </span>
                 </motion.button>
               );
             })}
-          </div>
+          </motion.div>
         )}
       </motion.div>
 

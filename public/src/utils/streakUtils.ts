@@ -29,23 +29,21 @@ function getPreviousDate(date: Date) {
 
 function calculateCurrentStreak(activeDays: string[]) {
   const active = new Set(activeDays);
-
-  let streak = 0;
   const date = new Date();
 
-  // Current streak only exists if today was active.
+  // Today not done yet? Streak is still alive if yesterday was active.
   if (!active.has(toDateKey(date))) {
-    return 0;
+    date.setDate(date.getDate() - 1);
+    if (!active.has(toDateKey(date))) return 0; // missed yesterday → broken
   }
 
+  let streak = 0;
   while (active.has(toDateKey(date))) {
     streak++;
     date.setDate(date.getDate() - 1);
   }
-
   return streak;
 }
-
 // ─────────────────────────────────────────────
 // Calculate longest streak FROM active days
 // ─────────────────────────────────────────────

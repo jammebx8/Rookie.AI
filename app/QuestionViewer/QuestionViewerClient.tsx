@@ -331,7 +331,7 @@ function SimilarQuestionCard({
 
   const T = {
     card:       isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-white border-[#E5E7EB]',
-    optionIdle: isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-white text-white' : 'bg-white border-[#E5E7EB] hover:border-black text-[#0f172a]',
+    optionIdle: isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-white/70 text-white' : 'bg-white border-[#E5E7EB] hover:border-black text-[#0f172a]',
     optionLabel:isDark ? 'bg-[#151B27] border-[#262F4C] text-slate-200' : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]',
     muted:      isDark ? 'text-slate-400'  : 'text-slate-500',
     examBadge:  isDark ? 'bg-blue-900/40 text-blue-400 border border-blue-500/50' : 'bg-blue-100 text-blue-700 border border-blue-300',
@@ -824,7 +824,7 @@ export default function QuestionViewerClient() {
     page:        isDark ? 'bg-[#07090f] text-white'              : 'bg-[#F0F2FA] text-[#0f172a]',
     header:      isDark ? 'bg-[#07090f]/95 border-[#1e2538]'    : 'bg-white/95 border-[#E5E7EB]',
     card:        isDark ? 'bg-[#0d1117] border-[#1e2538]'       : 'bg-white border-[#E5E7EB]',
-    optionIdle:  isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-white text-white'
+    optionIdle:  isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-white/70 text-white'
                         : 'bg-white border-[#E5E7EB] hover:border-black text-[#0f172a]',
     optionLabel: isDark ? 'bg-[#151B27] border-[#262F4C] text-slate-200'
                         : 'bg-[#F3F4F6] border-[#D1D5DB] text-[#374151]',

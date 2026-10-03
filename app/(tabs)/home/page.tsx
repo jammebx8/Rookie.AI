@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Sparkles, Zap, Flame, Gem, Trophy } from 'lucide-react';
 import { supabase } from '../../../public/src/utils/supabase';
 import { syncStreakFromSupabase, readStreakFromLocal } from '../../../public/src/utils/streakUtils'; // adjust path
 import 'katex/dist/katex.min.css';
@@ -150,6 +151,7 @@ const DAILY_GOAL_KEY = 'rookie_daily_goal';
 const STREAK_KEY = 'rookie_streak_data';
 
 const DAILY_GOAL_OPTIONS = [5, 10, 20, 30, 50];
+const DAILY_GOAL_CUSTOM_KEY = 'rookie_daily_goal_custom';
 
 const socialMediaLinks = [
   {
@@ -549,6 +551,8 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
   const [goal, setGoal] = useState<number | null>(null);
   const [solved, setSolved] = useState(0);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
+  const [customInput, setCustomInput] = useState('');
+  const [customError, setCustomError] = useState('');
 
   useEffect(() => {
     const refresh = () => {
@@ -575,69 +579,72 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
     try { localStorage.setItem(DAILY_GOAL_KEY, String(g)); } catch {}
     setGoal(g);
     setShowGoalPicker(false);
+    setCustomInput('');
+    setCustomError('');
+  };
+
+  const handleCustomSubmit = () => {
+    const val = parseInt(customInput, 10);
+    if (isNaN(val) || val < 1) { setCustomError('Enter a number ≥ 1'); return; }
+    if (val > 500) { setCustomError('Max 500 questions'); return; }
+    saveGoal(val);
   };
 
   const progress = goal ? Math.min(solved / goal, 1) : 0;
   const pct = Math.round(progress * 100);
 
+  // Derive a single fill color that smoothly transitions red → orange → yellow → green
+  // as pct goes 0 → 100. We interpolate between color stops.
+  const getFillColor = (p: number): string => {
+    // stops: 0%=#ef4444, 33%=#f97316, 66%=#eab308, 100%=#22c55e
+    const stops: [number, [number,number,number]][] = [
+      [0,   [239, 68,  68]],   // red
+      [33,  [249, 115, 22]],   // orange
+      [66,  [234, 179,  8]],   // yellow
+      [100, [34,  197, 94]],   // green
+    ];
+    for (let i = 0; i < stops.length - 1; i++) {
+      const [s1, c1] = stops[i];
+      const [s2, c2] = stops[i + 1];
+      if (p <= s2) {
+        const t = (p - s1) / (s2 - s1);
+        const r = Math.round(c1[0] + (c2[0] - c1[0]) * t);
+        const g = Math.round(c1[1] + (c2[1] - c1[1]) * t);
+        const b = Math.round(c1[2] + (c2[2] - c1[2]) * t);
+        return `rgb(${r},${g},${b})`;
+      }
+    }
+    return 'rgb(34,197,94)';
+  };
+
+  const fillColor = getFillColor(pct);
+
   const card     = isDark ? 'bg-[#0A0E17] border-[#1D2939]' : 'bg-white border-gray-200';
   const text     = isDark ? 'text-white' : 'text-gray-900';
   const subtext  = isDark ? 'text-gray-400' : 'text-gray-500';
-  const trackBg  = isDark ? 'bg-[#1D2939]' : 'bg-gray-100';
+  const trackBg  = isDark ? 'bg-[#1D2939]' : 'bg-gray-200';
   const toggleBg = isDark ? 'bg-[#111827] border-[#1D2939]' : 'bg-gray-50 border-gray-200';
 
-  // Red → yellow → green gradient stops interpolated from pct
-  // We use a fixed gradient and mask it with clip-path via width
-  // so the visible portion always looks like it transitions as it fills.
-
   // Milestone 5 SVG icons — fully inline, no PNG/Image dependency
-  const MilestoneIcon = ({ index, reached }: { index: number; reached: boolean }) => {
-    const col = reached
-      ? (isDark ? '#f97316' : '#ea580c')   // orange when reached
-      : (isDark ? '#334155' : '#94a3b8');  // muted when not
+  const MILESTONE_ICONS = [Sparkles, Zap, Flame, Gem, Trophy] as const;
 
-    if (index === 0) return (
-      // Person standing — start
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="5" r="2.5"/>
-        <path d="M12 9v7M9 11h6M10 16l-2 5M14 16l2 5"/>
-      </svg>
-    );
-    if (index === 1) return (
-      // Person walking — 25%
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="13" cy="4.5" r="2"/>
-        <path d="M11 8l-2 4h4l2 5M9 12l-1 4M15 12l1 4"/>
-      </svg>
-    );
-    if (index === 2) return (
-      // Person running — 50%
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="14" cy="4" r="2"/>
-        <path d="M12 7l-3 4 3 1-1 5M12 7l4 2-1 4M6 9l2-1M16 17l2 1"/>
-      </svg>
-    );
-    if (index === 3) return (
-      // Person sprinting — 75%
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="15" cy="3.5" r="2"/>
-        <path d="M13 7l-4 3 3 2-2 6M13 7l5 1-1 5M5 8l3-1M17 18l2 1"/>
-      </svg>
-    );
-    // Checkered flag — 100%
+  const MilestoneIcon = ({ index, reached }: { index: number; reached: boolean }) => {
+    const milestoneColor = getFillColor(milestones[index] * 100);
+    const col    = reached ? milestoneColor : (isDark ? '#334155' : '#94a3b8');
+    const Icon   = MILESTONE_ICONS[index];
     return (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 21V4" stroke={col} strokeWidth="1.8"/>
-        <path d="M4 4h16l-3 5 3 5H4" fill={reached ? col : 'none'} fillOpacity={reached ? 0.25 : 0} stroke={col} strokeWidth="1.8"/>
-        <rect x="8" y="4" width="4" height="4" fill={col} opacity="0.4"/>
-        <rect x="12" y="8" width="4" height="4" fill={col} opacity="0.4"/>
-        <rect x="8" y="8" width="4" height="4" fill={col} opacity="0.15"/>
-        <rect x="12" y="4" width="4" height="4" fill={col} opacity="0.15"/>
-      </svg>
+      <Icon
+        size={14}
+        color={col}
+        fill={reached ? col : 'none'}
+        fillOpacity={reached ? 0.25 : 0}
+        strokeWidth={1.8}
+      />
     );
   };
 
   const milestones = [0, 0.25, 0.5, 0.75, 1];
+  const isCustomGoal = goal !== null && !DAILY_GOAL_OPTIONS.includes(goal);
 
   return (
     <div className={`rounded-2xl border ${card} p-5`}>
@@ -649,14 +656,14 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
           </svg>
           <span className={`text-sm font-semibold ${text}`}>Daily Goal</span>
           {goal && (
-            <span className="text-sm font-bold text-orange-500 tabular-nums">
+            <span className="text-sm font-bold tabular-nums" style={{ color: fillColor }}>
               {solved}/{goal}
             </span>
           )}
         </div>
         <motion.button
           whileTap={{ scale: 0.95 }}
-          onClick={() => setShowGoalPicker((p) => !p)}
+          onClick={() => { setShowGoalPicker((p) => !p); setCustomError(''); }}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${toggleBg} ${text}`}
         >
           {goal ? 'Change' : 'Set goal'}
@@ -678,7 +685,7 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
           >
             <div className={`p-3 rounded-xl border ${toggleBg}`}>
               <p className={`text-xs font-medium mb-2.5 ${subtext}`}>Questions per day</p>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap mb-3">
                 {DAILY_GOAL_OPTIONS.map((g) => (
                   <motion.button
                     key={g} whileTap={{ scale: 0.95 }}
@@ -695,6 +702,43 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
                   </motion.button>
                 ))}
               </div>
+
+              {/* Custom input */}
+              <div className={`pt-2.5 border-t ${isDark ? 'border-[#1D2939]' : 'border-gray-200'}`}>
+                <p className={`text-xs font-medium mb-2 ${subtext}`}>Custom goal</p>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    placeholder="e.g. 15"
+                    value={customInput}
+                    onChange={(e) => { setCustomInput(e.target.value); setCustomError(''); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleCustomSubmit(); }}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-semibold border outline-none transition-all
+                      ${isCustomGoal && customInput === '' ? 'border-orange-500' : ''}
+                      ${isDark
+                        ? 'bg-[#0A0E17] border-[#1D2939] text-white placeholder-gray-600 focus:border-orange-500/60'
+                        : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400 focus:border-orange-400'
+                      }`}
+                  />
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleCustomSubmit}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                  >
+                    Set
+                  </motion.button>
+                </div>
+                {customError && (
+                  <p className="text-[10px] text-red-400 mt-1.5">{customError}</p>
+                )}
+                {isCustomGoal && (
+                  <p className={`text-[10px] mt-1.5 ${isDark ? 'text-orange-400' : 'text-orange-500'}`}>
+                    Current custom goal: {goal} Qs
+                  </p>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -702,27 +746,14 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
 
       {goal ? (
         <div className="relative">
-          {/* Track + gradient fill */}
+          {/* Track — plain neutral color; fill transitions red→green */}
           <div className={`relative h-2.5 rounded-full overflow-hidden ${trackBg}`}>
-            {/* Full gradient strip — always red→yellow→green across 100% width */}
-            <div
-              className="absolute inset-y-0 left-0 right-0 rounded-full"
-              style={{
-                background: 'linear-gradient(to right, #ef4444, #f59e0b, #22c55e)',
-                opacity: isDark ? 0.25 : 0.15,
-              }}
-            />
-            {/* Animated fill that reveals the gradient */}
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${pct}%` }}
               transition={{ duration: 0.7, ease: 'easeOut' }}
               className="absolute inset-y-0 left-0 rounded-full"
-              style={{
-                background: 'linear-gradient(to right, #ef4444, #f59e0b 50%, #22c55e)',
-                backgroundSize: `${Math.max(pct, 1)}% 100%`,
-                backgroundRepeat: 'no-repeat',
-              }}
+              style={{ backgroundColor: fillColor }}
             />
           </div>
 
@@ -731,19 +762,23 @@ function DailyGoalBar({ isDark }: { isDark: boolean }) {
             {milestones.map((m, i) => {
               const reached = progress >= m - 0.01;
               const isLast = i === milestones.length - 1;
+              // bubble color tracks the fill color interpolation at each milestone's position
+              const milestoneColor = getFillColor(m * 100);
               return (
                 <div
                   key={i}
                   className="absolute flex flex-col items-center"
                   style={{ left: `${m * 100}%`, transform: 'translateX(-50%)' }}
                 >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    reached
-                      ? isLast
-                        ? isDark ? 'bg-orange-500/20 ring-2 ring-orange-500/60' : 'bg-orange-100 ring-2 ring-orange-400'
-                        : isDark ? 'bg-orange-500/15' : 'bg-orange-50'
-                      : isDark ? 'bg-[#1D2939]' : 'bg-gray-100'
-                  }`}>
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300"
+                    style={reached ? {
+                      backgroundColor: `${milestoneColor}22`,
+                      boxShadow: isLast ? `0 0 0 2px ${milestoneColor}55` : 'none',
+                    } : {
+                      backgroundColor: isDark ? '#1D2939' : '#f3f4f6',
+                    }}
+                  >
                     <MilestoneIcon index={i} reached={reached} />
                   </div>
                 </div>
@@ -1065,7 +1100,7 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
   // ── Theme shortcuts ──────────────────────────────────────────────────────
   const skelBg  = isDark ? 'bg-[#1e2538]' : 'bg-gray-200';
   const optIdle = isDark
-    ? 'bg-[#0d1117] border-[#1e2538] hover:border-white text-white cursor-pointer'
+    ? 'bg-[#0d1117] border-[#1e2538] hover:border-white/70 text-white cursor-pointer'
     : 'bg-white border-[#E5E7EB] hover:border-black text-[#0f172a] cursor-pointer';
   const optLabel = isDark
     ? 'bg-[#151B27] border-[#262F4C] text-slate-200'
