@@ -51,12 +51,11 @@ create or replace function vector_running_avg(
 ) returns vector
 language sql immutable strict
 as $$
-  select (
+  select
     case
       when old_n = 0 or old_avg is null then new_vec
-      else (old_avg * old_n::float + new_vec) / (old_n + 1)::float
+      else ((old_avg * old_n::real) + new_vec) / (old_n + 1)::real
     end
-  )
 $$;
 
 -- ── 7. update_student_ability_vector(user_id, question_id, correct)

@@ -12,12 +12,12 @@ import {
 import { IoTimeOutline, IoBookmark } from 'react-icons/io5'
 import { supabase } from '../../public/src/utils/supabase'
 import 'katex/dist/katex.min.css'
-import { InlineMath, BlockMath } from 'react-katex'
 import { updateStreak } from '../../public/src/utils/streakUtils'
 import { updateAbilityVector } from '../../lib/recommendation'
+import { renderContent } from '../components/renderContent'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const API_BASE       = 'https://rookie-backend.vercel.app/api'
+const API_BASE       = 'https://rookie-backend.vercel.app'
 const BOOKMARKS_KEY  = 'bookmarkedQuestions'
 const SESSION_KEY    = 'questionSessionResponses_v1'
 const AI_SOL_CACHE   = 'aiSolutionCache_v1'
@@ -140,7 +140,6 @@ export type Question = {
   solution:           string | null
   question_img_url:   string | null
   solution_image_url: string | null
-  sol_ai?:            string | null
   option_a_img?:      string | null
   option_b_img?:      string | null
   option_c_img?:      string | null
@@ -239,15 +238,9 @@ function Spinner({ size = 20, cls = 'border-indigo-500' }: { size?: number; cls?
   )
 }
 
-// ─── LaTeX renderer ───────────────────────────────────────────────────────────
-function renderLatex(text: string | null | undefined): React.ReactNode {
-  if (!text) return null
-  return text.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/).map((part, i) => {
-    if (part.startsWith('$$') && part.endsWith('$$')) return <BlockMath key={i} math={part.slice(2, -2)} />
-    if (part.startsWith('$') && part.endsWith('$'))   return <InlineMath key={i} math={part.slice(1, -1)} />
-    return <span key={i}>{part}</span>
-  })
-}
+// ─── LaTeX / content renderer (markdown tables + LaTeX + bold) ───────────────
+// Imported from shared utility — kept as a local alias so no call sites change.
+const renderLatex = (text: string | null | undefined, isDark = true) => renderContent(text, isDark)
 
 function CheckIcon() {
   return (
@@ -325,7 +318,6 @@ function SimilarQuestionCard({
   const [aiFollowupLoading, setAIFollowupLoading] = useState(false)
   const [imageModal, setImageModal]         = useState<string | null>(null)
   const [integerAnswer, setIntegerAnswer]   = useState('')
-  const [determiningAnswer, setDeterminingAnswer] = useState(false)
   // The question object for this card lives in local state so we can update
   // correct_option immutably (mutating the `q` prop in place doesn't
   // reliably re-render, and — more importantly — it doesn't respect the
@@ -390,57 +382,6 @@ function SimilarQuestionCard({
     } catch { return q.solution || '' }
   }
 
-  const determineAnswer = async (q: Question): Promise<string | null> => {
-    setDeterminingAnswer(true)
-  
-    try {
-      const res = await axios.post(`${API_BASE}/solution`, {
-        action: "determine_answer",
-        question_text: q.question_text,
-        option_A: q.option_a,
-        option_B: q.option_b,
-        option_C: q.option_c,
-        option_D: q.option_d,
-        solution: q.solution,
-      })
-  
-      const raw = res.data.correct_answer || ""
-  
-      const ans = raw
-        .replace(/option_?/gi, "")
-        .replace(/[^a-dA-D]/g, "")
-        .slice(0, 1)
-        .toLowerCase()
-  
-      if (!ans) return null
-  
-      // Wait for Supabase
-      const { error } = await supabase
-        .from(DB_TABLE)
-        .update({ correct_option: ans })
-        .eq("question_id", q.question_id)
-  
-      if (error) {
-        console.error(error)
-        return null
-      }
-  
-      // Update this card's own local copy immediately. (Previously this
-      // called a `setQuestions` that doesn't exist in this component's
-      // scope — a ReferenceError that threw on every resolve, silently
-      // rejecting this promise and leaving the clicked option stuck grey
-      // forever with no error shown to the user.)
-      setLocalQ(prev => ({ ...prev, correct_option: ans }))
-  
-      return ans
-    } catch (err) {
-      console.error('determineAnswer failed:', err)
-      return null
-    } finally {
-      setDeterminingAnswer(false)
-    }
-  }
-
   // NOTE: solution generation is fired in parallel with the answer check
   // (see handleOption / handleIntegerSubmit below), so by the time we get
   // here the solution is either already done or already in flight — we
@@ -451,27 +392,19 @@ function SimilarQuestionCard({
 
   // Order of operations, deliberately:
   //   1. setPendingOption(opt)         → renders the clicked option grey.
-  //   2. Fire determineAnswer() AND generateSolution() AT THE SAME TIME —
-  //      the answer check is cheap/fast, the solution generation is the
-  //      expensive call. Making the solution call wait for the answer
-  //      check to finish first (the old flow) doubled the wait before the
-  //      solution card was ready, for no reason — neither call depends on
-  //      the other's result.
-  //   3. As soon as the (fast) answer check resolves, reveal
-  //      selectedOption/isCorrect — the user gets green/red feedback
-  //      quickly, without waiting on the (slow) solution text.
-  //   4. When the (already in-flight) solution promise resolves, plug it
-  //      in. We reconcile its final "Answer: Option X" line against the
-  //      confirmed answer so the two independent LLM calls can never
-  //      contradict the highlight colors.
+  //   2. Fire generateSolution() immediately — correct_option is already in
+  //      the DB row, so no answer-determination call is needed.
+  //   3. As soon as the fast answer comparison resolves, reveal
+  //      selectedOption/isCorrect — the user gets green/red feedback.
+  //   4. When the solution promise resolves, plug it in and reconcile the
+  //      final "Answer: Option X" line against the correct answer.
   const handleOption = async (opt: string) => {
     if (selectedOption !== null || pendingOption !== null) return
     questionStartTime.current = Date.now()
     setPendingOption(opt)
 
-    const answerPromise: Promise<string | null> = localQ.correct_option
-      ? Promise.resolve(localQ.correct_option)
-      : determineAnswer(q)
+    // correct_option is always present in the DB — use it directly
+    const answerPromise: Promise<string | null> = Promise.resolve(localQ.correct_option ?? q.correct_option ?? null)
 
     setSolutionRequested(true); setSolutionLoading(true)
     const solutionPromise = generateSolution()
@@ -495,9 +428,8 @@ function SimilarQuestionCard({
     if (isCorrect !== null || !integerAnswer.trim()) return
     setPendingOption('INTEGER')
 
-    const answerPromise: Promise<string | null> = localQ.correct_option
-      ? Promise.resolve(localQ.correct_option)
-      : determineAnswer(q)
+    // correct_option is always present in the DB — use it directly
+    const answerPromise: Promise<string | null> = Promise.resolve(localQ.correct_option ?? q.correct_option ?? null)
 
     setSolutionRequested(true); setSolutionLoading(true)
     const solutionPromise = generateSolution()
@@ -580,7 +512,6 @@ function SimilarQuestionCard({
               {!isCorrect && localQ.correct_option && <p className="text-xs text-gray-300 mt-1">Correct: <b className="text-[#1DC97A]">{localQ.correct_option}</b></p>}
             </div>
           )}
-          {determiningAnswer && <div className="flex items-center gap-2"><Spinner size={14} cls="border-white" /><span className={`text-xs ${T.muted}`}>Checking answer…</span></div>}
         </div>
       ) : selectedOption === null && pendingOption === null ? (
         /* MCQ unanswered */
@@ -871,7 +802,6 @@ export default function QuestionViewerClient() {
   const [bookmarked, setBookmarked]             = useState(false)
   const [solutionLoading, setSolutionLoading]   = useState(false)
   const [solutionRequested, setSolutionRequested] = useState(false)
-  const [determiningAnswer, setDeterminingAnswer] = useState(false)
   const [integerAnswer, setIntegerAnswer]       = useState('')
   const [imageModal, setImageModal]             = useState<string | null>(null)
   const [buddyId, setBuddyId]                   = useState(DEFAULT_BUDDY_ID)
@@ -1008,7 +938,7 @@ export default function QuestionViewerClient() {
 
         const { data, error } = await supabase
           .from(DB_TABLE)
-          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,sol_ai,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
+          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
           .eq('subject', subject)
           .eq('chapter', chapterTitle)
           .order('question', { ascending: true })
@@ -1047,7 +977,7 @@ export default function QuestionViewerClient() {
       try {
         const { data } = await supabase
           .from(DB_TABLE)
-          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,sol_ai,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
+          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
           .eq('subject', subject)
           .eq('chapter', chapterTitle)
           .order('question', { ascending: true })
@@ -1256,50 +1186,6 @@ export default function QuestionViewerClient() {
     } catch {}
   }
 
-  // ── Determine answer via AI ───────────────────────────────────────────────
-  const determineAnswer = async (q: Question): Promise<string | null> => {
-    setDeterminingAnswer(true)
-    try {
-      const res = await axios.post(`${API_BASE}/solution`, {
-        action: 'determine_answer', question_text: q.question_text,
-        option_A: q.option_a, option_B: q.option_b, option_C: q.option_c, option_D: q.option_d,
-        solution: q.solution,
-      })
-      const raw: string = res.data.correct_answer || ''
-      const normalised = raw
-        .replace(/option_?/gi, '')
-        .replace(/[^a-dA-D]/g, '')
-        .slice(0, 1)
-        .toLowerCase()
-      const ans = normalised || raw.toLowerCase().trim()
-
-      if (!ans) {
-        console.warn('determineAnswer: empty answer from API, raw was:', JSON.stringify(raw))
-        return null
-      }
-
-      // Write to Supabase — don't let a failed DB write block returning the answer
-      supabase.from(DB_TABLE)
-        .update({ correct_option: ans })
-        .eq('question_id', q.question_id)
-        .then(({ error }) => {
-          if (error) console.warn('determineAnswer: Supabase write failed:', error.message)
-          else {
-            setQuestions(prev => prev.map(item =>
-              item.question_id === q.question_id ? { ...item, correct_option: ans } : item
-            ))
-          }
-        })
-
-      return ans
-    } catch (err) {
-      console.error('determineAnswer failed:', err)
-      return null
-    } finally {
-      setDeterminingAnswer(false)
-    }
-  }
-
   // ── Generate AI solution ──────────────────────────────────────────────────
   const generateAISolution = async (
     q: Question, activeBuddyId: string, activeBuddy: typeof AI_BUDDIES[string],
@@ -1370,11 +1256,7 @@ export default function QuestionViewerClient() {
   // ── Regenerate solution ───────────────────────────────────────────────────
   const handleRegenerateSolution = async () => {
     const q = questions[currentIndex]; if (!q) return
-    // By regen time correct_option is already in DB — but guard against edge case
-    if (!q.correct_option) {
-      const ans = await determineAnswer(q)
-      if (ans) q.correct_option = ans
-    }
+    // correct_option is always in DB — no need to fall back to AI determination
     try { sessionStorage.removeItem(getAISolCacheKey(q.question_id, solutionBuddyId)) } catch {}
     setSolution(''); setAIFollowup(null); setSolutionLoading(true)
     try {
@@ -1394,21 +1276,10 @@ export default function QuestionViewerClient() {
 
   // ── MCQ click ─────────────────────────────────────────────────────────────
   // Order of operations, deliberately:
-  //   1. setPendingOption(opt)          → renders the clicked option grey.
-  //   2. Fire determineAnswer() AND generateAISolution() AT THE SAME TIME.
-  //      determineAnswer is a cheap call (max_tokens: 10); generateAISolution
-  //      is the expensive one (max_tokens: 2000). The old flow awaited
-  //      determineAnswer, THEN started generateAISolution — paying both
-  //      latencies back to back for no reason, since neither call needs the
-  //      other's result up front (the backend now infers the correct option
-  //      itself from `solution` when we don't pass one — see route.ts).
-  //   3. The moment the (fast) answerPromise resolves, reveal
-  //      selectedOption/isCorrect — green/red shows up without waiting on
-  //      the (slow) solution text.
-  //   4. When the already in-flight solutionPromise resolves, plug it in,
-  //      after reconciling its final "Answer: Option X" line against the
-  //      confirmed answer so the two independent LLM calls can never
-  //      contradict the highlight colors.
+  //   1. setPendingOption(opt)          → grey state, no verdict yet.
+  //   2. correct_option is read directly from the DB row — no AI call needed.
+  //   3. setIsCorrect / setSelectedOption → colored (green/red) view renders.
+  //   4. handlePostAnswer → solution generation starts.
   const handleOptionClick = (opt: string) => {
     if (selectedOption !== null || pendingOption !== null) return
     const q = questions[currentIndex]; if (!q) return
@@ -1418,9 +1289,8 @@ export default function QuestionViewerClient() {
     const activeBuddyId = buddyId
     const activeBuddy = AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
 
-    const answerPromise: Promise<string | null> = q.correct_option
-      ? Promise.resolve(q.correct_option)
-      : determineAnswer(q)
+    // correct_option is always present in the DB — use it directly
+    const answerPromise: Promise<string | null> = Promise.resolve(q.correct_option ?? null)
 
     setSolutionBuddyId(activeBuddyId)
     setSolutionRequested(true); setSolutionLoading(true)
@@ -1461,9 +1331,8 @@ export default function QuestionViewerClient() {
     const activeBuddyId = buddyId
     const activeBuddy = AI_BUDDIES[activeBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
 
-    const answerPromise: Promise<string | null> = q.correct_option
-      ? Promise.resolve(q.correct_option)
-      : determineAnswer(q)
+    // correct_option is always present in the DB — use it directly
+    const answerPromise: Promise<string | null> = Promise.resolve(q.correct_option ?? null)
 
     setSolutionBuddyId(activeBuddyId)
     setSolutionRequested(true); setSolutionLoading(true)
@@ -1671,9 +1540,6 @@ export default function QuestionViewerClient() {
                       <p className="text-sm text-gray-300 mt-0.5">Correct: <b className="text-[#1DC97A]">{resolvedCorrectOption || Q.correct_option}</b></p>
                     )}
                   </motion.div>
-                )}
-                {determiningAnswer && (
-                  <div className="flex items-center gap-3"><Spinner size={16} cls="border-white" /><span className={`text-sm ${T.muted}`}>Determining correct answer…</span></div>
                 )}
               </div>
 

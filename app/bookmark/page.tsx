@@ -18,10 +18,10 @@ import {
 } from 'react-icons/fi';
 import { IoBookmark } from 'react-icons/io5';
 import 'katex/dist/katex.min.css';
-import { InlineMath, BlockMath } from 'react-katex';
+import { renderContent } from '../components/renderContent';
 
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
-const API_BASE = 'https://rookie-backend.vercel.app/api';
+const API_BASE = 'https://rookie-backend.vercel.app';
 
 type BookmarkedQuestion = {
   question: string;
@@ -57,7 +57,6 @@ type QuestionState = {
   solutionLoading: boolean;
   motivationLoading: boolean;
   aiFollowupLoading: boolean;
-  determiningAnswer: boolean;
   integerAnswer: string;
   hasTyped: boolean;
   solutionRequested: boolean 
@@ -74,7 +73,6 @@ function defaultState(): QuestionState {
     solutionRequested: false,
     motivationLoading: false,
     aiFollowupLoading: false,
-    determiningAnswer: false,
     integerAnswer: '',
     hasTyped: false,
   };
@@ -110,18 +108,8 @@ function useTheme() {
   return isDark;
 }
 
-// ── LaTeX renderer ───────────��─────────────────────────────────────────────
-function renderLatex(text: string): React.ReactNode {
-  if (!text) return null;
-  const parts = text.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/);
-  return parts.map((part, i) => {
-    if (part.startsWith('$$') && part.endsWith('$$'))
-      return <BlockMath key={i} math={part.slice(2, -2)} />;
-    if (part.startsWith('$') && part.endsWith('$'))
-      return <InlineMath key={i} math={part.slice(1, -1)} />;
-    return <span key={i}>{part}</span>;
-  });
-}
+// ── Content renderer (markdown tables + LaTeX + bold) ────────────────────────
+const renderLatex = (text: string | null | undefined, isDark = true) => renderContent(text, isDark)
 
 // ── Typing effect hook ─────────────────────────────────────────────────────
 function useTypingEffect(text: string, active: boolean) {
@@ -305,27 +293,8 @@ function QuestionCard({
 
     patch({ selectedOption: option });
 
-    let correctAnswer = q.correct_option;
-
-    if (!correctAnswer) {
-      patch({ determiningAnswer: true });
-      try {
-        const res = await axios.post(`${API_BASE}/solution`, {
-          action: 'determine_answer',
-          question_text: q.question_text,
-          option_A: q.option_a,
-          option_B: q.option_b,
-          option_C: q.option_c,
-          option_D: q.option_d,
-          solution: q.solution,
-        });
-        correctAnswer = res.data.correct_answer ?? null;
-        q.correct_option = correctAnswer;
-      } catch {
-        //
-      }
-      patch({ determiningAnswer: false });
-    }
+    // correct_option is always present in the DB
+    const correctAnswer = q.correct_option;
 
     const isCorrect = option === correctAnswer;
     patch({ isCorrect, motivationLoading: true, solutionLoading: true });
@@ -382,23 +351,8 @@ function QuestionCard({
 
     patch({ selectedOption: 'INTEGER' });
 
-    let correctAnswer = q.correct_option;
-
-    if (!correctAnswer) {
-      patch({ determiningAnswer: true });
-      try {
-        const res = await axios.post(`${API_BASE}/solution`, {
-          action: 'determine_answer',
-          question_text: q.question_text,
-          solution: q.solution,
-        });
-        correctAnswer = res.data.correct_answer ?? null;
-        q.correct_option = correctAnswer;
-      } catch {
-        //
-      }
-      patch({ determiningAnswer: false });
-    }
+    // correct_option is always present in the DB
+    const correctAnswer = q.correct_option;
 
     const u = parseFloat(state.integerAnswer.trim());
     const c = parseFloat(correctAnswer || '');
@@ -643,12 +597,7 @@ function QuestionCard({
                     </motion.div>
                   )}
 
-                  {state.determiningAnswer && (
-                    <div className="flex items-center gap-3">
-                      <Spinner size={4} color={isDark ? 'white' : '#0f172a'} />
-                      <span className={`text-sm ${T.muted}`}>Determining correct answer…</span>
-                    </div>
-                  )}
+
                 </div>
               ) : state.selectedOption === null ? (
                 /* ── MCQ unanswered ── */
@@ -727,13 +676,6 @@ function QuestionCard({
                 </div>
               )}
 
-              {/* Determining loader */}
-              {state.determiningAnswer && state.selectedOption !== null && (
-                <div className="flex items-center gap-3 py-1">
-                  <Spinner size={4} color={isDark ? 'white' : '#0f172a'} />
-                  <span className={`text-sm ${T.muted}`}>Determining correct answer…</span>
-                </div>
-              )}
 
               {/* ── Post-answer section ── */}
               {state.selectedOption !== null && (

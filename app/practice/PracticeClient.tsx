@@ -12,7 +12,7 @@ import {
 import { IoTimeOutline, IoBookmark } from 'react-icons/io5'
 import { supabase } from '../../public/src/utils/supabase'
 import 'katex/dist/katex.min.css'
-import { InlineMath, BlockMath } from 'react-katex'
+import { renderContent } from '../components/renderContent'
 import { updateStreak } from '../../public/src/utils/streakUtils'
 import { AI_BUDDIES, type Question } from '../QuestionViewer/QuestionViewerClient'
 import {
@@ -24,7 +24,7 @@ import {
 } from '../../lib/recommendation'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const API_BASE      = 'https://rookie-backend.vercel.app/api'
+const API_BASE      = 'https://rookie-backend.vercel.app'
 const BOOKMARKS_KEY = 'bookmarkedQuestions'
 const AI_SOL_CACHE  = 'aiSolutionCache_v1'
 const DB_TABLE      = 'jee_mains'
@@ -120,15 +120,8 @@ function Spinner({ size = 20, cls = 'border-white' }: { size?: number; cls?: str
   )
 }
 
-// ─── LaTeX renderer ───────────────────────────────────────────────────────────
-function renderLatex(text: string | null | undefined): React.ReactNode {
-  if (!text) return null
-  return text.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/).map((part, i) => {
-    if (part.startsWith('$$') && part.endsWith('$$')) return <BlockMath key={i} math={part.slice(2, -2)} />
-    if (part.startsWith('$') && part.endsWith('$')) return <InlineMath key={i} math={part.slice(1, -1)} />
-    return <span key={i}>{part}</span>
-  })
-}
+// ─── Content renderer (markdown tables + LaTeX + bold) ───────────────────────
+const renderLatex = (text: string | null | undefined, isDark = true) => renderContent(text, isDark)
 
 function CheckIcon() {
   return (
@@ -314,7 +307,6 @@ export default function PracticeClient() {
   const [solution, setSolution]             = useState('')
   const [solutionLoading, setSolutionLoading] = useState(false)
   const [solutionRequested, setSolutionRequested] = useState(false)
-  const [determiningAnswer, setDeterminingAnswer] = useState(false)
   const [integerAnswer, setIntegerAnswer]   = useState('')
 
   const [buddyId, setBuddyId]               = useState(DEFAULT_BUDDY)
@@ -571,45 +563,6 @@ export default function PracticeClient() {
     } catch {}
   }
 
-  // ── Determine correct answer ──────────────────────────────────────────────
-  const determineAnswer = async (q: Question): Promise<string | null> => {
-    setDeterminingAnswer(true)
-    try {
-      const res = await axios.post(`${API_BASE}/solution`, {
-        action: 'determine_answer', question_text: q.question_text,
-        option_A: q.option_a, option_B: q.option_b,
-        option_C: q.option_c, option_D: q.option_d, solution: q.solution,
-      })
-      const raw: string = res.data.correct_answer || ''
-      const normalised = raw.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
-      const ans = normalised || raw.toLowerCase().trim()
-
-      if (!ans) {
-        console.warn('determineAnswer: empty answer from API, raw:', JSON.stringify(raw))
-        return null
-      }
-
-      // Fire-and-forget DB write — never await so a failed RLS write can't
-      // block returning the answer or corrupt the comparison result.
-      supabase.from(DB_TABLE)
-        .update({ correct_option: ans })
-        .eq('question_id', q.question_id)
-        .then(({ error }) => {
-          if (error) console.warn('determineAnswer: Supabase write failed:', error.message)
-          else setQuestion(prev =>
-            (prev && prev.question_id === q.question_id) ? { ...prev, correct_option: ans } : prev
-          )
-        })
-
-      return ans
-    } catch (err) {
-      console.error('determineAnswer failed:', err)
-      return null
-    } finally {
-      setDeterminingAnswer(false)
-    }
-  }
-
   // ── Post-answer handler ───────────────────────────────────────────────────
   const handlePostAnswer = async (
     correct: boolean, timeSpent: number, q: Question, optKey: string,
@@ -768,22 +721,21 @@ export default function PracticeClient() {
   //   2. await determineAnswer → resolves + persists correct_option, lands
   //      it in `question` state via setQuestion.
   //   3. setIsCorrect / setSelectedOption → only now do we render the
-  //      colored (green/red) view, so correct_option can never read as null
-  //      at that point.
-  //   4. handlePostAnswer → solution generation starts only after the
-  //      answer is confirmed.
+  // Order of operations, deliberately:
+  //   1. setPendingOption(opt) → grey state, no verdict yet.
+  //   2. correct_option is read directly from the DB row — no AI call needed.
+  //   3. setIsCorrect / setSelectedOption → colored (green/red) view renders.
+  //   4. handlePostAnswer → solution generation starts.
   const handleOptionClick = async (opt: string) => {
     if (selectedOption !== null || pendingOption !== null || !question) return
     const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000)
     setPendingOption(opt)
-    let ans = question.correct_option
-    if (!ans) ans = await determineAnswer(question)
+    // correct_option is always present in the DB
+    const ans = question.correct_option
     const normalize = (v: string | null) =>
       v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? ''
     const correct = normalize(opt) === normalize(ans)
-    // Set before selectedOption so the answered-view render never reads a
-    // stale/null question.correct_option on the very first paint.
-    setResolvedCorrectOption(ans || question.correct_option || null)
+    setResolvedCorrectOption(ans || null)
     setIsCorrect(correct)
     setSelectedOption(opt)
     setPendingOption(null)
@@ -794,11 +746,11 @@ export default function PracticeClient() {
   const handleIntegerSubmit = async () => {
     if (isCorrect !== null || !question || !integerAnswer.trim()) return
     const timeSpent = Math.floor((Date.now() - questionStartTime.current) / 1000)
-    let ans = question.correct_option
-    if (!ans) ans = await determineAnswer(question)
+    // correct_option is always present in the DB
+    const ans = question.correct_option
     const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
     const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
-    setResolvedCorrectOption(ans || question.correct_option || null)
+    setResolvedCorrectOption(ans || null)
     setIsCorrect(correct); setSelectedOption('INTEGER')
     handlePostAnswer(correct, timeSpent, question, 'INTEGER', ans || '')
   }
@@ -1067,9 +1019,6 @@ export default function PracticeClient() {
                       <p className="text-sm text-gray-300 mt-1">Correct: <b className="text-[#1DC97A]">{resolvedCorrectOption || (displayQ ?? Q)!.correct_option}</b></p>
                     )}
                   </div>
-                )}
-                {determiningAnswer && (
-                  <div className="flex items-center gap-3"><Spinner size={16} /><span className={`text-sm ${T.muted}`}>Checking…</span></div>
                 )}
               </div>
 

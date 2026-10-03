@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../../public/src/utils/supabase';
 import { syncStreakFromSupabase, readStreakFromLocal } from '../../../public/src/utils/streakUtils'; // adjust path
 import 'katex/dist/katex.min.css';
-import { InlineMath, BlockMath } from 'react-katex';
+import { renderContent } from '../../components/renderContent';
 import {
   fetchRecommended as fetchRecommendedQ,
   updateAbilityVector,
@@ -874,13 +874,8 @@ function ContinueSection({ isDark }: { isDark: boolean }) {
   );
 }
 
-function renderLatex(text: string | null | undefined): React.ReactNode {
-  if (!text) return null;
-  return text.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/).map((part, i) => {
-    if (part.startsWith('$$') && part.endsWith('$$')) return <BlockMath key={i} math={part.slice(2, -2)} />;
-    if (part.startsWith('$') && part.endsWith('$'))   return <InlineMath key={i} math={part.slice(1, -1)} />;
-    return <span key={i}>{part}</span>;
-  });
+function renderLatex(text: string | null | undefined, isDark = true) {
+  return renderContent(text, isDark)
 }
 
 function CheckIconSmall() {
@@ -911,7 +906,6 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
   const [errored, setErrored]                     = useState(false);
   const [selectedOption, setSelectedOption]       = useState<string | null>(null);
   const [isCorrect, setIsCorrect]                 = useState<boolean | null>(null);
-  const [determiningAnswer, setDeterminingAnswer] = useState(false);
   const [bookmarked, setBookmarked]               = useState(false);
   // random users who have attempted this question
   const [attemptUsers, setAttemptUsers]           = useState<{ id: string; name: string; avatar_url: string | null }[]>([]);
@@ -966,27 +960,8 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
     if (selectedOption !== null || !question) return;
     setSelectedOption(optKey);
 
-    let correctOpt: string | null = question.correct_option ?? null;
-
-    if (!correctOpt) {
-      setDeterminingAnswer(true);
-      try {
-        const axiosLib = await import('axios');
-        const res = await axiosLib.default.post('https://rookie-backend.vercel.app/api/solution', {
-          action: 'determine_answer',
-          question_text: question.question_text,
-          option_A: question.option_a, option_B: question.option_b,
-          option_C: question.option_c, option_D: question.option_d,
-          solution: question.solution,
-        });
-        const raw: string = res.data.correct_answer || '';
-        const normalised = raw.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase();
-        correctOpt = normalised || raw.trim();
-        await supabase.from('jee_mains').update({ correct_option: correctOpt }).eq('question_id', question.question_id);
-        setQuestion((prev: any) => ({ ...prev, correct_option: correctOpt }));
-      } catch {}
-      finally { setDeterminingAnswer(false); }
-    }
+    // correct_option is always present in the DB
+    const correctOpt: string | null = question.correct_option ?? null;
 
     const normalize = (v: string | null) =>
       v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? '';
@@ -1222,16 +1197,8 @@ function RecommendedQuestionCard({ isDark }: { isDark: boolean }) {
               </div>
             )}
 
-            {/* Determining answer spinner */}
-            {determiningAnswer && (
-              <div className={`flex items-center gap-2 mb-3 text-xs ${mutedCls}`}>
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                Checking answer…
-              </div>
-            )}
-
             {/* Verdict */}
-            {isCorrect !== null && !determiningAnswer && (
+            {isCorrect !== null && (
               <motion.p
                 initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                 className={`text-xs font-semibold mb-3 ${isCorrect ? 'text-[#1DC97A]' : 'text-[#f87171]'}`}

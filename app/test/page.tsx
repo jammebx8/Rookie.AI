@@ -698,7 +698,7 @@ export default function AIChat() {
 
     const fetchGreeting = async () => {
       try {
-        const response = await fetch('https://rookie-backend.vercel.app/api/chat', {
+        const response = await fetch('https://rookie-backend.vercel.app/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -898,7 +898,7 @@ export default function AIChat() {
     try {
       abortControllerRef.current = new AbortController();
 
-      const response = await fetch('https://rookie-backend.vercel.app/api/chat', {
+      const response = await fetch('https://rookie-backend.vercel.app/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -947,7 +947,7 @@ export default function AIChat() {
       // Fetch TTS audio for AI response
       let audioUrl: string | undefined;
       try {
-        const ttsRes = await fetch('https://rookie-backend.vercel.app/api/tts', {
+        const ttsRes = await fetch('https://rookie-backend.vercel.app/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: accumulated }),
@@ -1033,7 +1033,7 @@ export default function AIChat() {
 
     try {
       abortControllerRef.current = new AbortController();
-      const response = await fetch('https://rookie-backend.vercel.app/api/chat', {
+      const response = await fetch('https://rookie-backend.vercel.app/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1075,7 +1075,7 @@ export default function AIChat() {
 
       let audioUrl: string | undefined;
       try {
-        const ttsRes = await fetch('https://rookie-backend.vercel.app/api/tts', {
+        const ttsRes = await fetch('https://rookie-backend.vercel.app/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: accumulated }),
@@ -1156,7 +1156,7 @@ export default function AIChat() {
           const formData = new FormData();
           formData.append('audio', audioBlob, 'recording.webm');
 
-          const res = await fetch('https://rookie-backend.vercel.app/api/transcribe', {
+          const res = await fetch('https://rookie-backend.vercel.app/transcribe', {
             method: 'POST',
             body: formData,
           });
