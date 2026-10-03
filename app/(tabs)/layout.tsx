@@ -69,6 +69,19 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [rookieCoins, setRookieCoins] = useState(0);
   const [isDark, setIsDark] = useState(true);
+  // Red badge on bookmark tab — count of unseen wrong-answer auto-bookmarks
+  const [wrongBadge, setWrongBadge] = useState(0);
+
+  useEffect(() => {
+    // Read badge count on mount + listen for updates from practice/questionviewer
+    const readBadge = () => {
+      try { setWrongBadge(parseInt(localStorage.getItem('rookie_wrong_bookmarks') || '0', 10)) } catch {}
+    }
+    readBadge()
+    window.addEventListener('wrongBadgeUpdated', readBadge)
+    window.addEventListener('storage', (e) => { if (e.key === 'rookie_wrong_bookmarks') readBadge() })
+    return () => window.removeEventListener('wrongBadgeUpdated', readBadge)
+  }, []);
 
   // Load theme from localStorage on mount
   useEffect(() => {
@@ -290,6 +303,12 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                       style={isActive && !isDark ? { filter: 'invert(29%) sepia(89%) saturate(1000%) hue-rotate(228deg) brightness(90%)' } : undefined}
                       priority={isActive}
                     />
+                    {/* Red badge on Bookmarks tab */}
+                    {tab.path === '/bookmark' && wrongBadge > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                        {wrongBadge > 99 ? '99+' : wrongBadge}
+                      </span>
+                    )}
                   </div>
                   <span className="text-sm font-medium">{tab.name}</span>
                   {isActive && (
@@ -393,6 +412,12 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                       style={isActive && !isDark ? { filter: 'invert(29%) sepia(89%) saturate(1000%) hue-rotate(228deg) brightness(90%)' } : undefined}
                       priority={isActive}
                     />
+                    {/* Red badge on Bookmarks tab */}
+                    {tab.path === '/bookmark' && wrongBadge > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                        {wrongBadge > 9 ? '9+' : wrongBadge}
+                      </span>
+                    )}
                   </div>
                   <span
                     className={`text-[10px] font-medium ${

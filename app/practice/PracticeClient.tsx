@@ -13,15 +13,24 @@ import { IoTimeOutline, IoBookmark } from 'react-icons/io5'
 import { supabase } from '../../public/src/utils/supabase'
 import 'katex/dist/katex.min.css'
 import { renderContent } from '../components/renderContent'
-import { updateStreak } from '../../public/src/utils/streakUtils'
+import { updateStreak, readStreakFromLocal } from '../../public/src/utils/streakUtils'
 import { AI_BUDDIES, type Question } from '../QuestionViewer/QuestionViewerClient'
+import { getWeakTopics, abilityLabel, updateAbilityVector, type WeakChapter } from '../../lib/recommendation'
 import {
-  fetchRecommended as fetchRecommendedQ,
-  updateAbilityVector,
-  getWeakTopics,
-  abilityLabel,
-  type WeakChapter,
-} from '../../lib/recommendation'
+  fetchAdaptive,
+  targetDifficulty,
+  questionDifficulty,
+  computeXP,
+  addXP,
+  readXP,
+  checkStreakGate,
+  autoBookmarkWrong,
+  loadSurvey,
+  shouldShowSurvey,
+  saveSurvey,
+  ALL_SURVEY_CHAPTERS,
+  type XPState,
+} from '../../lib/adaptivePractice'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const API_BASE      = 'https://rookie-backend.vercel.app'
@@ -280,14 +289,254 @@ function SessionSummary({ results, isDark, onContinue, onHome }: {
   )
 }
 
+// ─── Confetti particle ───────────────────────────────────────────────────────
+function Confetti() {
+  const colors = ['#f59e0b','#10b981','#6366f1','#ef4444','#ec4899','#ffffff']
+  const particles = Array.from({ length: 36 }, (_, i) => ({
+    id: i,
+    color: colors[i % colors.length],
+    x: Math.random() * 100,
+    delay: Math.random() * 0.5,
+    size: 5 + Math.random() * 6,
+    rotation: Math.random() * 360,
+  }))
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[500] overflow-hidden">
+      {particles.map(p => (
+        <motion.div
+          key={p.id}
+          initial={{ y: -20, x: `${p.x}vw`, opacity: 1, rotate: 0, scale: 1 }}
+          animate={{ y: '110vh', opacity: 0, rotate: p.rotation + 360, scale: 0.6 }}
+          transition={{ duration: 2.2 + p.delay, ease: 'easeIn', delay: p.delay }}
+          style={{
+            position: 'absolute', top: 0, width: p.size, height: p.size,
+            backgroundColor: p.color, borderRadius: p.id % 3 === 0 ? '50%' : 2,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ─── Streak Modal ─────────────────────────────────────────────────────────────
+function StreakModal({ streak, isDark, onClose }: {
+  streak: number; isDark: boolean; onClose: () => void
+}) {
+  return (
+    <>
+      <Confetti />
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[400] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ y: 80, opacity: 0, scale: 0.9 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 80, opacity: 0, scale: 0.9 }}
+          transition={{ type: 'spring', stiffness: 340, damping: 26 }}
+          onClick={e => e.stopPropagation()}
+          className={`w-full max-w-sm rounded-3xl p-8 text-center shadow-2xl border ${
+            isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
+          }`}
+        >
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <span className="text-5xl leading-none select-none">🔥</span>
+            <motion.span
+              key={streak}
+              initial={{ y: 30, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 22, delay: 0.15 }}
+              className="text-6xl font-black text-orange-500 leading-none tabular-nums"
+            >
+              {streak}
+            </motion.span>
+          </div>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+            <p className="text-xl font-bold mb-1">
+              {streak === 1 ? 'Streak started! 🎉' : `${streak}-day streak! 🎉`}
+            </p>
+            <p className={`text-sm mb-6 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              {streak === 1
+                ? "You've solved 3+ questions today. Come back tomorrow to keep it going!"
+                : `${streak} days in a row — consistency is your superpower.`}
+            </p>
+          </motion.div>
+          <motion.button
+            whileTap={{ scale: 0.97 }} onClick={onClose}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}
+            className={`w-full py-3.5 rounded-2xl text-sm font-bold ${
+              isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'
+            }`}
+          >
+            Keep going →
+          </motion.button>
+        </motion.div>
+      </motion.div>
+    </>
+  )
+}
+
+// ─── XP Progress Bar ─────────────────────────────────────────────────────────
+function XPBar({ xpState, isDark }: { xpState: ReturnType<typeof readXP>; isDark: boolean }) {
+  const pct = Math.min(100, Math.round((xpState.xpInLevel / xpState.xpForNextLevel) * 100))
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className={`text-[10px] font-bold flex-shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+        Lv {xpState.level}
+      </span>
+      <div className={`flex-1 h-1.5 rounded-full overflow-hidden min-w-[48px] ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`}>
+        <motion.div
+          className="h-full rounded-full bg-indigo-500"
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+        />
+      </div>
+      <span className={`text-[10px] tabular-nums flex-shrink-0 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+        {xpState.xpInLevel}/{xpState.xpForNextLevel}
+      </span>
+    </div>
+  )
+}
+
+// ─── Level-up badge ───────────────────────────────────────────────────────────
+function LevelUpBadge({ level, isDark, onDone }: { level: number; isDark: boolean; onDone: () => void }) {
+  useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t) }, [onDone])
+  return (
+    <motion.div
+      initial={{ scale: 0.7, opacity: 0, y: 20 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      exit={{ scale: 0.8, opacity: 0, y: -10 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 24 }}
+      className="flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-lg bg-indigo-600 text-white"
+    >
+      <span className="text-lg">⬆️</span>
+      <span className="font-bold text-sm">Level {level} reached!</span>
+    </motion.div>
+  )
+}
+
+// ─── Difficulty Pill ──────────────────────────────────────────────────────────
+function DifficultyPill({ difficulty, isDark }: { difficulty: number; isDark: boolean }) {
+  const label = difficulty < 0.35 ? 'Easy' : difficulty < 0.6 ? 'Medium' : difficulty < 0.8 ? 'Hard' : 'Expert'
+  const color = difficulty < 0.35 ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10'
+              : difficulty < 0.6  ? 'text-amber-400 border-amber-500/40 bg-amber-500/10'
+              : difficulty < 0.8  ? 'text-orange-400 border-orange-500/40 bg-orange-500/10'
+              :                     'text-red-400 border-red-500/40 bg-red-500/10'
+  return (
+    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${color}`}>
+      {label}
+    </span>
+  )
+}
+
+// ─── Chapter Survey Modal ─────────────────────────────────────────────────────
+function ChapterSurveyModal({ isDark, userId, onDone }: {
+  isDark: boolean; userId: string | null; onDone: () => void
+}) {
+  const subjects = ['physics', 'chemistry', 'maths'] as const
+  const [activeSubject, setActiveSubject] = useState<string>('physics')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+
+  const subjectLabel: Record<string, string> = { physics: 'Physics', chemistry: 'Chemistry', maths: 'Maths' }
+  const subjectColor: Record<string, string> = {
+    physics:   isDark ? 'bg-blue-500'   : 'bg-blue-600',
+    chemistry: isDark ? 'bg-green-500'  : 'bg-green-600',
+    maths:     isDark ? 'bg-purple-500' : 'bg-purple-600',
+  }
+  const chaptersForSubject = ALL_SURVEY_CHAPTERS.filter(c => c.subject === activeSubject)
+
+  const toggle = (ch: string) => {
+    setSelected(prev => { const n = new Set(prev); n.has(ch) ? n.delete(ch) : n.add(ch); return n })
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    await saveSurvey(userId, [...selected])
+    setSaving(false)
+    onDone()
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm px-2 sm:px-4"
+    >
+      <motion.div
+        initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+        className={`w-full max-w-lg rounded-t-3xl sm:rounded-3xl border overflow-hidden flex flex-col ${
+          isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
+        }`}
+        style={{ maxHeight: '88vh' }}
+      >
+        <div className={`px-5 pt-5 pb-4 border-b flex-shrink-0 ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
+          <h2 className="font-bold text-lg mb-0.5">Chapters you've studied 📚</h2>
+          <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            Pick what you've covered — we'll focus your practice there.
+          </p>
+        </div>
+        <div className={`flex gap-2 px-4 pt-3 pb-2 flex-shrink-0 border-b ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
+          {subjects.map(s => (
+            <button key={s} onClick={() => setActiveSubject(s)}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeSubject === s
+                  ? `${subjectColor[s]} text-white`
+                  : isDark ? 'bg-[#111827] text-slate-400 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              {subjectLabel[s]}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3 grid grid-cols-2 gap-2 content-start" style={{ scrollbarWidth: 'none' }}>
+          {chaptersForSubject.map(c => {
+            const active = selected.has(c.chapter)
+            return (
+              <motion.button key={c.chapter} whileTap={{ scale: 0.97 }} onClick={() => toggle(c.chapter)}
+                className={`p-3 rounded-xl border-2 text-left text-xs font-medium leading-tight transition-all ${
+                  active
+                    ? isDark ? 'bg-indigo-900/50 border-indigo-500 text-white' : 'bg-indigo-50 border-indigo-400 text-indigo-900'
+                    : isDark ? 'bg-[#111827] border-[#1e2538] text-slate-300 hover:border-[#2a3548]' : 'bg-gray-50 border-[#E5E7EB] text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {active && <span className="text-indigo-400 mr-1">✓</span>}
+                {c.chapter}
+              </motion.button>
+            )
+          })}
+        </div>
+        <div className={`px-4 py-4 border-t flex items-center gap-3 flex-shrink-0 ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
+          <span className={`text-xs flex-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            {selected.size} chapter{selected.size !== 1 ? 's' : ''} selected
+          </span>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={onDone}
+            className={`px-4 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${
+              isDark ? 'bg-[#111827] border-[#1D2939] text-white' : 'bg-white border-[#D1D5DB] text-gray-700'
+            }`}
+          >
+            Skip
+          </motion.button>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={handleSave} disabled={saving || selected.size === 0}
+            className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40 ${
+              isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'
+            }`}
+          >
+            {saving ? 'Saving…' : 'Save →'}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ─── Main Practice Component ──────────────────────────────────────────────────
 export default function PracticeClient() {
   const isDark = useTheme()
   const router = useRouter()
   const sp     = useSearchParams()
-
-  // The home page "Continue" button may pass a seed question_id so the first
-  // question feels instant (no RPC round-trip on first load).
   const seedQid = sp.get('qid') || ''
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -297,12 +546,8 @@ export default function PracticeClient() {
   const [loadingNext, setLoadingNext]       = useState(false)
 
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
-  const [pendingOption, setPendingOption]   = useState<string | null>(null) // clicked, not yet resolved
+  const [pendingOption, setPendingOption]   = useState<string | null>(null)
   const [isCorrect, setIsCorrect]           = useState<boolean | null>(null)
-  // Set synchronously in handleOptionClick/handleIntegerSubmit the moment the
-  // answer is resolved — guaranteed non-null by the time selectedOption flips,
-  // so the answered-view render (below) never has to read a stale/null
-  // question.correct_option. Mirrors QuestionViewerClient's resolvedCorrectOption.
   const [resolvedCorrectOption, setResolvedCorrectOption] = useState<string | null>(null)
   const [solution, setSolution]             = useState('')
   const [solutionLoading, setSolutionLoading] = useState(false)
@@ -323,15 +568,27 @@ export default function PracticeClient() {
   const [timer, setTimer]                   = useState(0)
 
   // session tracking
-  const [sessionCount, setSessionCount]     = useState(0)    // answered this session
+  const [sessionCount, setSessionCount]     = useState(0)
   const [sessionResults, setSessionResults] = useState<SessionResult[]>([])
   const [excludeIds, setExcludeIds]         = useState<string[]>(seedQid ? [seedQid] : [])
   const [userId, setUserId]                 = useState<string | null>(null)
   const [showSummary, setShowSummary]       = useState(false)
 
+  // adaptive difficulty — session-level correct/incorrect results for targetDifficulty()
+  const [recentCorrect, setRecentCorrect]   = useState<boolean[]>([])
+  const [currentDifficulty, setCurrentDifficulty] = useState(0.4)
+  const surveyChaptersRef                   = useRef<string[]>([])
+
+  // gamification
+  const [xpState, setXpState]               = useState(() => readXP())
+  const [showStreakModal, setShowStreakModal] = useState(false)
+  const [streakCount, setStreakCount]        = useState(0)
+  const [showLevelUp, setShowLevelUp]        = useState(false)
+  const [levelUpLevel, setLevelUpLevel]      = useState(1)
+  const [showSurvey, setShowSurvey]          = useState(false)
+
   // recommendation context
   const [weakTopics, setWeakTopics]         = useState<WeakChapter[]>([])
-  // stable ref so callbacks always have the latest userId without stale closure
   const userIdRef = useRef<string | null>(null)
 
   // ── Back-navigation history ───────────────────────────────────────────────
@@ -407,21 +664,36 @@ export default function PracticeClient() {
   }, [])
 
   // ── Fetch recommended question ────────────────────────────────────────────
-  // Uses lib/recommendation.ts which calls the embedding-based Supabase RPC.
-  // Falls back to a random unseen question on any error so the session never
-  // gets stuck.
-  const fetchRecommended = useCallback(async (excludes: string[]): Promise<Question | null> => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return null
-    return fetchRecommendedQ(user.id, excludes)
-  }, [])
+  // Uses adaptive difficulty system from lib/adaptivePractice.ts.
+  // Falls back gracefully — session never gets stuck.
+  const fetchNext = useCallback(async (excludes: string[]): Promise<Question | null> => {
+    const uid = userIdRef.current
+    const target = targetDifficulty(sessionCount, recentCorrect)
+    try {
+      const result = await fetchAdaptive(uid, excludes, target, surveyChaptersRef.current)
+      setCurrentDifficulty(result.difficulty)
+      if (result.newLap) addToast('🔄 Starting a new lap — all questions unlocked!', 'info', 3500)
+      return result.question
+    } catch {
+      return null
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionCount, recentCorrect])
+  const fetchRecommended = fetchNext  // alias so advanceToNext/other callers stay unchanged
 
-  // ── Load first question ───────────────────────────────────────────────────
+  // ── Load first question + show survey if needed ───────────────────────────
   useEffect(() => {
     const init = async () => {
       setLoadingQ(true)
 
-      // If a seed question_id was passed (from home preview card), fetch it directly
+      // Load survey chapters into ref so fetchNext can filter
+      const survey = loadSurvey()
+      if (survey) surveyChaptersRef.current = survey.chapters
+
+      // Show survey if due (first time or expired)
+      if (shouldShowSurvey()) setShowSurvey(true)
+
+      // If a seed question_id was passed (from home preview card), fetch directly
       if (seedQid) {
         const { data, error } = await supabase
           .from(DB_TABLE)
@@ -430,34 +702,27 @@ export default function PracticeClient() {
           .single()
         if (!error && data) {
           setQuestion(data as Question)
+          setCurrentDifficulty(questionDifficulty(data as Question))
           setLoadingQ(false)
-          // Prefetch the next one in background
-          const uid = (await supabase.auth.getUser()).data.user?.id
-          if (uid) {
-            setLoadingNext(true)
-            const next = await fetchRecommended([seedQid])
-            setNextQuestion(next)
-            setLoadingNext(false)
-          }
+          setLoadingNext(true)
+          fetchNext([seedQid]).then(next => { setNextQuestion(next); setLoadingNext(false) })
           return
         }
       }
 
-      // No seed — fetch from RPC directly
-      const q = await fetchRecommended([])
+      // No seed — adaptive fetch
+      const q = await fetchNext([])
       setQuestion(q)
       setLoadingQ(false)
 
-      // Prefetch next
       if (q) {
         setLoadingNext(true)
-        const next = await fetchRecommended([q.question_id])
-        setNextQuestion(next)
-        setLoadingNext(false)
+        fetchNext([q.question_id]).then(next => { setNextQuestion(next); setLoadingNext(false) })
       }
     }
     init()
-  }, [seedQid, fetchRecommended])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedQid])
 
   // ── Bookmark sync ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -566,22 +831,50 @@ export default function PracticeClient() {
   // ── Post-answer handler ───────────────────────────────────────────────────
   const handlePostAnswer = async (
     correct: boolean, timeSpent: number, q: Question, optKey: string,
-    confirmedAnswer: string   // ← resolved correct answer, never null
+    confirmedAnswer: string
   ) => {
+    const diff  = currentDifficulty
     const coins = correct ? Math.min((timeSpent <= 30 ? 5 : timeSpent <= 60 ? 4 : timeSpent <= 90 ? 3 : timeSpent <= 120 ? 2 : 1) + 5, 10) : 0
+    const xp    = computeXP(correct, diff, timeSpent)
 
-    addToast(correct ? `✓ Correct! +${coins} Coins` : '✗ Not quite — check the solution', correct ? 'coin' : 'error', 3000)
+    // ── XP ────────────────────────────────────────────────────────────────
+    const newXp = addXP(xp)
+    setXpState(newXp)
+    if (newXp.levelledUp) {
+      setLevelUpLevel(newXp.level)
+      setShowLevelUp(true)
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────────
+    const xpMsg = correct ? `✓ Correct! +${coins} Coins · +${xp} XP` : `✗ Not quite — check the solution`
+    addToast(xpMsg, correct ? 'coin' : 'error', 3000)
     if (correct && coins > 0) updateCoins(coins)
-    updateStreak()
 
-    // local daily count
+    // ── Streak (fires updateStreak, dispatches 'streakUpdated') ──────────
+    await updateStreak()
+
+    // ── Daily count + streak gate ─────────────────────────────────────────
     const todayKey = `questionsToday_${new Date().toDateString()}`
-    localStorage.setItem(todayKey, String((parseInt(localStorage.getItem(todayKey) || '0') + 1)))
+    const todayCount = parseInt(localStorage.getItem(todayKey) || '0', 10) + 1
+    localStorage.setItem(todayKey, String(todayCount))
 
-    // record attempt
+    // Show streak modal the first time the student crosses 3 questions today
+    if (checkStreakGate(todayCount)) {
+      const sd = readStreakFromLocal()
+      setStreakCount(sd.current)
+      setShowStreakModal(true)
+    }
+
+    // ── Auto-bookmark wrong answers ───────────────────────────────────────
+    if (!correct) autoBookmarkWrong(q)
+
+    // ── Adaptive: update recentCorrect for next targetDifficulty() call ──
+    setRecentCorrect(prev => [...prev, correct])
+
+    // ── Write attempt to DB ───────────────────────────────────────────────
     await writeAttempt(q, correct, timeSpent)
 
-    // update session state
+    // ── Session state ─────────────────────────────────────────────────────
     const newResults: SessionResult[] = [
       ...sessionResults,
       { question_id: q.question_id, correct, chapter: q.chapter || '', subject: q.subject || '' },
@@ -589,28 +882,22 @@ export default function PracticeClient() {
     setSessionResults(newResults)
     setSessionCount(c => c + 1)
 
-    // ── Push to back-navigation history ──────────────────────────────────
-    // We push before the solution resolves; the entry's solution is updated
-    // in the generateAISolution .then() below via setHistory.
     setHistory(prev => [...prev, {
       question:        q,
       selectedOption:  optKey,
       resolvedCorrect: confirmedAnswer || null,
       isCorrect:       correct,
-      solution:        '',      // filled in once AI solution resolves
+      solution:        '',
       aiFollowup:      null,
       solutionBuddyId: buddyId,
     }])
 
-    // Refresh weak topics in background so the header chip stays up to date
     const uid = userIdRef.current
     if (uid) getWeakTopics(uid, 2).then(topics => setWeakTopics(topics))
 
-    // add to exclude list and start prefetching the one AFTER next
     const newExcludes = [...excludeIds, q.question_id]
     setExcludeIds(newExcludes)
 
-    // generate solution — pass confirmedAnswer directly so backend never gets null
     const activeBuddy = buddyId
     setSolutionBuddyId(activeBuddy)
     setSolutionRequested(true)
@@ -619,7 +906,6 @@ export default function PracticeClient() {
     generateAISolution(q, activeBuddy, confirmedAnswer).then(aiSol => {
       setSolution(aiSol)
       setSolutionLoading(false)
-      // Persist solution into the last history entry
       setHistory(prev => {
         if (prev.length === 0) return prev
         const updated = [...prev]
@@ -629,16 +915,9 @@ export default function PracticeClient() {
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150)
     })
 
-    // Prefetch the question AFTER next (if we have nextQuestion already, prefetch one beyond that)
     if (nextQuestion) {
       const beyondExcludes = [...newExcludes, nextQuestion.question_id]
-      fetchRecommended(beyondExcludes).then(beyond => {
-        // store as the new "nextQuestion" candidate once user advances
-        // We'll swap it in when the user hits "Next Question"
-        setNextQuestion(prev => prev) // keep current nextQuestion; beyond is ready
-        // Store it in a ref for the advance handler to pick up
-        beyondRef.current = beyond
-      })
+      fetchNext(beyondExcludes).then(beyond => { beyondRef.current = beyond })
     }
   }
 
@@ -690,7 +969,7 @@ export default function PracticeClient() {
       // Prefetch beyond
       const newExcludes = [...excludeIds, nextQuestion.question_id]
       setLoadingNext(true)
-      fetchRecommended(newExcludes).then(q => {
+      fetchNext(newExcludes).then(q => {
         beyondRef.current = q
         setLoadingNext(false)
       })
@@ -698,11 +977,11 @@ export default function PracticeClient() {
       // Fallback: fetch on demand
       resetAnswerState()
       setLoadingQ(true)
-      const q = await fetchRecommended(excludeIds)
+      const q = await fetchNext(excludeIds)
       setQuestion(q)
       setLoadingQ(false)
       if (q) {
-        const next = await fetchRecommended([...excludeIds, q.question_id])
+        const next = await fetchNext([...excludeIds, q.question_id])
         setNextQuestion(next)
       }
     }
@@ -858,6 +1137,36 @@ export default function PracticeClient() {
       {/* Image modal */}
       <AnimatePresence>{imageModal && <ImageModal src={imageModal} onClose={() => setImageModal(null)} />}</AnimatePresence>
 
+      {/* Streak modal */}
+      <AnimatePresence>
+        {showStreakModal && (
+          <StreakModal streak={streakCount} isDark={isDark} onClose={() => setShowStreakModal(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* Level-up badge */}
+      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[350] pointer-events-none">
+        <AnimatePresence>
+          {showLevelUp && (
+            <LevelUpBadge level={levelUpLevel} isDark={isDark} onDone={() => setShowLevelUp(false)} />
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Chapter survey modal */}
+      <AnimatePresence>
+        {showSurvey && (
+          <ChapterSurveyModal
+            isDark={isDark} userId={userId}
+            onDone={() => {
+              setShowSurvey(false)
+              const survey = loadSurvey()
+              if (survey) surveyChaptersRef.current = survey.chapters
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Buddy modal */}
       <AnimatePresence>
         {buddyModalOpen && (
@@ -884,25 +1193,12 @@ export default function PracticeClient() {
           {/* Title + session count */}
           <div className="flex-1 mx-3 min-w-0 text-center">
             <h1 className="text-sm font-bold">
-              {isReviewing ? `Review · Q${historyIndex + 1} of ${history.length}` : 'Daily Practice'}
+              {isReviewing ? `Review · Q${historyIndex + 1} of ${history.length}` : 'Adaptive Practice'}
             </h1>
-            
-            {/* Weak-topic chip */}
-            {!isReviewing && weakTopics.length > 0 && !loadingNext && selectedOption === null && (
-              <div className="flex items-center justify-center gap-1 mt-0.5">
-               
-                {(() => {
-                  const lbl = abilityLabel(
-                    weakTopics[0].total > 0
-                      ? (weakTopics[0].total - weakTopics[0].wrong) / weakTopics[0].total
-                      : 0
-                  )
-                  return (
-                    <span className="text-[9px] font-semibold" style={{ color: lbl.color }}>
-                      {lbl.emoji}
-                    </span>
-                  )
-                })()}
+            {/* XP bar */}
+            {!isReviewing && (
+              <div className="mt-1 px-2">
+                <XPBar xpState={xpState} isDark={isDark} />
               </div>
             )}
           </div>
@@ -965,6 +1261,7 @@ export default function PracticeClient() {
                     {(displayQ ?? Q)!.chapter}
                   </span>
                 )}
+                {!isReviewing && <DifficultyPill difficulty={currentDifficulty} isDark={isDark} />}
               </div>
 
               <div className="font-medium leading-relaxed">{renderLatex((displayQ ?? Q)!.question_text)}</div>

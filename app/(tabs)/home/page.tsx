@@ -12,6 +12,11 @@ import {
   fetchRecommended as fetchRecommendedQ,
   updateAbilityVector,
 } from '../../../lib/recommendation';
+import {
+  shouldShowSurvey,
+  saveSurvey,
+  ALL_SURVEY_CHAPTERS,
+} from '../../../lib/adaptivePractice';
 
 
 
@@ -1304,6 +1309,114 @@ function ThemeToggle({ isDark }: { isDark: boolean }) {
   );
 }
 
+// ─── Chapter Survey Modal (home page version, same logic as PracticeClient) ──
+function HomeSurveyModal({ isDark, userId, onDone }: {
+  isDark: boolean; userId: string | null; onDone: () => void
+}) {
+  const subjects = ['physics', 'chemistry', 'maths'] as const
+  const [activeSubject, setActiveSubject] = useState<string>('physics')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+
+  const subjectLabel: Record<string, string> = { physics: 'Physics', chemistry: 'Chemistry', maths: 'Maths' }
+  const subjectColor: Record<string, string> = {
+    physics:   isDark ? 'bg-blue-500'   : 'bg-blue-600',
+    chemistry: isDark ? 'bg-green-500'  : 'bg-green-600',
+    maths:     isDark ? 'bg-purple-500' : 'bg-purple-600',
+  }
+  const chaptersForSubject = ALL_SURVEY_CHAPTERS.filter(c => c.subject === activeSubject)
+
+  const toggle = (ch: string) => {
+    setSelected(prev => { const n = new Set(prev); n.has(ch) ? n.delete(ch) : n.add(ch); return n })
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    await saveSurvey(userId, [...selected])
+    setSaving(false)
+    onDone()
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm px-2 sm:px-4"
+    >
+      <motion.div
+        initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+        className={`w-full max-w-lg rounded-t-3xl sm:rounded-3xl border overflow-hidden flex flex-col ${
+          isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
+        }`}
+        style={{ maxHeight: '88vh' }}
+      >
+        {/* Header */}
+        <div className={`px-5 pt-5 pb-4 border-b flex-shrink-0 ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
+          <h2 className="font-bold text-lg mb-0.5">Chapters you've studied 📚</h2>
+          <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            Pick what you've covered — we'll focus your practice there. Takes 10 seconds.
+          </p>
+        </div>
+
+        {/* Subject tabs */}
+        <div className={`flex gap-2 px-4 pt-3 pb-2 flex-shrink-0 border-b ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
+          {subjects.map(s => (
+            <button key={s} onClick={() => setActiveSubject(s)}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeSubject === s
+                  ? `${subjectColor[s]} text-white`
+                  : isDark ? 'bg-[#111827] text-slate-400 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              {subjectLabel[s]}
+            </button>
+          ))}
+        </div>
+
+        {/* Chapter grid */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 grid grid-cols-2 gap-2 content-start" style={{ scrollbarWidth: 'none' }}>
+          {chaptersForSubject.map(c => {
+            const active = selected.has(c.chapter)
+            return (
+              <motion.button key={c.chapter} whileTap={{ scale: 0.97 }} onClick={() => toggle(c.chapter)}
+                className={`p-3 rounded-xl border-2 text-left text-xs font-medium leading-tight transition-all ${
+                  active
+                    ? isDark ? 'bg-indigo-900/50 border-indigo-500 text-white' : 'bg-indigo-50 border-indigo-400 text-indigo-900'
+                    : isDark ? 'bg-[#111827] border-[#1e2538] text-slate-300 hover:border-[#2a3548]' : 'bg-gray-50 border-[#E5E7EB] text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {active && <span className="text-indigo-400 mr-1">✓</span>}
+                {c.chapter}
+              </motion.button>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className={`px-4 py-4 border-t flex items-center gap-3 flex-shrink-0 ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
+          <span className={`text-xs flex-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            {selected.size} chapter{selected.size !== 1 ? 's' : ''} selected
+          </span>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={onDone}
+            className={`px-4 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${
+              isDark ? 'bg-[#111827] border-[#1D2939] text-white' : 'bg-white border-[#D1D5DB] text-gray-700'
+            }`}
+          >
+            Skip
+          </motion.button>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={handleSave} disabled={saving || selected.size === 0}
+            className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40 ${
+              isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'
+            }`}
+          >
+            {saving ? 'Saving…' : 'Save →'}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function HomePage() {
   const router = useRouter();
@@ -1314,6 +1427,9 @@ export default function HomePage() {
   const [cl, setcl] = useState('');
   const [exam, setExam] = useState('');
   const [saving, setSaving] = useState(false);
+  // Weekly chapter survey
+  const [showSurvey, setShowSurvey] = useState(false);
+  const [surveyUserId, setSurveyUserId] = useState<string | null>(null);
 
   // Apply body background on theme change
   useEffect(() => {
@@ -1328,6 +1444,7 @@ export default function HomePage() {
       if (!cached) return;
       const parsed: User = JSON.parse(cached);
       setUser(parsed);
+      setSurveyUserId(parsed.id ?? null);
       if (!parsed.cl || !parsed.exam) {
         setShowProfileModal(true);
       } else {
@@ -1335,6 +1452,11 @@ export default function HomePage() {
         setExam(parsed.exam || '');
       }
     } catch {}
+    // Show chapter survey if due (first time or expired every 7 days)
+    if (shouldShowSurvey()) {
+      // Small delay so profile modal (if needed) appears first
+      setTimeout(() => setShowSurvey(true), 800);
+    }
   }, []);
 
   const saveProfile = async () => {
@@ -1389,6 +1511,17 @@ export default function HomePage() {
 
   return (
     <main className={`min-h-screen ${bg} ${text} transition-colors duration-300`}>
+
+      {/* ─── Chapter Survey Modal (weekly) ─────────────────────────────────── */}
+      <AnimatePresence>
+        {showSurvey && !showProfileModal && (
+          <HomeSurveyModal
+            isDark={isDark}
+            userId={surveyUserId}
+            onDone={() => setShowSurvey(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ─── Profile Completion Modal ─────────────────────────────────────── */}
       <AnimatePresence>

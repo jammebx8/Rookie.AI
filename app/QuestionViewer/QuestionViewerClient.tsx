@@ -14,6 +14,7 @@ import { supabase } from '../../public/src/utils/supabase'
 import 'katex/dist/katex.min.css'
 import { updateStreak } from '../../public/src/utils/streakUtils'
 import { updateAbilityVector } from '../../lib/recommendation'
+import { sortByDifficulty, autoBookmarkWrong } from '../../lib/adaptivePractice'
 import { renderContent } from '../components/renderContent'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -938,7 +939,7 @@ export default function QuestionViewerClient() {
 
         const { data, error } = await supabase
           .from(DB_TABLE)
-          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
+          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,option_a_percent,option_b_percent,option_c_percent,option_d_percent,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
           .eq('subject', subject)
           .eq('chapter', chapterTitle)
           .order('question', { ascending: true })
@@ -946,7 +947,8 @@ export default function QuestionViewerClient() {
 
         if (error || !data) { setQuestions([]); return }
 
-        setQuestions(data as Question[])
+        // Sort easy-first within the window using crowd difficulty score
+        setQuestions(sortByDifficulty(data as Question[]))
         setPageOffset(windowStart)
 
         // currentIndex within window
@@ -977,14 +979,15 @@ export default function QuestionViewerClient() {
       try {
         const { data } = await supabase
           .from(DB_TABLE)
-          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
+          .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,option_a_percent,option_b_percent,option_c_percent,option_d_percent,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
           .eq('subject', subject)
           .eq('chapter', chapterTitle)
           .order('question', { ascending: true })
           .range(nextStart, nextStart + PAGE_SIZE - 1)
 
         if (data && data.length > 0) {
-          setQuestions(prev => [...prev, ...(data as Question[])])
+          // Sort new window easy-first before appending
+          setQuestions(prev => [...prev, ...sortByDifficulty(data as Question[])])
         }
       } catch { /* silent */ } finally {
         setLoadingMore(false)
@@ -1240,6 +1243,9 @@ export default function QuestionViewerClient() {
       const prev = loadSession(globalIndex)
       if (prev?.isCorrect !== true) updateRookieCoins(coins)
     }
+
+    // Auto-bookmark wrong answers so the red badge appears on the Bookmarks tab
+    if (!correct) autoBookmarkWrong(q)
 
     updateStreak()
 

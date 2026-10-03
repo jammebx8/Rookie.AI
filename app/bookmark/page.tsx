@@ -19,6 +19,7 @@ import {
 import { IoBookmark } from 'react-icons/io5';
 import 'katex/dist/katex.min.css';
 import { renderContent } from '../components/renderContent';
+import { clearWrongBadge } from '../../lib/adaptivePractice';
 
 const BOOKMARKS_KEY = 'bookmarkedQuestions';
 const API_BASE = 'https://rookie-backend.vercel.app';
@@ -461,6 +462,11 @@ function QuestionCard({
               {parseShift(q.exam_shift)}
             </span>
           )}
+          {q._autoBookmark && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 flex-shrink-0">
+              ✗ Wrong
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
@@ -789,6 +795,8 @@ export default function BookmarkPage() {
     } catch {
       setBookmarks([]);
     }
+    // Clear the red badge the moment the user opens this page
+    clearWrongBadge();
   }, []);
 
   const subjects = [
