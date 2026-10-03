@@ -103,14 +103,13 @@ export async function fetchRecommended(
         p_user_id:              userId,
         p_exclude_question_ids: excludeIds,
       })
-      .single()
+      .limit(1)
 
-    if (error) {
-      // RPC not deployed or other DB error — use simple random fallback
+    if (error || !data || (data as any[]).length === 0) {
       return await fallbackRandom(userId, excludeIds)
     }
 
-    return (data as Question) ?? null
+    return ((data as any[])[0] as unknown as Question) ?? null
   } catch {
     return await fallbackRandom(userId, excludeIds)
   }

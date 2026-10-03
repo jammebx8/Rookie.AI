@@ -230,15 +230,7 @@ begin
     top5 as (
       select * from candidates order by distance limit 5
     )
-    select (top5).id, (top5).question, (top5).question_id, (top5).question_text,
-           (top5).option_a, (top5).option_b, (top5).option_c, (top5).option_d,
-           (top5).correct_option, (top5).exam_shift, (top5).source_url,
-           (top5).solution, (top5).question_img_url, (top5).solution_image_url,
-           (top5).sol_ai, (top5).option_a_img, (top5).option_b_img,
-           (top5).option_c_img, (top5).option_d_img, (top5).subject,
-           (top5).chapter, (top5).embedding,
-           (top5).buddy_jeetu, (top5).buddy_riya, (top5).buddy_rei,
-           (top5).buddy_ritu, (top5).buddy_shreya, (top5).buddy_neha
+    select (top5).*
     from   top5
     order  by random()
     limit  1;

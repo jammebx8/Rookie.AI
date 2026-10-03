@@ -340,8 +340,13 @@ function StreakModal({ streak, isDark, onClose }: {
             isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]'
           }`}
         >
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <span className="text-5xl leading-none select-none">🔥</span>
+          {/* Flame SVG icon */}
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" className="text-orange-500">
+              <path d="M12 2C12 2 7 7 7 12a5 5 0 0 0 10 0c0-2.5-1.5-5-3-7 0 0-1 3-2 3s-1-2-1-3l1 5z" fill="currentColor" opacity="0.3"/>
+              <path d="M12 2c0 0-5 5-5 10a5 5 0 0 0 10 0c0-2.5-1.5-5-3-7 0 0-1 3-2 3s-1-2-1-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="12" cy="14" r="2" fill="currentColor"/>
+            </svg>
             <motion.span
               key={streak}
               initial={{ y: 30, opacity: 0 }}
@@ -354,22 +359,25 @@ function StreakModal({ streak, isDark, onClose }: {
           </div>
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <p className="text-xl font-bold mb-1">
-              {streak === 1 ? 'Streak started! 🎉' : `${streak}-day streak! 🎉`}
+              {streak === 1 ? 'Streak started!' : `${streak}-day streak!`}
             </p>
             <p className={`text-sm mb-6 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               {streak === 1
-                ? "You've solved 3+ questions today. Come back tomorrow to keep it going!"
+                ? "You've solved 3+ questions today. Come back tomorrow to keep it going."
                 : `${streak} days in a row — consistency is your superpower.`}
             </p>
           </motion.div>
           <motion.button
             whileTap={{ scale: 0.97 }} onClick={onClose}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}
-            className={`w-full py-3.5 rounded-2xl text-sm font-bold ${
+            className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-bold ${
               isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'
             }`}
           >
-            Keep going →
+            Keep going
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
           </motion.button>
         </motion.div>
       </motion.div>
@@ -409,10 +417,14 @@ function LevelUpBadge({ level, isDark, onDone }: { level: number; isDark: boolea
       animate={{ scale: 1, opacity: 1, y: 0 }}
       exit={{ scale: 0.8, opacity: 0, y: -10 }}
       transition={{ type: 'spring', stiffness: 380, damping: 24 }}
-      className="flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-lg bg-indigo-600 text-white"
+      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-lg border ${
+        isDark ? 'bg-[#0d1117] border-[#1e2538] text-white' : 'bg-white border-[#E5E7EB] text-[#0f172a]'
+      }`}
     >
-      <span className="text-lg">⬆️</span>
-      <span className="font-bold text-sm">Level {level} reached!</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-indigo-400 flex-shrink-0">
+        <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <span className="font-bold text-sm">Level {level} reached</span>
     </motion.div>
   )
 }
@@ -440,12 +452,12 @@ function ChapterSurveyModal({ isDark, userId, onDone }: {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
 
+  // Leaderboard-style filter chip tokens — white/black, no random colors
+  const chipActive = isDark ? 'bg-white text-[#0f172a] border-white' : 'bg-[#0f172a] text-white border-[#0f172a]'
+  const chipIdle   = isDark ? 'bg-[#111827] text-slate-300 border-[#1D2939] hover:border-slate-500'
+                            : 'bg-white text-slate-600 border-[#E5E7EB] hover:border-slate-400'
+
   const subjectLabel: Record<string, string> = { physics: 'Physics', chemistry: 'Chemistry', maths: 'Maths' }
-  const subjectColor: Record<string, string> = {
-    physics:   isDark ? 'bg-blue-500'   : 'bg-blue-600',
-    chemistry: isDark ? 'bg-green-500'  : 'bg-green-600',
-    maths:     isDark ? 'bg-purple-500' : 'bg-purple-600',
-  }
   const chaptersForSubject = ALL_SURVEY_CHAPTERS.filter(c => c.subject === activeSubject)
 
   const toggle = (ch: string) => {
@@ -472,59 +484,82 @@ function ChapterSurveyModal({ isDark, userId, onDone }: {
         }`}
         style={{ maxHeight: '88vh' }}
       >
+        {/* Header */}
         <div className={`px-5 pt-5 pb-4 border-b flex-shrink-0 ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
-          <h2 className="font-bold text-lg mb-0.5">Chapters you've studied 📚</h2>
+          <div className="flex items-center gap-2 mb-0.5">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className={isDark ? 'text-slate-400' : 'text-slate-500'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+            <h2 className="font-bold text-lg">Chapters you've studied</h2>
+          </div>
           <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             Pick what you've covered — we'll focus your practice there.
           </p>
         </div>
-        <div className={`flex gap-2 px-4 pt-3 pb-2 flex-shrink-0 border-b ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
+
+        {/* Subject filter chips */}
+        <div className={`flex gap-2 px-4 pt-3 pb-3 flex-shrink-0 border-b ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
           {subjects.map(s => (
-            <button key={s} onClick={() => setActiveSubject(s)}
-              className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeSubject === s
-                  ? `${subjectColor[s]} text-white`
-                  : isDark ? 'bg-[#111827] text-slate-400 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900'
+            <motion.button key={s} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+              onClick={() => setActiveSubject(s)}
+              className={`flex-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-200 ${
+                activeSubject === s ? chipActive : chipIdle
               }`}
             >
               {subjectLabel[s]}
-            </button>
+            </motion.button>
           ))}
         </div>
+
+        {/* Chapter grid */}
         <div className="flex-1 overflow-y-auto px-4 py-3 grid grid-cols-2 gap-2 content-start" style={{ scrollbarWidth: 'none' }}>
           {chaptersForSubject.map(c => {
             const active = selected.has(c.chapter)
             return (
               <motion.button key={c.chapter} whileTap={{ scale: 0.97 }} onClick={() => toggle(c.chapter)}
-                className={`p-3 rounded-xl border-2 text-left text-xs font-medium leading-tight transition-all ${
+                className={`p-3 rounded-xl border text-left text-xs font-medium leading-tight transition-all flex items-start gap-2 ${
                   active
-                    ? isDark ? 'bg-indigo-900/50 border-indigo-500 text-white' : 'bg-indigo-50 border-indigo-400 text-indigo-900'
-                    : isDark ? 'bg-[#111827] border-[#1e2538] text-slate-300 hover:border-[#2a3548]' : 'bg-gray-50 border-[#E5E7EB] text-gray-700 hover:border-gray-300'
+                    ? isDark ? 'bg-[#111827] border-white text-white' : 'bg-[#0f172a] border-[#0f172a] text-white'
+                    : isDark ? 'bg-[#111827] border-[#1e2538] text-slate-300 hover:border-slate-500' : 'bg-gray-50 border-[#E5E7EB] text-gray-700 hover:border-gray-400'
                 }`}
               >
-                {active && <span className="text-indigo-400 mr-1">✓</span>}
-                {c.chapter}
+                {/* SVG checkbox */}
+                <span className={`mt-0.5 flex-shrink-0 w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all ${
+                  active
+                    ? isDark ? 'border-white bg-white/20' : 'border-[#0f172a] bg-white/10'
+                    : isDark ? 'border-[#2a3548]' : 'border-gray-300'
+                }`}>
+                  {active && (
+                    <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                      <path d="M1 3l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </span>
+                <span className="flex-1">{c.chapter}</span>
               </motion.button>
             )
           })}
         </div>
+
+        {/* Footer */}
         <div className={`px-4 py-4 border-t flex items-center gap-3 flex-shrink-0 ${isDark ? 'border-[#1e2538]' : 'border-[#E5E7EB]'}`}>
           <span className={`text-xs flex-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            {selected.size} chapter{selected.size !== 1 ? 's' : ''} selected
+            {selected.size} selected
           </span>
           <motion.button whileTap={{ scale: 0.97 }} onClick={onDone}
-            className={`px-4 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${
-              isDark ? 'bg-[#111827] border-[#1D2939] text-white' : 'bg-white border-[#D1D5DB] text-gray-700'
-            }`}
+            className={`px-4 py-2 rounded-full text-xs font-semibold border transition-all duration-200 ${chipIdle}`}
           >
             Skip
           </motion.button>
           <motion.button whileTap={{ scale: 0.97 }} onClick={handleSave} disabled={saving || selected.size === 0}
-            className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40 ${
-              isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'
-            }`}
+            className={`px-5 py-2 rounded-full text-xs font-bold transition-all duration-200 disabled:opacity-30 flex items-center gap-1.5 border ${chipActive}`}
           >
-            {saving ? 'Saving…' : 'Save →'}
+            {saving ? 'Saving' : 'Save'}
+            {!saving && (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            )}
           </motion.button>
         </div>
       </motion.div>
