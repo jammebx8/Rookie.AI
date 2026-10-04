@@ -707,9 +707,9 @@ export default function OnboardingPage() {
   `;
 
   const EXAMS: ExamMeta[] = [
-    { name: 'JEE Main',     color: '#3b82f6', logo: '/JM.png',     abbr: 'JM'  },
+    { name: 'JEE Main',     color: '#3b82f6', logo: '/jm.png',     abbr: 'JM'  },
     { name: 'JEE Advanced', color: '#8b5cf6', logo: '/JA.png', abbr: 'JA'  },
-    { name: 'NEET',         color: '#10b981', logo: '/NT.png',         abbr: 'NT'  },
+    { name: 'NEET',         color: '#10b981', logo: '/nt.png',         abbr: 'NT'  },
     { name: 'MHT CET',      color: '#f59e0b', logo: '/MH.png',      abbr: 'MH'  },
     { name: 'BITSAT',       color: '#6366f1', logo: '/BS.png',       abbr: 'BS'  },
   ];

@@ -13,9 +13,9 @@ interface Props {
 }
 
 const EXAM_LOGOS: Record<string, string> = {
-  'JEE Main': '/JM.png',
+  'JEE Main': '/jm.png',
   'JEE Advanced': '/JA.png',
-  'NEET': '/NT.png',
+  'NEET': '/nt.png',
   'MHT CET': '/MH.png',
   'BITSAT': '/BS.png',
 }
