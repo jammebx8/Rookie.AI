@@ -64,6 +64,20 @@ const BookmarkIcon = ({ isDark }: { isDark: boolean }) => (
   </svg>
 );
 
+// Tests (clipboard-check) icon SVG
+const TestsNavIcon = ({ active, isDark }: { active: boolean; isDark: boolean }) => {
+  const col = active
+    ? (isDark ? '#ffffff' : '#4F46E5')
+    : (isDark ? '#6B7280' : '#9CA3AF')
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+      <path d="M9 12l2 2 4-4"/>
+    </svg>
+  )
+}
+
 export default function TabLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -139,6 +153,12 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
       path: '/leaderboard',
       iconFilled: '/trophy-fill.png',
       iconUnfilled: '/trophy.png',
+    },
+    {
+      name: 'Tests',
+      path: '/tests',
+      iconFilled: '/tests_filled.png',
+      iconUnfilled: '/tests_unfilled.png',
     },
     {
       name: 'Practice',
@@ -286,6 +306,9 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
 
                   
                   <div className="w-8 h-8 flex-shrink-0 relative mt-2">
+                    {tab.path === '/tests' ? (
+                      <TestsNavIcon active={isActive} isDark={isDark} />
+                    ) : (
                     <Image
                       src={isActive ? tab.iconFilled : tab.iconUnfilled}
                       alt={tab.name}
@@ -303,6 +326,7 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                       style={isActive && !isDark ? { filter: 'invert(29%) sepia(89%) saturate(1000%) hue-rotate(228deg) brightness(90%)' } : undefined}
                       priority={isActive}
                     />
+                    )}
                     {/* Red badge on Bookmarks tab */}
                     {tab.path === '/bookmark' && wrongBadge > 0 && (
                       <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
@@ -395,6 +419,9 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                   transition={{ type: 'spring', stiffness: 300, damping: 22 }}
                 >
                   <div className="relative w-5 h-5 mb-1">
+                    {tab.path === '/tests' ? (
+                      <TestsNavIcon active={isActive} isDark={isDark} />
+                    ) : (
                     <Image
                       src={isActive ? tab.iconFilled : tab.iconUnfilled}
                       alt={tab.name}
@@ -412,6 +439,7 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                       style={isActive && !isDark ? { filter: 'invert(29%) sepia(89%) saturate(1000%) hue-rotate(228deg) brightness(90%)' } : undefined}
                       priority={isActive}
                     />
+                    )}
                     {/* Red badge on Bookmarks tab */}
                     {tab.path === '/bookmark' && wrongBadge > 0 && (
                       <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
