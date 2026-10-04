@@ -16,6 +16,7 @@ import { updateStreak } from '../../public/src/utils/streakUtils'
 import { updateAbilityVector } from '../../lib/recommendation'
 import { sortByDifficulty, autoBookmarkWrong } from '../../lib/adaptivePractice'
 import { renderContent } from '../components/renderContent'
+import { track, startSolutionTimer } from '../../lib/analytics'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const API_BASE       = 'https://rookie-backend.vercel.app'
@@ -420,6 +421,15 @@ function SimilarQuestionCard({
     setPendingOption(null)
     postAnswerMeta(correct)
 
+    // ── Track similar question attempt ──────────────────────────────────────
+    track('similar_attempted', {
+      feature:     'similar',
+      question_id: q.question_id,
+      subject:     q.subject  ?? undefined,
+      chapter:     q.chapter  ?? undefined,
+      metadata:    { correct },
+    })
+
     const sol = await solutionPromise
     setSolution(reconcileAnswerLine(sol, ans))
     setSolutionLoading(false)
@@ -695,6 +705,14 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
         setQuestions((fullRows || []) as Question[])
       }
       setFetched(true)
+      // Track that similar questions were shown
+      track('similar_shown', {
+        feature:     'similar',
+        question_id: mainQuestion.question_id,
+        subject:     mainQuestion.subject  ?? subjectName ?? undefined,
+        chapter:     mainQuestion.chapter  ?? chapterTitle ?? undefined,
+        metadata:    { count: questions.length },
+      })
     } catch {
       setError(true)
     } finally {
@@ -1167,6 +1185,23 @@ export default function QuestionViewerClient() {
       // toward recommendations too, not just Practice-page questions.
       updateAbilityVector(user.id, q.question_id, correct)
 
+      // ── Analytics tracking ──────────────────────────────────────────────
+      track(correct ? 'question_correct' : 'question_incorrect', {
+        feature:     'question_viewer',
+        question_id: q.question_id,
+        subject:     subject || undefined,
+        chapter:     chapterTitle || undefined,
+        duration_ms: timeSpent * 1000,
+      })
+      track('question_answered', {
+        feature:     'question_viewer',
+        question_id: q.question_id,
+        subject:     subject || undefined,
+        chapter:     chapterTitle || undefined,
+        duration_ms: timeSpent * 1000,
+        metadata:    { correct },
+      })
+
       answeredThisSession.current.add(q.question_id)
     } catch {}
   }
@@ -1301,6 +1336,14 @@ export default function QuestionViewerClient() {
     setSolutionBuddyId(activeBuddyId)
     setSolutionRequested(true); setSolutionLoading(true)
     const solutionPromise = generateAISolution(q, activeBuddyId, activeBuddy, q.correct_option || '')
+
+    // ── Track solution viewed ───────────────────────────────────────────────
+    track('solution_viewed', {
+      feature:     'question_viewer',
+      question_id: q.question_id,
+      subject:     q.subject   ?? undefined,
+      chapter:     q.chapter   ?? undefined,
+    })
 
     // Normalise both sides to a single lowercase letter for comparison
     const normalize = (v: string | null): string => {

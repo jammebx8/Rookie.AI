@@ -11,6 +11,7 @@ import { QuestionPalette } from '../../../features/tests/QuestionPalette'
 import { SubmitDialog }    from '../../../features/tests/SubmitDialog'
 import { useEngineStore }  from '../../../features/tests/useTestStore'
 import type { TestQuestion, AnswerMap, TestAttemptRow } from '../../../features/tests/types'
+import { track } from '../../../lib/analytics'
 import 'katex/dist/katex.min.css'
 
 // ─── Theme hook ────────────────────────────────────────────────────────────────
@@ -96,6 +97,12 @@ export default function TestEnginePage() {
           const expiresAt = new Date(Date.now() + att.duration_seconds * 1000).toISOString()
           updates.started_at = now
           updates.expires_at = expiresAt
+          // Track test started (first open only)
+          track('test_started', {
+            feature: 'custom_test',
+            test_id: attemptId,
+            metadata: { duration_seconds: att.duration_seconds },
+          })
         }
         await supabase.from('test_attempts').update(updates).eq('id', attemptId)
 
@@ -239,10 +246,15 @@ export default function TestEnginePage() {
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault()
       e.returnValue = ''
+      track('test_abandoned', {
+        feature: 'custom_test',
+        test_id: attemptId,
+        metadata: { answered: Object.values(answersRef.current).filter(a => a.q_status === 'answered' || a.q_status === 'marked_answered').length },
+      })
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [])
+  }, [attemptId])
 
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmitConfirm = useCallback(async () => {
@@ -259,6 +271,15 @@ export default function TestEnginePage() {
         body: JSON.stringify({ attemptId, answers: answersRef.current }),
       })
       if (!res.ok) throw new Error('Submit failed')
+      // Track test completed
+      track('test_completed', {
+        feature: 'custom_test',
+        test_id: attemptId,
+        metadata: {
+          answered:   paletteStats.answered,
+          total:      paletteStats.total,
+        },
+      })
       router.push(`/tests/${attemptId}/result`)
     } catch {
       setSubmitting(false)

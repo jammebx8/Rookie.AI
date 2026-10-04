@@ -16,6 +16,7 @@ import { renderContent } from '../components/renderContent'
 import { updateStreak, readStreakFromLocal } from '../../public/src/utils/streakUtils'
 import { AI_BUDDIES, type Question } from '../QuestionViewer/QuestionViewerClient'
 import { getWeakTopics, abilityLabel, updateAbilityVector, type WeakChapter } from '../../lib/recommendation'
+import { track, startSolutionTimer, trackSessionStart, trackSessionEnd } from '../../lib/analytics'
 import {
   fetchAdaptive,
   targetDifficulty,
@@ -685,6 +686,12 @@ export default function PracticeClient() {
 
   // ── Init: load buddy, coins, userId ───────────────────────────────────────
   useEffect(() => {
+    trackSessionStart('practice')
+    return () => { trackSessionEnd('practice') }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
     try { const s = localStorage.getItem('selectedBuddy'); if (s && AI_BUDDIES[s]) setBuddyId(s) } catch {}
 
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -708,6 +715,16 @@ export default function PracticeClient() {
       const result = await fetchAdaptive(uid, excludes, target, surveyChaptersRef.current)
       setCurrentDifficulty(result.difficulty)
       if (result.newLap) addToast('🔄 Starting a new lap — all questions unlocked!', 'info', 3500)
+      // Track that a recommendation was shown
+      if (result.question) {
+        track('recommendation_shown', {
+          feature:     'recommendation',
+          question_id: result.question.question_id,
+          subject:     result.question.subject   ?? undefined,
+          chapter:     result.question.chapter   ?? undefined,
+          difficulty:  result.difficulty,
+        })
+      }
       return result.question
     } catch {
       return null
@@ -909,6 +926,25 @@ export default function PracticeClient() {
     // ── Write attempt to DB ───────────────────────────────────────────────
     await writeAttempt(q, correct, timeSpent)
 
+    // ── Analytics tracking ────────────────────────────────────────────────
+    track(correct ? 'question_correct' : 'question_incorrect', {
+      feature:     'practice',
+      question_id: q.question_id,
+      subject:     q.subject   ?? undefined,
+      chapter:     q.chapter   ?? undefined,
+      difficulty:  currentDifficulty,
+      duration_ms: timeSpent * 1000,
+    })
+    track('question_answered', {
+      feature:     'practice',
+      question_id: q.question_id,
+      subject:     q.subject   ?? undefined,
+      chapter:     q.chapter   ?? undefined,
+      difficulty:  currentDifficulty,
+      duration_ms: timeSpent * 1000,
+      metadata:    { correct },
+    })
+
     // ── Session state ─────────────────────────────────────────────────────
     const newResults: SessionResult[] = [
       ...sessionResults,
@@ -937,6 +973,14 @@ export default function PracticeClient() {
     setSolutionBuddyId(activeBuddy)
     setSolutionRequested(true)
     setSolutionLoading(true)
+
+    // ── Track solution view + start read timer ────────────────────────────
+    track('solution_viewed', {
+      feature:     'practice',
+      question_id: q.question_id,
+      subject:     q.subject ?? undefined,
+      chapter:     q.chapter ?? undefined,
+    })
 
     generateAISolution(q, activeBuddy, confirmedAnswer).then(aiSol => {
       setSolution(aiSol)

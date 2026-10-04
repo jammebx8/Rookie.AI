@@ -9,6 +9,7 @@ import { useWizardStore } from './useTestStore'
 import { TestPreview } from './TestPreview'
 import type { WizardStep } from './types'
 import { supabase } from '../../public/src/utils/supabase'
+import { track } from '../../lib/analytics'
 
 import { Step1Exam }     from './steps/Step1Exam'
 import { Step2Years }    from './steps/Step2Years'
@@ -166,6 +167,19 @@ export function WizardModal({ isDark, onClose, onTestCreated }: Props) {
       })
       if (!res.ok) throw new Error('Failed to create test')
       const data = await res.json()
+      // Track test created
+      track('test_created', {
+        feature:  'custom_test',
+        test_id:  data.attemptId,
+        metadata: {
+          exam:              config.examId,
+          years:             config.years,
+          subjects:          config.subjects,
+          chapter_count:     config.chapters.length,
+          duration_seconds:  config.durationSeconds,
+          question_count:    (data.questionIds ?? []).length,
+        },
+      })
       reset()
       onClose()
       onTestCreated?.()
