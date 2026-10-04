@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useWizardStore } from './useTestStore'
 import { TestPreview } from './TestPreview'
 import type { WizardStep } from './types'
+import { supabase } from '../../public/src/utils/supabase'
 
 import { Step1Exam }     from './steps/Step1Exam'
 import { Step2Years }    from './steps/Step2Years'
@@ -151,9 +152,16 @@ export function WizardModal({ isDark, onClose, onTestCreated }: Props) {
     const title = `${config.examId === 'jee_main' ? 'JEE Main' : 'Custom'} — ${subjects.join(', ')}`
 
     try {
+      // Attach the user's JWT so the API route can verify identity
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token ?? ''
+
       const res = await fetch('/api/tests/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ config, title }),
       })
       if (!res.ok) throw new Error('Failed to create test')
