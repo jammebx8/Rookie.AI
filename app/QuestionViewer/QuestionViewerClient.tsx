@@ -429,6 +429,14 @@ function SimilarQuestionCard({
       chapter:     q.chapter  ?? undefined,
       metadata:    { correct },
     })
+    // question_answered with feature='similar' is what the dashboard counts
+    track('question_answered', {
+      feature:     'similar',
+      question_id: q.question_id,
+      subject:     q.subject  ?? undefined,
+      chapter:     q.chapter  ?? undefined,
+      metadata:    { correct },
+    })
 
     const sol = await solutionPromise
     setSolution(reconcileAnswerLine(sol, ans))
@@ -452,6 +460,22 @@ function SimilarQuestionCard({
     setSelectedOption('INTEGER')
     setPendingOption(null)
     postAnswerMeta(correct)
+
+    // ── Track similar integer attempt ─────────────────────────────────────
+    track('similar_attempted', {
+      feature:     'similar',
+      question_id: q.question_id,
+      subject:     q.subject  ?? undefined,
+      chapter:     q.chapter  ?? undefined,
+      metadata:    { correct },
+    })
+    track('question_answered', {
+      feature:     'similar',
+      question_id: q.question_id,
+      subject:     q.subject  ?? undefined,
+      chapter:     q.chapter  ?? undefined,
+      metadata:    { correct },
+    })
 
     const sol = await solutionPromise
     setSolution(reconcileAnswerLine(sol, ans))
