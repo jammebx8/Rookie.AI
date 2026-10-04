@@ -1,11 +1,10 @@
 'use client'
 // ─── features/tests/ResultView.tsx ───────────────────────────────────────────
+// Styling follows /design.md (monochrome, tokens shared with the profile modal).
 
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  CheckCircle2, XCircle, Minus, Clock, ChevronDown, ChevronUp, Home,
-} from 'lucide-react'
+import { Check, X, Minus, ChevronDown, Home } from 'lucide-react'
 import { renderContent } from '../../app/components/renderContent'
 import type { SubmitTestResponse, TestQuestionReview, AnswerMap } from './types'
 
@@ -16,6 +15,32 @@ interface Props {
   title:     string
   onHome:    () => void
 }
+
+// ─── Design tokens (see design.md) ────────────────────────────────────────────
+function useTokens(isDark: boolean) {
+  return {
+    page:        isDark ? 'bg-[#05070C] text-white'            : 'bg-gray-50 text-gray-900',
+    surface:     isDark ? 'bg-[#0A0E17] border-[#1D2939]'      : 'bg-white border-gray-200',
+    inset:       isDark ? 'bg-[#111827] border-[#1D2939]'      : 'bg-gray-50 border-gray-200',
+    text:        isDark ? 'text-white'                         : 'text-gray-900',
+    subtext:     isDark ? 'text-gray-400'                      : 'text-gray-500',
+    divider:     isDark ? 'border-[#1D2939]'                   : 'border-gray-200',
+    track:       isDark ? 'bg-[#1D2939]'                       : 'bg-gray-200',
+    fill:        isDark ? 'bg-white'                           : 'bg-gray-900',
+    ringTrack:   isDark ? '#1D2939'                            : '#E5E7EB',
+    ringFill:    isDark ? '#FFFFFF'                            : '#111827',
+    btnPrimary:  isDark ? 'bg-white text-black hover:bg-gray-100'
+                        : 'bg-gray-900 text-white hover:bg-gray-800',
+    hoverBorder: isDark ? 'hover:border-gray-500'              : 'hover:border-gray-400',
+    optIdle:     isDark ? 'border-[#1D2939] text-gray-300'     : 'border-gray-200 text-gray-700',
+    badgeIdle:   isDark ? 'bg-[#111827] text-gray-400 border-[#1D2939]'
+                        : 'bg-gray-100 text-gray-500 border-gray-200',
+  }
+}
+
+// Semantic colours are used only for answer correctness, and only as small accents.
+const GOOD = { text: 'text-emerald-500', soft: 'bg-emerald-500/10 border-emerald-500/30' }
+const BAD  = { text: 'text-rose-500',    soft: 'bg-rose-500/10 border-rose-500/30' }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function normOption(raw: string | null | undefined): string {
@@ -28,28 +53,46 @@ function fmtTime(s: number) {
   return h > 0 ? `${h}h ${pad2(m)}m ${pad2(sec)}s` : `${pad2(m)}m ${pad2(sec)}s`
 }
 
-// ─── Score ring ───────────────────────────────────────────────────────────────
+type Verdict = 'correct' | 'incorrect' | 'unattempted'
+
+function getVerdict(q: TestQuestionReview, entry: AnswerMap[string] | undefined): Verdict {
+  const answered =
+    entry &&
+    (entry.q_status === 'answered' || entry.q_status === 'marked_answered') &&
+    entry.selected_option
+  if (!answered) return 'unattempted'
+
+  if (q.is_numerical) {
+    const u = parseFloat(entry!.selected_option ?? '')
+    const c = parseFloat(q.correct_option ?? '')
+    return !isNaN(u) && !isNaN(c) && u === c ? 'correct' : 'incorrect'
+  }
+  return normOption(entry!.selected_option) === normOption(q.correct_option) ? 'correct' : 'incorrect'
+}
+
+// ─── Score ring (monochrome) ──────────────────────────────────────────────────
 function ScoreRing({ score, maxScore, isDark }: { score: number; maxScore: number; isDark: boolean }) {
-  const pct     = maxScore > 0 ? Math.max(0, score / maxScore) : 0
-  const r       = 52, cx = 60, cy = 60
-  const circ    = 2 * Math.PI * r
-  const dash    = circ * Math.min(pct, 1)
-  const color   = pct >= 0.7 ? '#22c55e' : pct >= 0.4 ? '#f59e0b' : '#ef4444'
+  const t    = useTokens(isDark)
+  const pct  = maxScore > 0 ? Math.max(0, score / maxScore) : 0
+  const r = 52, cx = 60, cy = 60
+  const circ = 2 * Math.PI * r
+  const dash = circ * Math.min(pct, 1)
 
   return (
     <div className="relative flex items-center justify-center">
       <svg width={120} height={120} viewBox="0 0 120 120" aria-hidden="true">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke={isDark ? '#1e2538' : '#e5e7eb'} strokeWidth={10} />
-        <circle cx={cx} cy={cy} r={r} fill="none"
-          stroke={color} strokeWidth={10}
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={t.ringTrack} strokeWidth={6} />
+        <circle
+          cx={cx} cy={cy} r={r} fill="none"
+          stroke={t.ringFill} strokeWidth={6}
           strokeDasharray={`${dash} ${circ}`}
           strokeLinecap="round"
-          style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px`, transition: 'stroke-dasharray 1s ease' }}
+          style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px`, transition: 'stroke-dasharray 0.8s ease' }}
         />
       </svg>
       <div className="absolute text-center pointer-events-none">
-        <p className={`text-2xl font-extrabold tabular-nums ${isDark ? 'text-white' : 'text-[#0f172a]'}`} style={{ color }}>{score}</p>
-        <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>/{maxScore}</p>
+        <p className={`text-3xl font-bold tabular-nums leading-none ${t.text}`}>{score}</p>
+        <p className={`text-xs mt-1 ${t.subtext}`}>out of {maxScore}</p>
       </div>
     </div>
   )
@@ -59,135 +102,109 @@ function ScoreRing({ score, maxScore, isDark }: { score: number; maxScore: numbe
 function ChapterBreakdown({ questions, answers, isDark }: {
   questions: TestQuestionReview[]; answers: AnswerMap; isDark: boolean
 }) {
-  const chapterMap: Record<string, { correct: number; incorrect: number; total: number; subject: string }> = {}
+  const t = useTokens(isDark)
+  const chapterMap: Record<string, { correct: number; total: number }> = {}
 
   for (const q of questions) {
-    const ch  = q.chapter ?? 'Unknown'
-    const sub = q.subject ?? ''
-    if (!chapterMap[ch]) chapterMap[ch] = { correct: 0, incorrect: 0, total: 0, subject: sub }
+    const ch = q.chapter ?? 'Unknown'
+    if (!chapterMap[ch]) chapterMap[ch] = { correct: 0, total: 0 }
     chapterMap[ch].total++
-
-    const entry   = answers[q.question_id]
-    const answered = entry && (entry.q_status === 'answered' || entry.q_status === 'marked_answered') && entry.selected_option
-    if (!answered) continue
-
-    if (q.is_numerical) {
-      const u = parseFloat(entry.selected_option ?? ''), c = parseFloat(q.correct_option ?? '')
-      if (!isNaN(u) && !isNaN(c) && u === c) chapterMap[ch].correct++
-      else chapterMap[ch].incorrect++
-    } else {
-      const userOpt = normOption(entry.selected_option)
-      const corrOpt = normOption(q.correct_option)
-      if (userOpt === corrOpt) chapterMap[ch].correct++
-      else chapterMap[ch].incorrect++
-    }
+    if (getVerdict(q, answers[q.question_id]) === 'correct') chapterMap[ch].correct++
   }
 
-  const sorted = Object.entries(chapterMap).sort(([, a], [, b]) => (a.correct / a.total) - (b.correct / b.total))
-
-  const T = {
-    card:  isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]',
-    muted: isDark ? 'text-slate-400' : 'text-slate-500',
-    text:  isDark ? 'text-white' : 'text-[#0f172a]',
-    track: isDark ? 'bg-[#1e2538]' : 'bg-gray-200',
-  }
+  // Weakest chapters first
+  const sorted = Object.entries(chapterMap).sort(
+    ([, a], [, b]) => a.correct / a.total - b.correct / b.total
+  )
 
   return (
-    <div className={`rounded-2xl border p-5 ${T.card}`}>
-      <p className={`text-xs font-bold uppercase tracking-widest mb-4 ${T.muted}`}>Chapter Breakdown</p>
-      <div className="space-y-4">
+    <section className={`rounded-2xl border ${t.surface}`}>
+      <div className="p-6 pb-4">
+        <h2 className={`text-lg font-bold ${t.text}`}>Chapter breakdown</h2>
+        <p className={`text-sm mt-1 ${t.subtext}`}>Sorted from weakest to strongest.</p>
+      </div>
+      <div className="px-6 pb-6 space-y-4">
         {sorted.map(([ch, s]) => {
           const pct = Math.round((s.correct / s.total) * 100)
-          const barColor = pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'
           return (
             <div key={ch}>
-              <div className="flex items-center justify-between mb-1">
-                <span className={`text-xs truncate max-w-[200px] ${T.muted}`}>{ch}</span>
-                <span className="text-xs font-semibold">{s.correct}/{s.total}</span>
+              <div className="flex items-center justify-between gap-3 mb-1.5">
+                <span className={`text-sm truncate ${t.text}`}>{ch}</span>
+                <span className={`text-xs tabular-nums flex-shrink-0 ${t.subtext}`}>
+                  {s.correct}/{s.total}
+                </span>
               </div>
-              <div className={`h-1.5 rounded-full overflow-hidden ${T.track}`}>
-                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: barColor }} />
+              <div className={`h-1 rounded-full overflow-hidden ${t.track}`}>
+                <div className={`h-full rounded-full transition-all duration-700 ${t.fill}`} style={{ width: `${pct}%` }} />
               </div>
             </div>
           )
         })}
       </div>
-    </div>
+    </section>
   )
 }
 
 // ─── Question review item ─────────────────────────────────────────────────────
-const OPTION_KEYS = ['a', 'b', 'c', 'd'] as const
+const OPTION_KEYS   = ['a', 'b', 'c', 'd'] as const
 const OPTION_LABELS = ['A', 'B', 'C', 'D']
 
 function ReviewItem({ q, entry, index, isDark }: {
   q: TestQuestionReview; entry: AnswerMap[string] | undefined; index: number; isDark: boolean
 }) {
+  const t = useTokens(isDark)
   const [open, setOpen] = useState(false)
 
-  const userOpt  = normOption(entry?.selected_option)
-  const corrOpt  = normOption(q.correct_option)
-  const answered = entry && (entry.q_status === 'answered' || entry.q_status === 'marked_answered') && entry.selected_option
+  const userOpt = normOption(entry?.selected_option)
+  const corrOpt = normOption(q.correct_option)
+  const verdict = getVerdict(q, entry)
 
-  let verdict: 'correct' | 'incorrect' | 'unattempted'
-  if (!answered) {
-    verdict = 'unattempted'
-  } else if (q.is_numerical) {
-    const u = parseFloat(entry?.selected_option ?? ''), c = parseFloat(q.correct_option ?? '')
-    verdict = (!isNaN(u) && !isNaN(c) && u === c) ? 'correct' : 'incorrect'
-  } else {
-    verdict = userOpt === corrOpt ? 'correct' : 'incorrect'
-  }
-
-  const verdictConfig = {
-    correct:     { icon: <CheckCircle2 size={15} />, color: '#22c55e', label: 'Correct',     score: '+4' },
-    incorrect:   { icon: <XCircle      size={15} />, color: '#ef4444', label: 'Incorrect',   score: '-1' },
-    unattempted: { icon: <Minus        size={15} />, color: isDark ? '#475569' : '#94a3b8', label: 'Skipped', score: '0' },
+  const verdictUI = {
+    correct:     { icon: <Check size={14} strokeWidth={2.5} />, cls: GOOD.text, label: 'Correct', pts: '+4' },
+    incorrect:   { icon: <X     size={14} strokeWidth={2.5} />, cls: BAD.text,  label: 'Incorrect', pts: '-1' },
+    unattempted: { icon: <Minus size={14} strokeWidth={2.5} />, cls: t.subtext, label: 'Skipped', pts: '0' },
   }[verdict]
 
-  const T = {
-    card:    isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]',
-    text:    isDark ? 'text-white' : 'text-[#0f172a]',
-    muted:   isDark ? 'text-slate-400' : 'text-slate-500',
-    optBase: isDark ? 'border-[#1e2538] text-slate-300' : 'border-gray-200 text-gray-700',
-    solCard: isDark ? 'bg-[#070e0e] border-[#0a2020]' : 'bg-emerald-50 border-emerald-200',
-  }
-
   return (
-    <div className={`rounded-2xl border overflow-hidden ${T.card}`}>
-      {/* Header row */}
+    <div className={`rounded-2xl border overflow-hidden transition-colors ${t.surface} ${t.hoverBorder}`}>
+      {/* Header row — question is rendered through renderContent so LaTeX works here too */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:opacity-90 transition-opacity"
+        className="w-full flex items-start gap-3 px-4 py-4 text-left"
         aria-expanded={open}
       >
-        <span className={`text-xs font-bold flex-shrink-0 ${T.muted}`}>Q{index + 1}</span>
-        <span className={`flex-1 text-sm line-clamp-2 ${T.text}`}>
-          {q.question_text?.slice(0, 120)}{q.question_text?.length > 120 ? '…' : ''}
+        <span className={`text-xs font-semibold tabular-nums w-7 flex-shrink-0 pt-0.5 ${t.subtext}`}>
+          Q{index + 1}
         </span>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs font-bold" style={{ color: verdictConfig.color }}>{verdictConfig.score}</span>
-          <span style={{ color: verdictConfig.color }}>{verdictConfig.icon}</span>
-          {open ? <ChevronUp size={14} className={T.muted} /> : <ChevronDown size={14} className={T.muted} />}
+
+        <div
+          className={`flex-1 min-w-0 text-sm leading-relaxed ${t.text} ${open ? '' : 'line-clamp-2'}`}
+        >
+          {renderContent(q.question_text, isDark)}
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-shrink-0 pt-0.5">
+          <span className={`flex items-center gap-1 text-xs font-semibold ${verdictUI.cls}`}>
+            {verdictUI.icon}
+            <span className="tabular-nums">{verdictUI.pts}</span>
+          </span>
+          <ChevronDown
+            size={15}
+            className={`${t.subtext} transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          />
         </div>
       </button>
 
-      {/* Expanded review */}
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {open && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className={`px-4 pb-4 pt-2 border-t ${isDark ? 'border-[#1e2538]' : 'border-gray-100'} space-y-3`}>
-              {/* Full question */}
-              <div className={`text-sm leading-relaxed ${T.text}`}>
-                {renderContent(q.question_text, isDark)}
-              </div>
-
+            <div className={`px-4 pb-4 pt-4 border-t space-y-4 ${t.divider}`}>
               {/* Options */}
               {!q.is_numerical && (
                 <div className="space-y-2">
@@ -195,29 +212,31 @@ function ReviewItem({ q, entry, index, isDark }: {
                     const text = q[`option_${key}` as keyof TestQuestionReview] as string | null
                     const img  = q[`option_${key}_img` as keyof TestQuestionReview] as string | null
                     if (!text && !img) return null
-                    const isUser    = userOpt === key
+
                     const isCorrect = corrOpt === key
+                    const isWrong   = userOpt === key && !isCorrect
+
+                    const rowCls = isCorrect
+                      ? `${GOOD.soft} ${t.text}`
+                      : isWrong
+                        ? `${BAD.soft} ${t.text}`
+                        : `${t.optIdle} bg-transparent`
+
+                    const badgeCls = isCorrect
+                      ? 'bg-emerald-500 text-white border-emerald-500'
+                      : isWrong
+                        ? 'bg-rose-500 text-white border-rose-500'
+                        : t.badgeIdle
 
                     return (
-                      <div
-                        key={key}
-                        className={`flex items-start gap-2.5 px-3 py-2.5 rounded-xl border text-sm ${
-                          isCorrect
-                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
-                            : isUser && !isCorrect
-                              ? 'bg-rose-500/10 border-rose-500/40 text-rose-400'
-                              : `${T.optBase} bg-transparent`
-                        }`}
-                      >
-                        <span className={`flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${
-                          isCorrect ? 'bg-emerald-600 text-white' : isUser ? 'bg-rose-600 text-white' : (isDark ? 'bg-[#1e2538] text-slate-400' : 'bg-gray-100 text-gray-500')
-                        }`}>
+                      <div key={key} className={`flex items-start gap-3 px-3 py-2.5 rounded-xl border text-sm ${rowCls}`}>
+                        <span className={`flex-shrink-0 w-5 h-5 rounded-md border flex items-center justify-center text-[11px] font-semibold ${badgeCls}`}>
                           {OPTION_LABELS[i]}
                         </span>
                         {img && <img src={img} alt={`Option ${OPTION_LABELS[i]}`} className="max-h-16 rounded object-contain" />}
-                        {text && <span className="flex-1 text-xs">{renderContent(text, isDark)}</span>}
-                        {isCorrect && <CheckCircle2 size={13} className="text-emerald-500 flex-shrink-0 mt-0.5" />}
-                        {isUser && !isCorrect && <XCircle size={13} className="text-rose-500 flex-shrink-0 mt-0.5" />}
+                        {text && <div className="flex-1 min-w-0 leading-relaxed">{renderContent(text, isDark)}</div>}
+                        {isCorrect && <Check size={14} strokeWidth={2.5} className={`${GOOD.text} flex-shrink-0 mt-0.5`} />}
+                        {isWrong   && <X     size={14} strokeWidth={2.5} className={`${BAD.text} flex-shrink-0 mt-0.5`} />}
                       </div>
                     )
                   })}
@@ -226,23 +245,23 @@ function ReviewItem({ q, entry, index, isDark }: {
 
               {/* Numerical answer */}
               {q.is_numerical && (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                   {entry?.selected_option && (
-                    <span className={`text-xs px-2 py-1 rounded-lg ${verdict === 'correct' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'}`}>
-                      Your answer: {entry.selected_option}
+                    <span className={`text-xs px-3 py-1.5 rounded-lg border ${verdict === 'correct' ? GOOD.soft : BAD.soft} ${t.text}`}>
+                      Your answer: <span className="font-semibold">{entry.selected_option}</span>
                     </span>
                   )}
-                  <span className="text-xs px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-400">
-                    Correct: {q.correct_option}
+                  <span className={`text-xs px-3 py-1.5 rounded-lg border ${GOOD.soft} ${t.text}`}>
+                    Correct answer: <span className="font-semibold">{q.correct_option}</span>
                   </span>
                 </div>
               )}
 
               {/* Solution */}
               {q.solution && (
-                <div className={`rounded-xl border p-3 text-xs leading-relaxed ${T.solCard}`}>
-                  <p className={`font-bold mb-1.5 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>Solution</p>
-                  <div className={isDark ? 'text-slate-300' : 'text-gray-700'}>
+                <div className={`rounded-xl border p-4 ${t.inset}`}>
+                  <p className={`text-sm font-semibold mb-2 ${t.text}`}>Solution</p>
+                  <div className={`text-sm leading-relaxed ${t.subtext}`}>
                     {renderContent(q.solution, isDark)}
                   </div>
                 </div>
@@ -257,89 +276,78 @@ function ReviewItem({ q, entry, index, isDark }: {
 
 // ─── Main ResultView ──────────────────────────────────────────────────────────
 export function ResultView({ isDark, result, answers, title, onHome }: Props) {
+  const t = useTokens(isDark)
   const { score, maxScore, correctCount, incorrectCount, unattemptedCount, timeTakenSeconds, questions } = result
-  const pct = maxScore > 0 ? Math.round(Math.max(0, score) / maxScore * 100) : 0
+  const pct = maxScore > 0 ? Math.round((Math.max(0, score) / maxScore) * 100) : 0
 
-  const T = {
-    page:  isDark ? 'bg-[#07090f] text-white' : 'bg-[#F0F2FA] text-[#0f172a]',
-    card:  isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]',
-    muted: isDark ? 'text-slate-400' : 'text-slate-500',
-    text:  isDark ? 'text-white' : 'text-[#0f172a]',
-  }
+  const headline = pct >= 70 ? 'Strong performance' : pct >= 40 ? 'Solid attempt' : 'Room to improve'
+  const summary  =
+    pct >= 70 ? 'Review the solutions to tighten your approach.'
+    : pct >= 40 ? 'Focus on the chapters where you lost marks.'
+    : 'Go through each solution carefully, then retry.'
 
-  const summaryStats = [
-    { label: 'Correct',     value: correctCount,    icon: <CheckCircle2 size={15} />, color: '#22c55e' },
-    { label: 'Incorrect',   value: incorrectCount,   icon: <XCircle      size={15} />, color: '#ef4444' },
-    { label: 'Not answered',value: unattemptedCount, icon: <Minus        size={15} />, color: isDark ? '#475569' : '#94a3b8' },
-    { label: 'Time taken',  value: fmtTime(timeTakenSeconds ?? 0), icon: <Clock size={15} />, color: isDark ? '#818cf8' : '#4f46e5' },
+  const stats = [
+    { label: 'Correct',      value: String(correctCount),    cls: GOOD.text },
+    { label: 'Incorrect',    value: String(incorrectCount),  cls: BAD.text },
+    { label: 'Not answered', value: String(unattemptedCount), cls: t.text },
+    { label: 'Time taken',   value: fmtTime(timeTakenSeconds ?? 0), cls: t.text },
   ]
 
   return (
-    <div className={`min-h-screen ${T.page}`}>
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-20 space-y-6">
+    <div className={`min-h-screen ${t.page}`}>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-20 space-y-4">
 
-        {/* Score hero */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-          className={`rounded-2xl border p-6 text-center ${T.card}`}
+        {/* Score summary */}
+        <motion.section
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          className={`rounded-2xl border p-8 text-center ${t.surface}`}
         >
-          <p className={`text-xs font-bold uppercase tracking-widest mb-4 ${T.muted}`}>{title}</p>
-          <ScoreRing score={score} maxScore={maxScore} isDark={isDark} />
-          <h1 className={`text-2xl font-extrabold mt-3 ${T.text}`}>
-            {pct >= 70 ? 'Great work' : pct >= 40 ? 'Good effort' : 'Keep going'}
-          </h1>
-          <p className={`text-sm mt-1 ${T.muted}`}>
-            {pct >= 70 ? 'Strong performance. Review the solutions to perfect your approach.'
-              : pct >= 40 ? 'Solid attempt. Focus on the chapters where you struggled.'
-              : 'Tough test. Go through each solution carefully and try again.'}
-          </p>
-        </motion.div>
+          <p className={`text-sm mb-6 ${t.subtext}`}>{title}</p>
+          <div className="flex justify-center">
+            <ScoreRing score={score} maxScore={maxScore} isDark={isDark} />
+          </div>
+          <h1 className={`text-xl font-bold mt-6 ${t.text}`}>{headline}</h1>
+          <p className={`text-sm mt-1 ${t.subtext}`}>{summary}</p>
+        </motion.section>
 
-        {/* Stats grid */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}
-          className={`rounded-2xl border p-5 grid grid-cols-2 sm:grid-cols-4 gap-4 ${T.card}`}
-        >
-          {summaryStats.map(s => (
-            <div key={s.label} className="flex flex-col items-center text-center gap-1">
-              <span style={{ color: s.color }}>{s.icon}</span>
-              <span className={`text-xl font-extrabold tabular-nums ${T.text}`}>{s.value}</span>
-              <span className={`text-[10px] ${T.muted}`}>{s.label}</span>
+        {/* Stats */}
+        <section className={`rounded-2xl border grid grid-cols-2 sm:grid-cols-4 ${t.surface}`}>
+          {stats.map((s, i) => (
+            <div
+              key={s.label}
+              className={`p-5 text-center ${i > 0 ? `sm:border-l ${t.divider}` : ''} ${i % 2 === 1 ? `border-l sm:border-l ${t.divider}` : ''} ${i >= 2 ? `border-t sm:border-t-0 ${t.divider}` : ''}`}
+            >
+              <p className={`text-xl font-bold tabular-nums ${s.cls}`}>{s.value}</p>
+              <p className={`text-xs mt-1 ${t.subtext}`}>{s.label}</p>
             </div>
           ))}
-        </motion.div>
+        </section>
 
         {/* Chapter breakdown */}
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-          <ChapterBreakdown questions={questions} answers={answers} isDark={isDark} />
-        </motion.div>
+        <ChapterBreakdown questions={questions} answers={answers} isDark={isDark} />
 
-        {/* Question-by-question review */}
-        <div>
-          <p className={`text-sm font-bold mb-3 ${T.text}`}>Question Review</p>
+        {/* Question review */}
+        <div className="pt-4">
+          <div className="mb-3 px-1">
+            <h2 className={`text-lg font-bold ${t.text}`}>Question review</h2>
+            <p className={`text-sm mt-1 ${t.subtext}`}>Tap a question to see options and the solution.</p>
+          </div>
           <div className="space-y-2">
             {questions.map((q, i) => (
-              <motion.div
-                key={q.question_id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 + i * 0.02 }}
-              >
-                <ReviewItem q={q} entry={answers[q.question_id]} index={i} isDark={isDark} />
-              </motion.div>
+              <ReviewItem key={q.question_id} q={q} entry={answers[q.question_id]} index={i} isDark={isDark} />
             ))}
           </div>
         </div>
 
-        {/* Home button */}
-        <div className="flex justify-center pt-2">
+        {/* Footer action */}
+        <div className="flex justify-center pt-6">
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={onHome}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors"
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${t.btnPrimary}`}
           >
-            <Home size={15} />
-            Back to Tests
+            <Home size={14} />
+            Back to tests
           </motion.button>
         </div>
       </div>

@@ -48,8 +48,11 @@ export async function POST(req: NextRequest) {
     })
 
     if (rpcErr) {
-      console.error('[tests/create] build_test_question_ids error:', rpcErr)
-      return NextResponse.json({ error: 'Failed to build question set' }, { status: 500 })
+      console.error('[tests/create] build_test_question_ids error:', JSON.stringify(rpcErr))
+      return NextResponse.json(
+        { error: 'Failed to build question set', detail: rpcErr.message },
+        { status: 500 },
+      )
     }
 
     const questionIds: string[] = qIds ?? []

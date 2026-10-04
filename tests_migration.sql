@@ -133,52 +133,56 @@ DECLARE
   v_cap_total   integer;
   v_per_subject integer;
   v_n_subjects  integer;
-  v_ids         text[] := '{}';
+  v_ids         text[];
   v_subject     text;
+  v_batch       text[];
 BEGIN
   -- 1 question per 90 seconds, minimum 5, maximum 120
-  v_cap_total   := GREATEST(5, LEAST(120, p_duration_seconds / 90));
-  v_n_subjects  := array_length(p_subjects, 1);
+  v_cap_total  := GREATEST(5, LEAST(120, p_duration_seconds / 90));
+  v_n_subjects := COALESCE(array_length(p_subjects, 1), 0);
 
-  IF v_n_subjects IS NULL OR v_n_subjects = 0 THEN
-    RETURN v_ids;
+  IF v_n_subjects = 0 THEN
+    RETURN ARRAY[]::text[];
   END IF;
 
   v_per_subject := GREATEST(1, v_cap_total / v_n_subjects);
+  v_ids := ARRAY[]::text[];
 
+  -- Collect v_per_subject random questions per subject
   FOREACH v_subject IN ARRAY p_subjects LOOP
-    SELECT array_agg(q.question_id) INTO v_ids
+    SELECT array_agg(q.question_id)
+    INTO   v_batch
     FROM (
-      SELECT v_ids || array_agg(sub.question_id) AS question_id
-      FROM (
-        SELECT question_id
-        FROM   public.jee_mains
-        WHERE  (regexp_match(exam_shift, '(\d{4})'))[1] = ANY(p_years)
-          AND  lower(subject) = lower(v_subject)
-          AND  chapter        = ANY(p_chapters)
-          AND  question_id   IS NOT NULL
-        ORDER BY random()
-        LIMIT  v_per_subject
-      ) sub
-    ) agg;
+      SELECT question_id
+      FROM   public.jee_mains
+      WHERE  (regexp_match(exam_shift, '(\d{4})'))[1] = ANY(p_years)
+        AND  lower(subject) = lower(v_subject)
+        AND  chapter        = ANY(p_chapters)
+        AND  question_id   IS NOT NULL
+      ORDER  BY random()
+      LIMIT  v_per_subject
+    ) q;
+
+    IF v_batch IS NOT NULL THEN
+      v_ids := v_ids || v_batch;
+    END IF;
   END LOOP;
 
-  -- Flatten: v_ids was being rebuilt each iteration; redo cleanly
-  SELECT array_agg(question_id ORDER BY random()) INTO v_ids
-  FROM (
-    SELECT DISTINCT question_id
-    FROM   public.jee_mains
-    WHERE  (regexp_match(exam_shift, '(\d{4})'))[1] = ANY(p_years)
-      AND  lower(subject)  = ANY(
-             SELECT lower(s) FROM unnest(p_subjects) AS s
-           )
-      AND  chapter         = ANY(p_chapters)
-      AND  question_id    IS NOT NULL
-    ORDER BY random()
-    LIMIT v_cap_total
-  ) pool;
+  -- If we got nothing (e.g. year filter matched nothing), fall back to unfiltered chapters
+  IF array_length(v_ids, 1) IS NULL THEN
+    SELECT array_agg(question_id)
+    INTO   v_ids
+    FROM (
+      SELECT question_id
+      FROM   public.jee_mains
+      WHERE  chapter     = ANY(p_chapters)
+        AND  question_id IS NOT NULL
+      ORDER  BY random()
+      LIMIT  v_cap_total
+    ) q;
+  END IF;
 
-  RETURN COALESCE(v_ids, '{}');
+  RETURN COALESCE(v_ids, ARRAY[]::text[]);
 END;
 $$;
 GRANT EXECUTE ON FUNCTION public.build_test_question_ids(text[], text[], text[], integer) TO service_role;

@@ -248,13 +248,17 @@ function EmptyState({ isDark, onNew }: { isDark: boolean; onNew: () => void }) {
         Build your first custom test from JEE PYQs and track your progress over time.
       </p>
       <motion.button
-        whileTap={{ scale: 0.97 }}
-        onClick={onNew}
-        className="mt-1 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
-      >
-        <Plus size={15} />
-        Create your first test
-      </motion.button>
+  whileTap={{ scale: 0.97 }}
+  onClick={onNew}
+  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex-shrink-0 ${
+    isDark
+      ? 'bg-white text-black hover:bg-gray-100'
+      : 'bg-gray-900 text-white hover:bg-gray-800'
+  }`}
+>
+  <Plus size={16} />
+  Create your first test
+</motion.button>
     </div>
   )
 }
@@ -276,9 +280,7 @@ function HeroCard({ isDark, onNew }: { isDark: boolean; onNew: () => void }) {
       <div className="relative z-10">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
-              Custom Test Builder
-            </p>
+          
             <h2 className={`text-xl sm:text-2xl font-extrabold mb-2 ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
               Create Your Own Test
             </h2>
@@ -286,13 +288,17 @@ function HeroCard({ isDark, onNew }: { isDark: boolean; onNew: () => void }) {
               Pick any year, subject and chapter from 10,000+ PYQs. Set your duration and go.
             </p>
             <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={onNew}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors shadow-lg shadow-indigo-900/30"
-            >
-              <Plus size={16} />
-              Build a Test
-            </motion.button>
+  whileTap={{ scale: 0.97 }}
+  onClick={onNew}
+  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex-shrink-0 ${
+    isDark
+      ? 'bg-white text-black hover:bg-gray-100'
+      : 'bg-gray-900 text-white hover:bg-gray-800'
+  }`}
+>
+  <Plus size={16} />
+  Build a Test
+</motion.button>
           </div>
 
           {/* Clipboard illustration */}
