@@ -208,7 +208,20 @@ export default function TestEnginePage() {
     if (!currentQid) return
     selectOpt(currentQid, option)
     scheduleAutosave(currentQid)
-  }, [currentQid, selectOpt, scheduleAutosave])
+    // Track per-question answer so custom_test appears in the breakdown alongside
+    // practice / question_viewer / similar / recommendation
+    const q = questions[currentIndex]
+    if (q) {
+      track('question_answered', {
+        feature:     'custom_test',
+        question_id: currentQid,
+        test_id:     attemptId,
+        subject:     q.subject   ?? undefined,
+        chapter:     q.chapter   ?? undefined,
+        metadata:    { option },
+      })
+    }
+  }, [currentQid, selectOpt, scheduleAutosave, questions, currentIndex, attemptId])
 
   const handleClear = useCallback(() => {
     if (!currentQid) return
