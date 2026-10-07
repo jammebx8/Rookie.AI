@@ -328,7 +328,7 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                     )}
                     {/* Badge on Bookmarks tab */}
                     {tab.path === '/bookmark' && wrongBadge > 0 && (
-                      <span className={`absolute -top-1 -right-1 min-w-[16px] h-4 ${isDark ? 'bg-white text-black' : 'bg-black text-white'} text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none`}>
+                      <span className={`absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none`}>
                         {wrongBadge > 99 ? '99+' : wrongBadge}
                       </span>
                     )}
@@ -432,7 +432,7 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                     )}
                     {/* Badge on Bookmarks tab */}
                     {tab.path === '/bookmark' && wrongBadge > 0 && (
-                      <span className={`absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 ${isDark ? 'bg-white text-black' : 'bg-black text-white'} text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none`}>
+                      <span className={`absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none`}>
                         {wrongBadge > 9 ? '9+' : wrongBadge}
                       </span>
                     )}
