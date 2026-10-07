@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Zap, Flame, Gem, Trophy } from 'lucide-react';
 import { supabase } from '../../../public/src/utils/supabase';
 import { syncStreakFromSupabase, readStreakFromLocal } from '../../../public/src/utils/streakUtils'; // adjust path
+import { hasRookiePass, getPassExpiry, triggerCheckout, bustPassCache } from '../../../lib/rookiePass';
 import 'katex/dist/katex.min.css';
 import { renderContent } from '../../components/renderContent';
 import {
@@ -1539,44 +1540,148 @@ function HomeSurveyModal({ isDark, userId, onDone }: {
 }
 
 // ─── Rookie Pass Banner ───────────────────────────────────────────────────────
+// ─── Rookie Pass Banner ───────────────────────────────────────────────────────
 function RookiePassBanner() {
   const ref = React.useRef<HTMLDivElement>(null);
   const [mouse, setMouse] = React.useState({ x: 0.5, y: 0.5 });
   const [hovered, setHovered] = React.useState(false);
   const [shinePos, setShinePos] = React.useState(-100);
   const shineRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const [passExpiry, setPassExpiry] = React.useState<string | null>(null);
+  const [passChecked, setPassChecked] = React.useState(false);
+
+  // Check if user already has an active pass
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const raw = localStorage.getItem('@user');
+        if (!raw) { setPassChecked(true); return; }
+        const { id } = JSON.parse(raw);
+        const expiry = await getPassExpiry(id);
+        setPassExpiry(expiry);
+      } catch { /* no-op */ } finally {
+        setPassChecked(true);
+      }
+    })();
+  }, []);
 
   const handleMouseMove = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = ref.current?.getBoundingClientRect();
     if (!rect) return;
-    setMouse({
-      x: (e.clientX - rect.left) / rect.width,
-      y: (e.clientY - rect.top) / rect.height,
-    });
+    setMouse({ x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height });
   }, []);
 
   React.useEffect(() => {
     if (hovered) { if (shineRef.current) clearInterval(shineRef.current); return; }
     let pos = -100;
-    shineRef.current = setInterval(() => {
-      pos += 2;
-      if (pos > 220) pos = -100;
-      setShinePos(pos);
-    }, 16);
+    shineRef.current = setInterval(() => { pos += 2; if (pos > 220) pos = -100; setShinePos(pos); }, 16);
     return () => { if (shineRef.current) clearInterval(shineRef.current); };
   }, [hovered]);
 
   const spotX = `${mouse.x * 100}%`;
   const spotY = `${mouse.y * 100}%`;
 
+  const handleCheckout = React.useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { alert('Please sign in to purchase.'); return; }
+      const raw = localStorage.getItem('@user');
+      const user = raw ? JSON.parse(raw) : null;
+      await triggerCheckout({
+        token:   session.access_token,
+        userId:  session.user.id,
+        email:   session.user.email,
+        name:    user?.name ?? null,
+        onSuccess: (expiry: string) => { bustPassCache(); setPassExpiry(expiry); },
+        onError:   (msg: string)   => { alert(msg); },
+      });
+    } catch (e) { console.error(e); }
+  }, []);
+
+  // ── Active pass view ────────────────────────────────────────────────────────
+  if (passChecked && passExpiry) {
+    const expiryDate     = new Date(passExpiry);
+    const formattedExpiry = expiryDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const daysLeft       = Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / 86400000));
+
+    return (
+      <div
+        ref={ref}
+        onMouseMove={handleMouseMove}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className="relative rounded-2xl overflow-hidden select-none"
+        style={{
+          background: 'linear-gradient(125deg, #09091f 0%, #0e0b2e 35%, #041a10 100%)',
+          border: '1px solid rgba(74,222,128,0.3)',
+          boxShadow: hovered
+            ? '0 0 0 1px rgba(74,222,128,0.45), 0 8px 32px rgba(16,185,129,0.18)'
+            : '0 4px 20px rgba(0,0,0,0.5)',
+          transition: 'box-shadow 0.4s ease',
+        }}
+      >
+        {/* Cursor glow */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: `radial-gradient(circle 200px at ${spotX} ${spotY}, rgba(74,222,128,0.12) 0%, transparent 70%)`,
+          transition: hovered ? 'background 0.05s' : 'background 0.3s',
+        }} />
+       
+        {/* Dot base layer */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.14) 1px, transparent 1px)',
+          backgroundSize: '14px 14px', opacity: 0.18,
+        }} />
+        {/* Dot cursor-lit layer */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          backgroundImage: 'radial-gradient(circle, rgba(74,222,128,1) 1px, transparent 1px)',
+          backgroundSize: '14px 14px',
+          WebkitMaskImage: `radial-gradient(circle 140px at ${spotX} ${spotY}, black 0%, transparent 100%)`,
+          maskImage:       `radial-gradient(circle 140px at ${spotX} ${spotY}, black 0%, transparent 100%)`,
+          opacity: hovered ? 0.45 : 0, transition: hovered ? 'opacity 0.15s' : 'opacity 0.5s',
+        }} />
+
+        <div className="relative z-10 px-5 pt-5 pb-5">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <p className="text-[10px] font-bold tracking-[0.22em] uppercase mb-1" style={{ color: 'rgba(74,222,128,0.7)' }}>✦ Rookie Pass · Active</p>
+              <h2 className="text-lg font-extrabold text-white leading-tight">
+                JEE Advanced<br/>
+                <span style={{ background: 'linear-gradient(90deg, #4ade80, #34d399)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  All Years Unlocked
+                </span>
+              </h2>
+            </div>
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6L9 17l-5-5"/>
+              </svg>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mt-3">
+            {[{ label: 'Valid Until', value: formattedExpiry }, { label: 'Days Left', value: `${daysLeft} days` }].map(({ label, value }) => (
+              <div key={label} className="flex-1 rounded-xl px-3 py-2.5"
+                style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)' }}>
+                <p className="text-[9px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(74,222,128,0.6)' }}>{label}</p>
+                <p className="text-sm font-bold text-white">{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] pointer-events-none"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(74,222,128,0.6) 40%, rgba(52,211,153,0.6) 60%, transparent)' }} />
+      </div>
+    );
+  }
+
+  // ── Upsell (no pass / loading) view ────────────────────────────────────────
   return (
-    // ── Entire card is clickable ──
     <div
       ref={ref}
       role="button"
       tabIndex={0}
-      onClick={() => window.open('https://rzp.io/l/rookiepass', '_blank', 'noopener,noreferrer')}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') window.open('https://rzp.io/l/rookiepass', '_blank', 'noopener,noreferrer'); }}
+      onClick={handleCheckout}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleCheckout(); }}
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -1590,119 +1695,81 @@ function RookiePassBanner() {
         transition: 'box-shadow 0.4s ease',
       }}
     >
-      {/* ── Cursor-reactive radial glow ── */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: `radial-gradient(circle 220px at ${spotX} ${spotY}, rgba(129,140,248,0.18) 0%, rgba(99,102,241,0.08) 40%, transparent 70%)`,
-          transition: hovered ? 'background 0.05s' : 'background 0.3s',
-        }}
-      />
-
-      {/* ── Static ambient glows ── */}
+      {/* Cursor glow */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: `radial-gradient(circle 220px at ${spotX} ${spotY}, rgba(129,140,248,0.18) 0%, rgba(99,102,241,0.08) 40%, transparent 70%)`,
+        transition: hovered ? 'background 0.05s' : 'background 0.3s',
+      }} />
+      {/* Ambient glows */}
       <div className="absolute -top-16 -left-16 w-56 h-56 rounded-full pointer-events-none"
         style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.22) 0%, transparent 70%)' }} />
       <div className="absolute -bottom-12 -right-12 w-48 h-48 rounded-full pointer-events-none"
         style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.18) 0%, transparent 70%)' }} />
-
-
-
-      {/* ── Halftone dot texture — base (always dim) ── */}
+      {/* Holographic left strip */}
+      <div className="absolute left-0 top-0 bottom-0 w-1 pointer-events-none"
+        style={{ background: 'linear-gradient(180deg, #c084fc, #818cf8, #38bdf8, #34d399, #fbbf24, #f472b6, #a78bfa)', opacity: hovered ? 0.9 : 0.6, transition: 'opacity 0.3s' }} />
+      {/* Dot base layer */}
       <div className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px)',
-          backgroundSize: '14px 14px',
-          opacity: 0.22,
-        }}
-      />
-      {/* ── Halftone dot texture — cursor-lit layer (dots illuminate near cursor) ── */}
+        style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px)', backgroundSize: '14px 14px', opacity: 0.22 }} />
+      {/* Dot cursor-lit layer */}
       <div className="absolute inset-0 pointer-events-none"
         style={{
           backgroundImage: 'radial-gradient(circle, rgba(196,181,253,1) 1px, transparent 1px)',
           backgroundSize: '14px 14px',
-          /* Radial mask centred on cursor — only dots inside ~140px radius show through */
           WebkitMaskImage: `radial-gradient(circle 140px at ${spotX} ${spotY}, black 0%, transparent 100%)`,
-          maskImage: `radial-gradient(circle 140px at ${spotX} ${spotY}, black 0%, transparent 100%)`,
-          opacity: hovered ? 0.55 : 0,
-          transition: hovered ? 'opacity 0.15s' : 'opacity 0.5s',
-        }}
-      />
-
-      {/* ── Star-dust particles ── */}
+          maskImage:       `radial-gradient(circle 140px at ${spotX} ${spotY}, black 0%, transparent 100%)`,
+          opacity: hovered ? 0.55 : 0, transition: hovered ? 'opacity 0.15s' : 'opacity 0.5s',
+        }} />
+      {/* Star-dust */}
       {[
-        { top: '18%', left: '8%',  size: 2,   opacity: 0.6 },
-        { top: '72%', left: '14%', size: 1.5, opacity: 0.4 },
+        { top: '18%', left: '8%',  size: 2,   opacity: 0.6  },
+        { top: '72%', left: '14%', size: 1.5, opacity: 0.4  },
         { top: '35%', left: '88%', size: 2,   opacity: 0.55 },
         { top: '62%', left: '78%', size: 1.5, opacity: 0.35 },
         { top: '12%', left: '55%', size: 1.5, opacity: 0.45 },
-        { top: '80%', left: '48%', size: 2,   opacity: 0.3 },
-        { top: '25%', left: '72%', size: 1,   opacity: 0.5 },
-        { top: '55%', left: '32%', size: 1,   opacity: 0.4 },
+        { top: '80%', left: '48%', size: 2,   opacity: 0.3  },
+        { top: '25%', left: '72%', size: 1,   opacity: 0.5  },
+        { top: '55%', left: '32%', size: 1,   opacity: 0.4  },
       ].map((s, i) => (
         <div key={i} className="absolute rounded-full pointer-events-none animate-pulse"
-          style={{
-            top: s.top, left: s.left,
-            width: s.size, height: s.size,
-            backgroundColor: `rgba(196,181,253,${s.opacity})`,
-            animationDelay: `${i * 0.4}s`,
-            animationDuration: `${2.5 + i * 0.3}s`,
-          }}
-        />
+          style={{ top: s.top, left: s.left, width: s.size, height: s.size, backgroundColor: `rgba(196,181,253,${s.opacity})`, animationDelay: `${i * 0.4}s`, animationDuration: `${2.5 + i * 0.3}s` }} />
       ))}
 
-      {/* ── Content ── */}
+      {/* Content */}
       <div className="relative z-10 px-5 pt-5 pb-5">
-
-        {/* Top label — no "New" badge, just the pass label */}
-        <p className="text-[10px] font-bold tracking-[0.22em] uppercase mb-3"
-          style={{ color: 'rgba(165,180,252,0.6)' }}>
-           Rookie Pass
+        <p className="text-[10px] font-bold tracking-[0.22em] uppercase mb-3" style={{ color: 'rgba(165,180,252,0.6)' }}>
+          ✦ Rookie Pass · Exclusive Access
         </p>
-
-        {/* Headline */}
         <h2 className="text-xl font-extrabold leading-tight tracking-tight text-white mb-1">
           JEE Advanced PYQs —{' '}
-          <span style={{
-            background: 'linear-gradient(90deg, #a78bfa, #818cf8, #c084fc)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}>
+          <span style={{ background: 'linear-gradient(90deg, #a78bfa, #818cf8, #c084fc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             All Years Unlocked
           </span>
         </h2>
-
-        {/* Sub-copy */}
         <p className="text-sm leading-relaxed mb-5" style={{ color: 'rgba(203,213,225,0.65)' }}>
           Every JEE Advanced question ever asked. AI solutions, buddy explanations, and performance tracking — one pass.
         </p>
 
-        {/* Bottom row: price left, button right */}
         <div className="flex items-end justify-between gap-3">
-
           {/* Price */}
           <div>
             <div className="flex items-baseline gap-1">
               <span className="text-[28px] font-black leading-none text-white">₹299</span>
-              <span className="text-[20px] font-semibold leading-none" style={{ color: 'rgb(242, 244, 247)' }}>/ year</span>
+              <span className="text-[13px] font-semibold leading-none" style={{ color: 'rgba(148,163,184,0.55)' }}>/year</span>
             </div>
-            <div className="flex items-center gap-1.5 mt-4">
-              <span className="text-xs font-semibold line-through leading-none"
-                style={{ color: 'rgba(148,163,184,0.45)' }}>₹999</span>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-xs font-semibold line-through leading-none" style={{ color: 'rgba(148,163,184,0.45)' }}>₹999</span>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', color: '#4ade80' }}>
-                70% OFF
-              </span>
+                style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', color: '#4ade80' }}>70% OFF</span>
             </div>
-            <p className="text-[9px] mt-1" style={{ color: 'rgba(148,163,184,0.4)' }}>
-              One pass · All exams
-            </p>
+            <p className="text-[9px] mt-1" style={{ color: 'rgba(148,163,184,0.4)' }}>One-time · Yearly pass · Instant access</p>
           </div>
 
-          {/* ── Shine CTA button — bottom-right ── */}
+          {/* Shine CTA button */}
           <motion.button
             whileTap={{ scale: 0.96 }}
             whileHover={{ scale: 1.04 }}
-            onClick={(e) => e.stopPropagation()} // card already handles click
+            onClick={(e) => { e.stopPropagation(); handleCheckout(); }}
             className="relative overflow-hidden flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white flex-shrink-0"
             style={{
               background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #6d28d9 100%)',
@@ -1712,15 +1779,10 @@ function RookiePassBanner() {
               transition: 'box-shadow 0.3s',
             }}
           >
-            {/* Shine sweep */}
-            <span className="absolute inset-0 pointer-events-none"
-              style={{
-                background: `linear-gradient(105deg, transparent ${shinePos - 40}%, rgba(255,255,255,0.28) ${shinePos}%, rgba(255,255,255,0.08) ${shinePos + 15}%, transparent ${shinePos + 55}%)`,
-              }}
-            />
-            {/* Top shimmer line */}
-            <span className="absolute top-0 left-4 right-4 h-px pointer-events-none"
-              style={{ background: 'rgba(255,255,255,0.2)' }} />
+            <span className="absolute inset-0 pointer-events-none" style={{
+              background: `linear-gradient(105deg, transparent ${shinePos - 40}%, rgba(255,255,255,0.28) ${shinePos}%, rgba(255,255,255,0.08) ${shinePos + 15}%, transparent ${shinePos + 55}%)`,
+            }} />
+            <span className="absolute top-0 left-4 right-4 h-px pointer-events-none" style={{ background: 'rgba(255,255,255,0.2)' }} />
             <span className="relative z-10">Get Rookie Pass</span>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="relative z-10">
               <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -1729,7 +1791,6 @@ function RookiePassBanner() {
         </div>
       </div>
 
-      {/* ── Bottom accent line ── */}
       <div className="absolute bottom-0 left-0 right-0 h-[2px] pointer-events-none"
         style={{ background: 'linear-gradient(90deg, transparent, rgba(129,140,248,0.6) 40%, rgba(168,85,247,0.6) 60%, transparent)' }} />
     </div>

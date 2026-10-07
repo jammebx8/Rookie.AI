@@ -830,6 +830,23 @@ export default function QuestionViewerClient() {
   // Pick the right Supabase table based on exam
   const DB_TABLE = examName === 'JEE Advanced' ? DB_TABLE_ADV : DB_TABLE_MAIN
 
+  // ── Rookie Pass guard for JEE Advanced ────────────────────────────────────
+  useEffect(() => {
+    if (examName !== 'JEE Advanced') return
+    ;(async () => {
+      try {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem('@user') : null
+        if (!raw) { router.replace('/explore'); return }
+        const { id } = JSON.parse(raw)
+        const { hasRookiePass } = await import('../../lib/rookiePass')
+        const ok = await hasRookiePass(id)
+        if (!ok) router.replace('/explore')
+      } catch {
+        router.replace('/explore')
+      }
+    })()
+  }, [examName, router])
+
   // ── Windowed question state ────────────────────────────────────────────────
   const [questions, setQuestions]       = useState<Question[]>([])
   const [totalCount, setTotalCount]     = useState(0)

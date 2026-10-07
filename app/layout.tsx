@@ -1,6 +1,7 @@
 'use client';
 import './globals.css';
 import React, { useEffect } from 'react';
+import Script from 'next/script';
 
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
@@ -27,6 +28,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head />
       <body className="antialiased bg-[var(--background)] text-[var(--foreground)]">
         {children}
+        {/* Razorpay checkout SDK — loaded once for the whole app */}
+        <Script
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   );
