@@ -25,7 +25,8 @@ const SESSION_KEY    = 'questionSessionResponses_v1'
 const AI_SOL_CACHE   = 'aiSolutionCache_v1'
 const PAGE_SIZE      = 20   // questions fetched per window
 const PREFETCH_AHEAD = 5    // start fetching next window when this many remain
-const DB_TABLE       = 'jee_mains'
+const DB_TABLE_MAIN  = 'jee_mains'
+const DB_TABLE_ADV   = 'jee_adv'
 
 // ─── AI Buddy Definitions ────────────────────────────────────────────────────
 export const AI_BUDDIES: Record<string, {
@@ -305,10 +306,11 @@ function BuddySelectorModal({ currentBuddyId, onSelect, onClose, isDark }: {
 
 // ─── Similar Question Card (self-contained interactive mini question) ─────────
 function SimilarQuestionCard({
-  q, chapterTitle, subjectName, imageKey, isDark, addToast,
+  q, chapterTitle, subjectName, imageKey, isDark, addToast, dbTable,
 }: {
   q: Question; chapterTitle: string; subjectName: string; imageKey: string
   isDark: boolean; addToast: (msg: string, type: ToastType, ms?: number) => void
+  dbTable: string
 }) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [pendingOption, setPendingOption]   = useState<string | null>(null) // clicked, not yet resolved
@@ -364,7 +366,7 @@ function SimilarQuestionCard({
       const col = buddy.columnKey
       if (q[col]?.trim()) { sessionStorage.setItem(cacheKey, q[col]); return q[col] }
 
-      const { data: fresh } = await supabase.from(DB_TABLE).select(col).eq('question_id', q.question_id).single()
+      const { data: fresh } = await supabase.from(dbTable).select(col).eq('question_id', q.question_id).single()
       if ((fresh as any)?.[col]?.trim()) {
         sessionStorage.setItem(cacheKey, (fresh as any)[col])
         return (fresh as any)[col]
@@ -379,7 +381,7 @@ function SimilarQuestionCard({
       })
       const aiSol = res.data.solution || q.solution || ''
       sessionStorage.setItem(cacheKey, aiSol)
-      supabase.from(DB_TABLE).update({ [col]: aiSol }).eq('question_id', q.question_id).then(() => {})
+      supabase.from(dbTable).update({ [col]: aiSol }).eq('question_id', q.question_id).then(() => {})
       return aiSol
     } catch { return q.solution || '' }
   }
@@ -655,9 +657,10 @@ function SimilarQuestionCard({
 }
 
 // ─── Similar Questions Panel ──────────────────────────────────────────────────
-function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageKey, isDark, addToast }: {
+function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageKey, isDark, addToast, dbTable }: {
   mainQuestion: Question; chapterTitle: string; subjectName: string; imageKey: string
   isDark: boolean; addToast: (msg: string, type: ToastType, ms?: number) => void
+  dbTable: string
 }) {
   const [loading, setLoading]         = useState(false)
   const [questions, setQuestions]     = useState<Question[]>([])
@@ -678,7 +681,7 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
       // We call a Supabase RPC or use match_documents pattern
       // First get the embedding for this question
       const { data: sourceRow, error: embErr } = await supabase
-        .from(DB_TABLE)
+        .from(dbTable)
         .select('embedding')
         .eq('question_id', mainQuestion.question_id)
         .single()
@@ -686,7 +689,7 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
       if (embErr || !sourceRow?.embedding) {
         // Fallback: text search on same chapter, exclude current
         const { data: fallback } = await supabase
-          .from(DB_TABLE)
+          .from(dbTable)
           .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
           .eq('subject', mainQuestion.subject ?? subjectName)
           .eq('chapter', mainQuestion.chapter ?? chapterTitle)
@@ -708,7 +711,7 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
       if (rpcErr) {
         // Fallback if RPC doesn't exist yet
         const { data: fallback } = await supabase
-          .from(DB_TABLE)
+          .from(dbTable)
           .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
           .eq('subject', mainQuestion.subject ?? subjectName)
           .eq('chapter', mainQuestion.chapter ?? chapterTitle)
@@ -723,7 +726,7 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
         if (ids.length === 0) { setQuestions([]); setFetched(true); return }
 
         const { data: fullRows } = await supabase
-          .from(DB_TABLE)
+          .from(dbTable)
           .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
           .in('question_id', ids)
         setQuestions((fullRows || []) as Question[])
@@ -789,6 +792,7 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
               <SimilarQuestionCard
                 q={q} chapterTitle={chapterTitle} subjectName={subjectName}
                 imageKey={imageKey} isDark={isDark} addToast={addToast}
+                dbTable={dbTable}
               />
             </motion.div>
           ))}
@@ -819,8 +823,12 @@ export default function QuestionViewerClient() {
   const subject      = sp.get('subject')      || sp.get('subjectName') || ''
   const chapterTitle = sp.get('chapter')      || sp.get('chapterTitle') || ''
   const imageKey     = sp.get('imageKey')     || ''
+  const examName     = sp.get('examName')     || 'JEE Main'
   const startQId     = sp.get('qid')          || ''   // SEO: specific question_id
   const startIndex   = parseInt(sp.get('startIndex') || sp.get('index') || '0', 10)
+
+  // Pick the right Supabase table based on exam
+  const DB_TABLE = examName === 'JEE Advanced' ? DB_TABLE_ADV : DB_TABLE_MAIN
 
   // ── Windowed question state ────────────────────────────────────────────────
   const [questions, setQuestions]       = useState<Question[]>([])
@@ -1047,6 +1055,7 @@ export default function QuestionViewerClient() {
       subject: subject,
       chapter: chapterTitle,
       imageKey: imageKey,
+      examName: examName,
       qid: q.question_id,
       index: String(globalIndex),
     })
@@ -1802,6 +1811,7 @@ export default function QuestionViewerClient() {
                       imageKey={imageKey}
                       isDark={isDark}
                       addToast={addToast}
+                      dbTable={DB_TABLE}
                     />
                   </motion.div>
                 )}

@@ -50,16 +50,16 @@ const MoonIcon = () => (
 // App Logo SVG (custom)
 const AppLogo = ({ isDark }: { isDark: boolean }) => (
   <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect width="40" height="40" rx="10" fill={isDark ? '#1a1a2e' : '#EEF2FF'}/>
-    <path d="M10 28L20 10L30 28" stroke={isDark ? '#818CF8' : '#4F46E5'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M13.5 22H26.5" stroke={isDark ? '#818CF8' : '#4F46E5'} strokeWidth="2.5" strokeLinecap="round"/>
-    <circle cx="20" cy="10" r="2" fill={isDark ? '#C7D2FE' : '#6366F1'}/>
+    <rect width="40" height="40" rx="10" fill={isDark ? '#171717' : '#F5F5F5'}/>
+    <path d="M10 28L20 10L30 28" stroke={isDark ? '#FFFFFF' : '#000000'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M13.5 22H26.5" stroke={isDark ? '#FFFFFF' : '#000000'} strokeWidth="2.5" strokeLinecap="round"/>
+    <circle cx="20" cy="10" r="2" fill={isDark ? '#E5E5E5' : '#262626'}/>
   </svg>
 );
 
 // Bookmark icon SVG
 const BookmarkIcon = ({ isDark }: { isDark: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#9CA3AF' : '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#A3A3A3' : '#737373'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
   </svg>
 );
@@ -67,8 +67,8 @@ const BookmarkIcon = ({ isDark }: { isDark: boolean }) => (
 // Tests (clipboard-check) icon SVG
 const TestsNavIcon = ({ active, isDark }: { active: boolean; isDark: boolean }) => {
   const col = active
-    ? (isDark ? '#ffffff' : '#4F46E5')
-    : (isDark ? '#6B7280' : '#9CA3AF')
+    ? (isDark ? '#ffffff' : '#000000')
+    : (isDark ? '#737373' : '#A3A3A3')
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
@@ -83,7 +83,7 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [rookieCoins, setRookieCoins] = useState(0);
   const [isDark, setIsDark] = useState(true);
-  // Red badge on bookmark tab — count of unseen wrong-answer auto-bookmarks
+  // Badge on bookmark tab — count of unseen wrong-answer auto-bookmarks
   const [wrongBadge, setWrongBadge] = useState(0);
 
   useEffect(() => {
@@ -188,15 +188,15 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
  
   const isSettingsActive = pathname === '/profile';
 
-  // Colors based on theme
-  const bg = isDark ? 'bg-[#000000]' : 'bg-[#F8F9FF]';
+  // Colors based on theme (monochrome: black / white / neutral greys only)
+  const bg = isDark ? 'bg-[#000000]' : 'bg-[#FAFAFA]';
   const headerBg = isDark ? 'bg-[#000000]' : 'bg-white';
-  const borderColor = isDark ? 'border-[#262626]' : 'border-[#E5E7EB]';
+  const borderColor = isDark ? 'border-[#262626]' : 'border-[#E5E5E5]';
   const sidebarBg = isDark ? 'bg-[#0A0A0A]' : 'bg-white';
-  const textPrimary = isDark ? 'text-white' : 'text-[#111827]';
-  const textMuted = isDark ? 'text-gray-500' : 'text-gray-400';
-  const coinsBg = isDark ? 'bg-[#151B27] border-[#1D2939]' : 'bg-[#FFF7ED] border-[#FED7AA]';
-  const coinsText = isDark ? 'text-white' : 'text-[#92400E]';
+  const textPrimary = isDark ? 'text-white' : 'text-[#000000]';
+  const textMuted = isDark ? 'text-neutral-500' : 'text-neutral-400';
+  const coinsBg = isDark ? 'bg-[#0A0A0A] border-[#262626]' : 'bg-white border-[#E5E5E5]';
+  const coinsText = isDark ? 'text-white' : 'text-[#000000]';
 
   return (
     <div className={`flex flex-col min-h-screen ${bg} transition-colors duration-300`}>
@@ -249,8 +249,8 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                 onClick={toggleTheme}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg transition-colors duration-300 ${
                   isDark
-                    ? 'bg-[#151B27] border-[#1D2939] text-gray-300 hover:border-gray-600'
-                    : 'bg-[#F3F4F6] border-[#E5E7EB] text-gray-600 hover:bg-gray-200'
+                    ? 'bg-[#0A0A0A] border-[#262626] text-neutral-300 hover:border-neutral-500'
+                    : 'bg-neutral-100 border-[#E5E5E5] text-neutral-700 hover:bg-neutral-200'
                 }`}
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
@@ -295,11 +295,11 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
                     isActive
                       ? isDark
-                        ? 'bg-[#1a1a2e] text-white'
-                        : 'bg-[#EEF2FF] text-[#4F46E5]'
+                        ? 'bg-[#171717] text-white'
+                        : 'bg-neutral-100 text-[#000000]'
                       : isDark
-                        ? 'text-gray-400 hover:text-white hover:bg-white/5'
-                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                        ? 'text-neutral-400 hover:text-white hover:bg-white/5'
+                        : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
                   }`}
                   aria-current={isActive ? 'page' : undefined}
                 >
@@ -323,13 +323,12 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                             ? 'brightness-0 invert opacity-50'
                             : 'brightness-0 opacity-40'
                       }`}
-                      style={isActive && !isDark ? { filter: 'invert(29%) sepia(89%) saturate(1000%) hue-rotate(228deg) brightness(90%)' } : undefined}
                       priority={isActive}
                     />
                     )}
-                    {/* Red badge on Bookmarks tab */}
+                    {/* Badge on Bookmarks tab */}
                     {tab.path === '/bookmark' && wrongBadge > 0 && (
-                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                      <span className={`absolute -top-1 -right-1 min-w-[16px] h-4 ${isDark ? 'bg-white text-black' : 'bg-black text-white'} text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none`}>
                         {wrongBadge > 99 ? '99+' : wrongBadge}
                       </span>
                     )}
@@ -338,7 +337,7 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                   {isActive && (
                     <motion.div
                       layoutId="sidebar-active"
-                      className={`absolute left-0 w-1 h-7 rounded-r-full ${isDark ? 'bg-indigo-500' : 'bg-[#4F46E5]'}`}
+                      className={`absolute left-0 w-1 h-7 rounded-r-full ${isDark ? 'bg-white' : 'bg-black'}`}
                     />
                   )}
                 </Link>
@@ -352,8 +351,8 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
     onClick={() => router.push('/profile')}
     className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-all duration-200 ${
       isDark
-        ? 'text-gray-400 hover:text-white hover:bg-white/5'
-        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+        ? 'text-neutral-400 hover:text-white hover:bg-white/5'
+        : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
     }`}
     type="button"
   >
@@ -370,19 +369,11 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
     isSettingsActive
       ? isDark
         ? 'brightness-0 invert'
-        : ''
+        : 'brightness-0'
       : isDark
         ? 'brightness-0 invert opacity-50'
         : 'brightness-0 opacity-40'
   }`}
-  style={
-    isSettingsActive && !isDark
-      ? {
-          filter:
-            'invert(29%) sepia(89%) saturate(1000%) hue-rotate(228deg) brightness(90%)',
-        }
-      : undefined
-  }
 />
     
     <span className="text-sm font-medium">Settings</span>
@@ -431,18 +422,17 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                         isActive
                           ? isDark
                             ? 'brightness-0 invert'
-                            : ''
+                            : 'brightness-0'
                           : isDark
                             ? 'brightness-0 invert opacity-40'
                             : 'brightness-0 opacity-30'
                       }`}
-                      style={isActive && !isDark ? { filter: 'invert(29%) sepia(89%) saturate(1000%) hue-rotate(228deg) brightness(90%)' } : undefined}
                       priority={isActive}
                     />
                     )}
-                    {/* Red badge on Bookmarks tab */}
+                    {/* Badge on Bookmarks tab */}
                     {tab.path === '/bookmark' && wrongBadge > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                      <span className={`absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 ${isDark ? 'bg-white text-black' : 'bg-black text-white'} text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none`}>
                         {wrongBadge > 9 ? '9+' : wrongBadge}
                       </span>
                     )}
@@ -450,7 +440,7 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
                   <span
                     className={`text-[10px] font-medium ${
                       isActive
-                        ? isDark ? 'text-white' : 'text-[#4F46E5]'
+                        ? isDark ? 'text-white' : 'text-black'
                         : textMuted
                     }`}
                   >
@@ -482,19 +472,11 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
     isSettingsActive
       ? isDark
         ? 'brightness-0 invert'
-        : ''
+        : 'brightness-0'
       : isDark
         ? 'brightness-0 invert opacity-50'
         : 'brightness-0 opacity-40'
   }`}
-  style={
-    isSettingsActive && !isDark
-      ? {
-          filter:
-            'invert(29%) sepia(89%) saturate(1000%) hue-rotate(228deg) brightness(90%)',
-        }
-      : undefined
-  }
 />
             </div>
             <span className={`text-[10px] font-medium ${textMuted}`}>Settings</span>

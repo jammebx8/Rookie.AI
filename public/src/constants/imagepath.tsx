@@ -20,6 +20,9 @@ const imagepath = {
     Maths: "/mahhh.png",
     Maths1: "/mahhh1.jpg",
     Biology: "/bio.jpg",
+    AdvPhysics: "/phhh.png",
+    AdvChemistry: "/chhh.png",
+    AdvMaths: "/mahhh.png",
   
     Chemistry1: "/An_image_of_a_chemical_structure_with_glowing_lines_and_scientific_icons__in_a_banner_size__maintain.png",
     Chemistry2: "/bio.jpg",
