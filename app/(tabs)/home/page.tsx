@@ -1538,6 +1538,204 @@ function HomeSurveyModal({ isDark, userId, onDone }: {
   )
 }
 
+// ─── Rookie Pass Banner ───────────────────────────────────────────────────────
+function RookiePassBanner() {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [mouse, setMouse] = React.useState({ x: 0.5, y: 0.5 });
+  const [hovered, setHovered] = React.useState(false);
+  const [shinePos, setShinePos] = React.useState(-100);
+  const shineRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const handleMouseMove = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    setMouse({
+      x: (e.clientX - rect.left) / rect.width,
+      y: (e.clientY - rect.top) / rect.height,
+    });
+  }, []);
+
+  React.useEffect(() => {
+    if (hovered) { if (shineRef.current) clearInterval(shineRef.current); return; }
+    let pos = -100;
+    shineRef.current = setInterval(() => {
+      pos += 2;
+      if (pos > 220) pos = -100;
+      setShinePos(pos);
+    }, 16);
+    return () => { if (shineRef.current) clearInterval(shineRef.current); };
+  }, [hovered]);
+
+  const spotX = `${mouse.x * 100}%`;
+  const spotY = `${mouse.y * 100}%`;
+
+  return (
+    // ── Entire card is clickable ──
+    <div
+      ref={ref}
+      role="button"
+      tabIndex={0}
+      onClick={() => window.open('https://rzp.io/l/rookiepass', '_blank', 'noopener,noreferrer')}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') window.open('https://rzp.io/l/rookiepass', '_blank', 'noopener,noreferrer'); }}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="relative rounded-2xl overflow-hidden select-none cursor-pointer"
+      style={{
+        background: 'linear-gradient(135deg, #0d0221 0%, #0a0a2e 40%, #0d1a3a 70%, #0a1628 100%)',
+        border: '1px solid rgba(99,102,241,0.35)',
+        boxShadow: hovered
+          ? '0 0 0 1px rgba(129,140,248,0.5), 0 8px 40px rgba(99,102,241,0.25)'
+          : '0 4px 24px rgba(0,0,0,0.5)',
+        transition: 'box-shadow 0.4s ease',
+      }}
+    >
+      {/* ── Cursor-reactive radial glow ── */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: `radial-gradient(circle 220px at ${spotX} ${spotY}, rgba(129,140,248,0.18) 0%, rgba(99,102,241,0.08) 40%, transparent 70%)`,
+          transition: hovered ? 'background 0.05s' : 'background 0.3s',
+        }}
+      />
+
+      {/* ── Static ambient glows ── */}
+      <div className="absolute -top-16 -left-16 w-56 h-56 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.22) 0%, transparent 70%)' }} />
+      <div className="absolute -bottom-12 -right-12 w-48 h-48 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.18) 0%, transparent 70%)' }} />
+
+
+
+      {/* ── Halftone dot texture — base (always dim) ── */}
+      <div className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px)',
+          backgroundSize: '14px 14px',
+          opacity: 0.22,
+        }}
+      />
+      {/* ── Halftone dot texture — cursor-lit layer (dots illuminate near cursor) ── */}
+      <div className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(circle, rgba(196,181,253,1) 1px, transparent 1px)',
+          backgroundSize: '14px 14px',
+          /* Radial mask centred on cursor — only dots inside ~140px radius show through */
+          WebkitMaskImage: `radial-gradient(circle 140px at ${spotX} ${spotY}, black 0%, transparent 100%)`,
+          maskImage: `radial-gradient(circle 140px at ${spotX} ${spotY}, black 0%, transparent 100%)`,
+          opacity: hovered ? 0.55 : 0,
+          transition: hovered ? 'opacity 0.15s' : 'opacity 0.5s',
+        }}
+      />
+
+      {/* ── Star-dust particles ── */}
+      {[
+        { top: '18%', left: '8%',  size: 2,   opacity: 0.6 },
+        { top: '72%', left: '14%', size: 1.5, opacity: 0.4 },
+        { top: '35%', left: '88%', size: 2,   opacity: 0.55 },
+        { top: '62%', left: '78%', size: 1.5, opacity: 0.35 },
+        { top: '12%', left: '55%', size: 1.5, opacity: 0.45 },
+        { top: '80%', left: '48%', size: 2,   opacity: 0.3 },
+        { top: '25%', left: '72%', size: 1,   opacity: 0.5 },
+        { top: '55%', left: '32%', size: 1,   opacity: 0.4 },
+      ].map((s, i) => (
+        <div key={i} className="absolute rounded-full pointer-events-none animate-pulse"
+          style={{
+            top: s.top, left: s.left,
+            width: s.size, height: s.size,
+            backgroundColor: `rgba(196,181,253,${s.opacity})`,
+            animationDelay: `${i * 0.4}s`,
+            animationDuration: `${2.5 + i * 0.3}s`,
+          }}
+        />
+      ))}
+
+      {/* ── Content ── */}
+      <div className="relative z-10 px-5 pt-5 pb-5">
+
+        {/* Top label — no "New" badge, just the pass label */}
+        <p className="text-[10px] font-bold tracking-[0.22em] uppercase mb-3"
+          style={{ color: 'rgba(165,180,252,0.6)' }}>
+           Rookie Pass
+        </p>
+
+        {/* Headline */}
+        <h2 className="text-xl font-extrabold leading-tight tracking-tight text-white mb-1">
+          JEE Advanced PYQs —{' '}
+          <span style={{
+            background: 'linear-gradient(90deg, #a78bfa, #818cf8, #c084fc)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            All Years Unlocked
+          </span>
+        </h2>
+
+        {/* Sub-copy */}
+        <p className="text-sm leading-relaxed mb-5" style={{ color: 'rgba(203,213,225,0.65)' }}>
+          Every JEE Advanced question ever asked. AI solutions, buddy explanations, and performance tracking — one pass.
+        </p>
+
+        {/* Bottom row: price left, button right */}
+        <div className="flex items-end justify-between gap-3">
+
+          {/* Price */}
+          <div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-[28px] font-black leading-none text-white">₹299</span>
+              <span className="text-[20px] font-semibold leading-none" style={{ color: 'rgb(242, 244, 247)' }}>/ year</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-4">
+              <span className="text-xs font-semibold line-through leading-none"
+                style={{ color: 'rgba(148,163,184,0.45)' }}>₹999</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', color: '#4ade80' }}>
+                70% OFF
+              </span>
+            </div>
+            <p className="text-[9px] mt-1" style={{ color: 'rgba(148,163,184,0.4)' }}>
+              One pass · All exams
+            </p>
+          </div>
+
+          {/* ── Shine CTA button — bottom-right ── */}
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            whileHover={{ scale: 1.04 }}
+            onClick={(e) => e.stopPropagation()} // card already handles click
+            className="relative overflow-hidden flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white flex-shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #6d28d9 100%)',
+              boxShadow: hovered
+                ? '0 0 0 1.5px rgba(196,181,253,0.7), 0 0 20px rgba(139,92,246,0.55), inset 0 1px 0 rgba(255,255,255,0.15)'
+                : '0 0 0 1px rgba(129,140,248,0.45), 0 4px 16px rgba(99,102,241,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+              transition: 'box-shadow 0.3s',
+            }}
+          >
+            {/* Shine sweep */}
+            <span className="absolute inset-0 pointer-events-none"
+              style={{
+                background: `linear-gradient(105deg, transparent ${shinePos - 40}%, rgba(255,255,255,0.28) ${shinePos}%, rgba(255,255,255,0.08) ${shinePos + 15}%, transparent ${shinePos + 55}%)`,
+              }}
+            />
+            {/* Top shimmer line */}
+            <span className="absolute top-0 left-4 right-4 h-px pointer-events-none"
+              style={{ background: 'rgba(255,255,255,0.2)' }} />
+            <span className="relative z-10">Get Rookie Pass</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="relative z-10">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </motion.button>
+        </div>
+      </div>
+
+      {/* ── Bottom accent line ── */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px] pointer-events-none"
+        style={{ background: 'linear-gradient(90deg, transparent, rgba(129,140,248,0.6) 40%, rgba(168,85,247,0.6) 60%, transparent)' }} />
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function HomePage() {
   const router = useRouter();
@@ -1742,36 +1940,11 @@ export default function HomePage() {
           custom={0}
           className="pt-6"
         >
-    <div className="flex items-start justify-between">
-  <div>
-    <p className={`${subtext} text-sm mb-1`}>
-      {getGreeting()}{firstName ? `, ${firstName}` : ', learner'} 👋
-    </p>
+          <p className={`${subtext} text-sm mb-4`}>
+            {getGreeting()}{firstName ? `, ${firstName}` : ', learner'} 👋
+          </p>
 
-    <MotivationHeadline exam={exam} />
-  </div>
-</div>
-
-          {(cl || exam) && (
-            <div className="flex items-center gap-2 mt-3 flex-wrap">
-              {cl && (
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${card} ${text}`}>
-                  {cl}
-                </span>
-              )}
-              {exam && (
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-500">
-                  {exam}
-                </span>
-              )}
-              <button
-                onClick={() => setShowProfileModal(true)}
-                className={`text-xs ${isDark ? 'text-gray-600 hover:text-gray-400' : 'text-gray-400 hover:text-gray-600'} transition-colors underline underline-offset-2`}
-              >
-                Edit
-              </button>
-            </div>
-          )}
+          <RookiePassBanner />
         </motion.section>
 
         {/* ── Streak & Daily Goal ── */}
