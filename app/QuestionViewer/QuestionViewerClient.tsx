@@ -231,7 +231,7 @@ function ImageModal({ src, onClose }: { src: string; onClose: () => void }) {
 }
 
 // ─── Spinner ─────────────────────────────────────────────────────────────────
-function Spinner({ size = 20, cls = 'border-indigo-500' }: { size?: number; cls?: string }) {
+function Spinner({ size = 20, cls = 'border-white' }: { size?: number; cls?: string }) {
   return (
     <motion.div
       animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}

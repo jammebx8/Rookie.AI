@@ -44,7 +44,7 @@ export default function QuestionViewerPage() {
       fallback={
         <div className="min-h-screen flex items-center justify-center bg-[#07090f]">
           <div className="text-center">
-            <div className="w-12 h-12 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mx-auto mb-4" />
+            <div className="w-12 h-12 rounded-full border-2 border-white border-t-transparent animate-spin mx-auto mb-4" />
             <p className="text-slate-400 text-sm">Loading questions…</p>
           </div>
         </div>
