@@ -1701,13 +1701,6 @@ function RookiePassBanner() {
         transition: hovered ? 'background 0.05s' : 'background 0.3s',
       }} />
       {/* Ambient glows */}
-      <div className="absolute -top-16 -left-16 w-56 h-56 rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.22) 0%, transparent 70%)' }} />
-      <div className="absolute -bottom-12 -right-12 w-48 h-48 rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.18) 0%, transparent 70%)' }} />
-      {/* Holographic left strip */}
-      <div className="absolute left-0 top-0 bottom-0 w-1 pointer-events-none"
-        style={{ background: 'linear-gradient(180deg, #c084fc, #818cf8, #38bdf8, #34d399, #fbbf24, #f472b6, #a78bfa)', opacity: hovered ? 0.9 : 0.6, transition: 'opacity 0.3s' }} />
       {/* Dot base layer */}
       <div className="absolute inset-0 pointer-events-none"
         style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px)', backgroundSize: '14px 14px', opacity: 0.22 }} />
@@ -1738,7 +1731,7 @@ function RookiePassBanner() {
       {/* Content */}
       <div className="relative z-10 px-5 pt-5 pb-5">
         <p className="text-[10px] font-bold tracking-[0.22em] uppercase mb-3" style={{ color: 'rgba(165,180,252,0.6)' }}>
-          ✦ Rookie Pass · Exclusive Access
+           Rookie Pass 
         </p>
         <h2 className="text-xl font-extrabold leading-tight tracking-tight text-white mb-1">
           JEE Advanced PYQs —{' '}
@@ -1755,14 +1748,14 @@ function RookiePassBanner() {
           <div>
             <div className="flex items-baseline gap-1">
               <span className="text-[28px] font-black leading-none text-white">₹299</span>
-              <span className="text-[13px] font-semibold leading-none" style={{ color: 'rgba(148,163,184,0.55)' }}>/year</span>
+              <span className="text-[24px] font-semibold leading-none" style={{ color: 'rgb(247, 249, 252)' }}>/ year</span>
             </div>
-            <div className="flex items-center gap-1.5 mt-1">
+            <div className="flex items-center gap-1.5 mt-4">
               <span className="text-xs font-semibold line-through leading-none" style={{ color: 'rgba(148,163,184,0.45)' }}>₹999</span>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
                 style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', color: '#4ade80' }}>70% OFF</span>
             </div>
-            <p className="text-[9px] mt-1" style={{ color: 'rgba(148,163,184,0.4)' }}>One-time · Yearly pass · Instant access</p>
+          
           </div>
 
           {/* Shine CTA button */}
