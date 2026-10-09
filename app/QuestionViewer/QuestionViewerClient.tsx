@@ -836,11 +836,8 @@ export default function QuestionViewerClient() {
     if (examName !== 'JEE Advanced') return
     ;(async () => {
       try {
-        const raw = typeof window !== 'undefined' ? localStorage.getItem('@user') : null
-        if (!raw) { router.replace('/explore'); return }
-        const { id } = JSON.parse(raw)
         const { hasRookiePass } = await import('../../lib/rookiePass')
-        const ok = await hasRookiePass(id)
+        const ok = await hasRookiePass()
         if (!ok) router.replace('/explore')
       } catch {
         router.replace('/explore')
@@ -888,16 +885,19 @@ export default function QuestionViewerClient() {
     try { return parseInt(localStorage.getItem(SOL_KEY) ?? '0', 10) || 0 } catch { return 0 }
   })
 
-  // Check Rookie Pass on mount (after userId is set)
+  // Check Rookie Pass from DB on mount + listen for updates
   useEffect(() => {
-    if (!userId) return
-    ;(async () => {
+    const checkPass = async () => {
       try {
         const { hasRookiePass } = await import('../../lib/rookiePass')
-        const pass = await hasRookiePass(userId)
+        const pass = await hasRookiePass(userId ?? undefined)
         setHasPass(pass)
       } catch { setHasPass(false) }
-    })()
+    }
+    checkPass()
+    const handleUpdate = () => { checkPass() }
+    window.addEventListener('rookiePassUpdated', handleUpdate)
+    return () => window.removeEventListener('rookiePassUpdated', handleUpdate)
   }, [userId])
 
   // Increment daily counter when a solution is first viewed

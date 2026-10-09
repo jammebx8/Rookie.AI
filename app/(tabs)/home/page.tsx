@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
@@ -1550,19 +1550,20 @@ function RookiePassBanner() {
   const [passExpiry, setPassExpiry] = React.useState<string | null>(null);
   const [passChecked, setPassChecked] = React.useState(false);
 
-  // Check if user already has an active pass
+  // Check if user already has an active pass from DB
   React.useEffect(() => {
-    (async () => {
+    const checkPass = async () => {
       try {
-        const raw = localStorage.getItem('@user');
-        if (!raw) { setPassChecked(true); return; }
-        const { id } = JSON.parse(raw);
-        const expiry = await getPassExpiry(id);
+        const expiry = await getPassExpiry();
         setPassExpiry(expiry);
       } catch { /* no-op */ } finally {
         setPassChecked(true);
       }
-    })();
+    };
+    checkPass();
+    const handleUpdate = () => { checkPass(); };
+    window.addEventListener('rookiePassUpdated', handleUpdate);
+    return () => window.removeEventListener('rookiePassUpdated', handleUpdate);
   }, []);
 
   const handleMouseMove = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {

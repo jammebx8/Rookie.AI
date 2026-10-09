@@ -222,17 +222,18 @@ export default function ExplorePage() {
     return () => { window.removeEventListener('storage', update); ob.disconnect(); };
   }, []);
 
-  // Check pass on mount
+  // Check pass from DB on mount + listen for updates
   useEffect(() => {
-    (async () => {
+    const checkPass = async () => {
       try {
-        const raw = localStorage.getItem('@user');
-        if (!raw) { setHasPass(false); return; }
-        const { id } = JSON.parse(raw);
-        const pass = await hasRookiePass(id);
+        const pass = await hasRookiePass();
         setHasPass(pass);
       } catch { setHasPass(false); }
-    })();
+    };
+    checkPass();
+    const handleUpdate = () => { checkPass(); };
+    window.addEventListener('rookiePassUpdated', handleUpdate);
+    return () => window.removeEventListener('rookiePassUpdated', handleUpdate);
   }, []);
 
   // Cleanup on unmount

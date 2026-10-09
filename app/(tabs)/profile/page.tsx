@@ -379,9 +379,15 @@ export default function ProfilePage() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await supabase.auth.signOut(); } catch {}
+    try {
+      const { bustPassCache } = await import('@/lib/rookiePass');
+      bustPassCache();
+    } catch {}
     localStorage.clear();
-    router.push('https://rookieai.vercel.app/');
+    sessionStorage.clear();
+    router.push('/');
   };
 
   return (

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
@@ -231,17 +231,18 @@ function PYQMockSection({ isDark, attempts, onStarted }: { isDark: boolean; atte
   const [hasPass,     setHasPass]     = useState<boolean | null>(null)
   const [payingFor,   setPayingFor]   = useState(false)
 
-  // Check Rookie Pass on mount
+  // Check Rookie Pass on mount + listen for updates
   useEffect(() => {
-    ;(async () => {
+    const checkPass = async () => {
       try {
-        const raw = localStorage.getItem('@user')
-        if (!raw) { setHasPass(false); return }
-        const { id } = JSON.parse(raw)
-        const pass = await hasRookiePass(id)
+        const pass = await hasRookiePass()
         setHasPass(pass)
       } catch { setHasPass(false) }
-    })()
+    }
+    checkPass()
+    const handleUpdate = () => { checkPass() }
+    window.addEventListener('rookiePassUpdated', handleUpdate)
+    return () => window.removeEventListener('rookiePassUpdated', handleUpdate)
   }, [])
 
   const T = {
@@ -430,15 +431,16 @@ function HeroCard({ isDark, onNew, attempts }: { isDark: boolean; onNew: () => v
   const FREE_LIMIT  = 1
 
   useEffect(() => {
-    ;(async () => {
+    const checkPass = async () => {
       try {
-        const raw = localStorage.getItem('@user')
-        if (!raw) { setHasPass(false); return }
-        const { id } = JSON.parse(raw)
-        const pass = await hasRookiePass(id)
+        const pass = await hasRookiePass()
         setHasPass(pass)
       } catch { setHasPass(false) }
-    })()
+    }
+    checkPass()
+    const handleUpdate = () => { checkPass() }
+    window.addEventListener('rookiePassUpdated', handleUpdate)
+    return () => window.removeEventListener('rookiePassUpdated', handleUpdate)
   }, [])
 
   const canCreate = hasPass || customToday < FREE_LIMIT

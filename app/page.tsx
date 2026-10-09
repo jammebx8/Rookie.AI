@@ -114,7 +114,7 @@ export default function OnboardingPage() {
   useEffect(() => {
     try {
       if (localStorage.getItem('@user_onboarded') === 'true') {
-        router.replace('https://rookieai.vercel.app/home');
+        router.replace('/home');
         return;
       }
     } catch {}
@@ -135,7 +135,7 @@ export default function OnboardingPage() {
       if (existingUser && !fetchError) {
         localStorage.setItem('@user', JSON.stringify({ ...existingUser, rookieCoinsEarned: existingUser.rookieCoinsEarned ?? 0 }));
         localStorage.setItem('@user_onboarded', 'true');
-        router.replace('https://rookieai.vercel.app/home');
+        router.replace('/home');
       } else {
         const newUserData = {
           id: user.id, email: user.email,
@@ -154,7 +154,7 @@ export default function OnboardingPage() {
           setStep('profile');
         } else {
           localStorage.setItem('@user_onboarded', 'true');
-          router.replace('https://rookieai.vercel.app/home');
+          router.replace('/home');
         }
       }
     } catch { alert('Failed to complete sign-in. Please try again.'); }
@@ -183,7 +183,7 @@ export default function OnboardingPage() {
       if (updatedUser) {
         localStorage.setItem('@user', JSON.stringify({ ...updatedUser, rookieCoinsEarned: updatedUser.rookieCoinsEarned ?? 0 }));
         localStorage.setItem('@user_onboarded', 'true');
-        router.replace('https://rookieai.vercel.app/home');
+        router.replace('/home');
       }
     } catch (err) { alert((err as any)?.message || 'Something went wrong.'); setLoadingSave(false); }
   }

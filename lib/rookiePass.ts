@@ -4,21 +4,23 @@
  * Client-side utilities for the Rookie Pass payment flow.
  *
  * Public surface:
- *   hasRookiePass(userId)  — true if the user has an active entitlement
- *   getPassExpiry(userId)  — returns the ISO expiry string, or null
- *   triggerCheckout(opts)  — opens Razorpay checkout, polls until paid, resolves
+ *   hasRookiePass(userId?)  — true if the user has an active entitlement in DB
+ *   getPassExpiry(userId?)  — returns the ISO expiry string from DB, or null
+ *   triggerCheckout(opts)   — opens Razorpay checkout, polls until paid, resolves
+ *   bustPassCache(userId?)  — clears pass cache
  */
 
 import { supabase } from '../public/src/utils/supabase'
 
 const PLAN_ID   = 'rookie_pass_yearly'
-const CACHE_KEY = 'rookie_pass_cache'   // sessionStorage key
+const CACHE_KEY = 'rookie_pass_cache'   // base sessionStorage key
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface PassCache {
-  has_pass:    boolean
+  user_id:      string
+  has_pass:     boolean
   access_until: string | null
-  fetched_at:  number   // ms epoch
+  fetched_at:   number   // ms epoch
 }
 
 interface CheckoutOptions {
@@ -43,57 +45,121 @@ declare global {
   }
 }
 
+// ── User ID Resolver ───────────────────────────────────────────────────────────
+async function resolveUserId(passedId?: string | null): Promise<string | null> {
+  if (passedId && typeof passedId === 'string' && passedId.trim().length > 0) {
+    return passedId.trim()
+  }
+  // Primary source of truth: Supabase Auth Session
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.id) return user.id
+  } catch { /* no-op */ }
+
+  // Fallback: local storage @user
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('@user') : null
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed?.id) return parsed.id
+    }
+  } catch { /* no-op */ }
+
+  return null
+}
+
 // ── Cache helpers ──────────────────────────────────────────────────────────────
 const CACHE_TTL_MS = 5 * 60 * 1000   // 5 minutes
 
-function readCache(): PassCache | null {
+function readCache(userId: string): PassCache | null {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY)
+    if (typeof window === 'undefined') return null
+    const raw = sessionStorage.getItem(`${CACHE_KEY}_${userId}`)
     if (!raw) return null
     const c: PassCache = JSON.parse(raw)
+    if (c.user_id !== userId) return null
     if (Date.now() - c.fetched_at > CACHE_TTL_MS) return null
     return c
   } catch { return null }
 }
 
-function writeCache(c: PassCache) {
-  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(c)) } catch { /* no-op */ }
+function writeCache(userId: string, c: PassCache) {
+  try {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(`${CACHE_KEY}_${userId}`, JSON.stringify(c))
+    }
+  } catch { /* no-op */ }
 }
 
-export function bustPassCache() {
-  try { sessionStorage.removeItem(CACHE_KEY) } catch { /* no-op */ }
+export function bustPassCache(userId?: string) {
+  try {
+    if (typeof window === 'undefined') return
+    if (userId) {
+      sessionStorage.removeItem(`${CACHE_KEY}_${userId}`)
+    }
+    sessionStorage.removeItem(CACHE_KEY)
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i)
+      if (key && key.startsWith(CACHE_KEY)) {
+        sessionStorage.removeItem(key)
+      }
+    }
+  } catch { /* no-op */ }
 }
 
-// ── Core check ─────────────────────────────────────────────────────────────────
+// ── Core check against Supabase DB ─────────────────────────────────────────────
 async function _fetchPass(userId: string): Promise<PassCache> {
-  const { data } = await supabase
-    .from('entitlements')
-    .select('access_until')
-    .eq('user_id', userId)
-    .eq('plan_id', PLAN_ID)
-    .gt('access_until', new Date().toISOString())
-    .maybeSingle()
+  try {
+    const { data, error } = await supabase
+      .from('entitlements')
+      .select('access_until')
+      .eq('user_id', userId)
+      .eq('plan_id', PLAN_ID)
+      .gt('access_until', new Date().toISOString())
+      .maybeSingle()
 
-  const cache: PassCache = {
-    has_pass:    !!data,
-    access_until: data?.access_until ?? null,
-    fetched_at:  Date.now(),
+    if (error) {
+      console.warn('[rookiePass] Database entitlements check warning:', error.message)
+    }
+
+    const cache: PassCache = {
+      user_id:      userId,
+      has_pass:     !!data,
+      access_until: data?.access_until ?? null,
+      fetched_at:   Date.now(),
+    }
+    writeCache(userId, cache)
+    return cache
+  } catch (err) {
+    console.error('[rookiePass] Failed to query entitlements DB:', err)
+    return {
+      user_id:      userId,
+      has_pass:     false,
+      access_until: null,
+      fetched_at:   0,
+    }
   }
-  writeCache(cache)
-  return cache
 }
 
-export async function hasRookiePass(userId: string): Promise<boolean> {
-  const cached = readCache()
+export async function hasRookiePass(userId?: string): Promise<boolean> {
+  const uid = await resolveUserId(userId)
+  if (!uid) return false
+
+  const cached = readCache(uid)
   if (cached) return cached.has_pass
-  const c = await _fetchPass(userId)
+
+  const c = await _fetchPass(uid)
   return c.has_pass
 }
 
-export async function getPassExpiry(userId: string): Promise<string | null> {
-  const cached = readCache()
+export async function getPassExpiry(userId?: string): Promise<string | null> {
+  const uid = await resolveUserId(userId)
+  if (!uid) return null
+
+  const cached = readCache(uid)
   if (cached) return cached.access_until
-  const c = await _fetchPass(userId)
+
+  const c = await _fetchPass(uid)
   return c.access_until
 }
 
@@ -150,9 +216,12 @@ export async function triggerCheckout(opts: CheckoutOptions): Promise<void> {
         const d = await r.json()
         if (d.status === 'paid') {
           stopPoll()
-          bustPassCache()
-          // Re-fetch to get access_until
+          bustPassCache(userId)
+          // Re-fetch to get access_until directly from DB
           const expiry = await getPassExpiry(userId)
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('rookiePassUpdated'))
+          }
           onSuccess?.(expiry ?? '')
         }
       } catch { /* keep polling */ }
@@ -174,7 +243,7 @@ export async function triggerCheckout(opts: CheckoutOptions): Promise<void> {
     theme: { color: '#6366F1' },
     config: {
       display: {
-        // UPI first as requested
+        // UPI first
         preferences: { show_default_blocks: false },
         blocks: {
           upi:   { name: 'UPI',    instruments: [{ method: 'upi' }] },

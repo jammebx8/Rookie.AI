@@ -121,24 +121,28 @@ export default function TabLayout({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    const loadUserCoins = async () => {
+    const loadUserData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data, error } = await supabase
             .from('users')
-            .select('rookieCoinsEarned')
+            .select('*')
             .eq('id', user.id)
             .single();
           if (!error && data) {
             setRookieCoins(data.rookieCoinsEarned || 0);
+            try {
+              localStorage.setItem('@user', JSON.stringify({ ...data, rookieCoinsEarned: data.rookieCoinsEarned ?? 0 }));
+              localStorage.setItem('@user_onboarded', 'true');
+            } catch {}
           }
         }
       } catch (err) {
-        console.error('Error loading user coins:', err);
+        console.error('Error loading user profile:', err);
       }
     };
-    loadUserCoins();
+    loadUserData();
   }, []);
 
   const tabs: Tab[] = [
