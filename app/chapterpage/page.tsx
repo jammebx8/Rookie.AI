@@ -499,8 +499,7 @@ function ChapterPageContent() {
                     <motion.button
                       key={yr}
                       onClick={() => setSelectedYear(yr)}
-                      whileHover={{ scale: 1.04 }}
-                      whileTap={{ scale: 0.96 }}
+                    
                       className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-200 ${
                         active
                           ? 'bg-white text-black border-white'

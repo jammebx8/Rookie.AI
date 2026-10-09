@@ -136,34 +136,58 @@ export default function LeaderboardPage() {
   }, []);
 
   const fetchLeaderboard = async (examFilter = filterExam) => {
-    try {
-      setLoading(true);
-      let query: any = supabase
-        .from("users")
-        .select("id, name, email, avatar_url, rookieCoinsEarned, exam")
-        .order("rookieCoinsEarned", { ascending: false });
-      if (examFilter !== "All") query = query.eq("exam", examFilter);
+  try {
+    setLoading(true);
 
-      const { data, error } = await query;
-      if (error) { setUsers([]); return; }
+    let query: any = supabase
+      .from("users")
+      .select("id, name, email, avatar_url, rookieCoinsEarned, exam")
+      .order("rookieCoinsEarned", { ascending: false });
 
-      const sanitized: UserRow[] = (data || []).map((d: any) => ({
-        id: d.id,
-        name: d.name ?? d.email ?? "-",
-        email: d.email ?? null,
-        avatar_url: d.avatar_url ?? null,
-        rookieCoinsEarned: typeof d.rookieCoinsEarned === "number" ? d.rookieCoinsEarned : Number(d.rookieCoinsEarned) || 0,
-        exam: d.exam ?? null,
-      }));
-      setUsers(sanitized);
+    if (examFilter !== "All") {
+      query = query.eq("exam", examFilter);
+    }
 
+    const { data, error } = await query;
+
+    if (error) {
+      setUsers([]);
+      return;
+    }
+
+    const sanitized: UserRow[] = (data || []).map((d: any) => ({
+      id: d.id,
+      name: d.name ?? d.email ?? "-",
+      email: d.email ?? null,
+      avatar_url: d.avatar_url ?? null,
+      rookieCoinsEarned:
+        typeof d.rookieCoinsEarned === "number"
+          ? d.rookieCoinsEarned
+          : Number(d.rookieCoinsEarned) || 0,
+      exam: d.exam ?? null,
+    }));
+
+    setUsers(sanitized);
+
+    // IMPORTANT:
+    // Only generate the filter options from the unfiltered dataset.
+    // Otherwise clicking an exam removes all the other filters.
+    if (examFilter === "All") {
       const examsSet = new Set<string>();
-      sanitized.forEach(u => { if (u.exam) examsSet.add(u.exam); });
-      setExamOptions(["All", ...Array.from(examsSet).sort()]);
-    } catch { setUsers([]); }
-    finally { setLoading(false); }
-  };
 
+      sanitized.forEach((u) => {
+        if (u.exam) examsSet.add(u.exam);
+      });
+
+      setExamOptions(["All", ...Array.from(examsSet).sort()]);
+    }
+
+  } catch {
+    setUsers([]);
+  } finally {
+    setLoading(false);
+  }
+};
   useEffect(() => { fetchLeaderboard(filterExam).catch(() => {}); }, [filterExam]);
 
   const topThree = useMemo(() => users.slice(0, 3), [users]);
@@ -310,7 +334,7 @@ export default function LeaderboardPage() {
         >
           {examOptions.map(ex => (
             <motion.button key={ex} onClick={() => setFilterExam(ex)}
-              whileHover={{ scale:1.04 }} whileTap={{ scale:0.96 }}
+
               className={`flex-shrink-0 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-all duration-200 ${ex === filterExam ? T.filterActive : T.filterIdle}`}
             >
               {ex}

@@ -268,16 +268,10 @@ export function Step1Exam({ isDark, value, onChange }: Props) {
             `}
           />
 
-          <p
-            className={`
-              text-[11px]
-              leading-relaxed
-              ${T.muted}
-            `}
-          >
-            Currently, JEE Main questions are available.
-            JEE Advanced and NEET will be added soon.
-          </p>
+          <p className={`text-[11px] leading-relaxed ${T.muted}`}>
+              JEE Main and JEE Advanced questions are available.
+              NEET will be added soon.
+            </p>
         </div>
       </div>
     </div>

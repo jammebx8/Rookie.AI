@@ -879,6 +879,39 @@ export default function QuestionViewerClient() {
   const [buddyModalOpen, setBuddyModalOpen]     = useState(false)
   const [userId, setUserId]                     = useState<string | null>(null)
 
+  // ── Free-tier daily solution/similar view limit ───────────────────────────
+  // 3 per day for free users; unlimited for Rookie Pass holders.
+  const SOL_LIMIT     = 3
+  const SOL_KEY       = `rookie_sol_views_${new Date().toDateString()}`
+  const [hasPass,     setHasPass]     = useState<boolean | null>(null) // null = checking
+  const [solViewsToday, setSolViewsToday] = useState<number>(() => {
+    try { return parseInt(localStorage.getItem(SOL_KEY) ?? '0', 10) || 0 } catch { return 0 }
+  })
+
+  // Check Rookie Pass on mount (after userId is set)
+  useEffect(() => {
+    if (!userId) return
+    ;(async () => {
+      try {
+        const { hasRookiePass } = await import('../../lib/rookiePass')
+        const pass = await hasRookiePass(userId)
+        setHasPass(pass)
+      } catch { setHasPass(false) }
+    })()
+  }, [userId])
+
+  // Increment daily counter when a solution is first viewed
+  const recordSolView = useCallback(() => {
+    setSolViewsToday(prev => {
+      const next = prev + 1
+      try { localStorage.setItem(SOL_KEY, String(next)) } catch { /* no-op */ }
+      return next
+    })
+  }, [SOL_KEY])
+
+  // Whether the user can see the solution/similar panel
+  const canViewSolution = hasPass === true || solViewsToday < SOL_LIMIT
+
   const timerRef          = useRef<number | null>(null)
   const scrollRef         = useRef<HTMLDivElement | null>(null)
   const questionStartTime = useRef(Date.now())
@@ -1393,6 +1426,8 @@ export default function QuestionViewerClient() {
     const answerPromise: Promise<string | null> = Promise.resolve(q.correct_option ?? null)
 
     setSolutionBuddyId(activeBuddyId)
+    // Record daily solution view the first time (not when navigating back to an already-seen Q)
+    if (!solutionRequested) recordSolView()
     setSolutionRequested(true); setSolutionLoading(true)
     const solutionPromise = generateAISolution(q, activeBuddyId, activeBuddy, q.correct_option || '')
 
@@ -1443,6 +1478,8 @@ export default function QuestionViewerClient() {
     const answerPromise: Promise<string | null> = Promise.resolve(q.correct_option ?? null)
 
     setSolutionBuddyId(activeBuddyId)
+    // Record daily solution view the first time (not when navigating back to an already-seen Q)
+    if (!solutionRequested) recordSolView()
     setSolutionRequested(true); setSolutionLoading(true)
     const solutionPromise = generateAISolution(q, activeBuddyId, activeBuddy, q.correct_option || '')
 
@@ -1744,106 +1781,162 @@ export default function QuestionViewerClient() {
                   </motion.div>
                 ) : null}
 
-                {/* Solution card */}
+                {/* Solution card + Similar Questions — gated for free users */}
                 {solutionRequested && (
-                  <div ref={scrollRef} key="solution-card" className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2.5">
-                        <img src={solutionBuddy.image} alt={solutionBuddy.name} className="w-10 h-10 rounded-full object-cover" />
-                        <div>
-                          <h3 className="font-bold text-sm">Solution</h3>
-                          <p className={`text-[11px] ${T.muted}`}>Explained by {solutionBuddy.name}</p>
-                        </div>
-                      </div>
-                      {!solutionLoading && (
-                        <motion.button whileTap={{ scale: 0.95 }} onClick={handleRegenerateSolution}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${T.btnSecondary}`}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M21 8h-4M3 16h4"/>
-                          </svg>
-                          Redo
-                        </motion.button>
-                      )}
-                    </div>
-
-                    {solutionLoading ? (
-                      <div className="space-y-2.5 py-2">
-                        {[100, 88, 94, 72, 83, 90, 65].map((w, i) => (
-                          <div key={i} className={`h-3 rounded-full animate-pulse ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: `${w}%` }} />
-                        ))}
-                      </div>
-                    ) : (
-                      <>
-                        <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-                          {renderLatex(solution)}
-                        </div>
-                        {Q?.solution_image_url && (
-                          <div className="mt-4 relative group">
-                            <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-64 ${T.imgWrapper}`}>
-                              <img src={Q.solution_image_url} alt="Solution illustration"
-                                className="max-h-56 max-w-full object-contain cursor-zoom-in select-none"
-                                onClick={() => setImageModal(Q.solution_image_url!)} />
-                              <button onClick={() => setImageModal(Q.solution_image_url!)}
-                                className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/70 text-white flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity shadow">
-                                <FiZoomIn size={14} />
-                              </button>
+                  canViewSolution ? (
+                    <>
+                      <div ref={scrollRef} key="solution-card" className={`rounded-2xl border p-5 sm:p-6 transition-colors ${T.solCard}`}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2.5">
+                            <img src={solutionBuddy.image} alt={solutionBuddy.name} className="w-10 h-10 rounded-full object-cover" />
+                            <div>
+                              <h3 className="font-bold text-sm">Solution</h3>
+                              <p className={`text-[11px] ${T.muted}`}>Explained by {solutionBuddy.name}</p>
                             </div>
                           </div>
-                        )}
-                      </>
-                    )}
-
-                    {/* AI Followup buttons */}
-                    {!solutionLoading && solution && (
-                      <div className="mt-5">
-                        {!aiFollowup && !aiFollowupLoading && (
-                          <div className="flex flex-wrap gap-2">
-                            {/* Simpler Explanation button */}
-                            <motion.button
-                              whileTap={{ scale: 0.97 }} onClick={handleAIFollowup}
-                              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-colors ${isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'}`}
-                            >
-                              <FiSmile size={13} /> Simpler Explanation
+                          {!solutionLoading && (
+                            <motion.button whileTap={{ scale: 0.95 }} onClick={handleRegenerateSolution}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${T.btnSecondary}`}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M21 8h-4M3 16h4"/>
+                              </svg>
+                              Redo
                             </motion.button>
+                          )}
+                        </div>
+
+                        {solutionLoading ? (
+                          <div className="space-y-2.5 py-2">
+                            {[100, 88, 94, 72, 83, 90, 65].map((w, i) => (
+                              <div key={i} className={`h-3 rounded-full animate-pulse ${isDark ? 'bg-[#1e2538]' : 'bg-gray-200'}`} style={{ width: `${w}%` }} />
+                            ))}
                           </div>
+                        ) : (
+                          <>
+                            <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                              {renderLatex(solution)}
+                            </div>
+                            {Q?.solution_image_url && (
+                              <div className="mt-4 relative group">
+                                <div className={`rounded-xl border overflow-hidden flex items-center justify-center max-h-64 ${T.imgWrapper}`}>
+                                  <img src={Q.solution_image_url} alt="Solution illustration"
+                                    className="max-h-56 max-w-full object-contain cursor-zoom-in select-none"
+                                    onClick={() => setImageModal(Q.solution_image_url!)} />
+                                  <button onClick={() => setImageModal(Q.solution_image_url!)}
+                                    className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/70 text-white flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity shadow">
+                                    <FiZoomIn size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </>
                         )}
 
-                        {aiFollowupLoading && (
-                          <div className="flex items-center gap-3 mt-3">
-                            <Spinner size={16} /><span className={`text-sm ${T.muted}`}>Generating…</span>
+                        {/* AI Followup buttons */}
+                        {!solutionLoading && solution && (
+                          <div className="mt-5">
+                            {!aiFollowup && !aiFollowupLoading && (
+                              <div className="flex flex-wrap gap-2">
+                                <motion.button
+                                  whileTap={{ scale: 0.97 }} onClick={handleAIFollowup}
+                                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-colors ${isDark ? 'bg-white text-black border-white hover:bg-gray-100' : 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#1e293b]'}`}
+                                >
+                                  <FiSmile size={13} /> Simpler Explanation
+                                </motion.button>
+                              </div>
+                            )}
+                            {aiFollowupLoading && (
+                              <div className="flex items-center gap-3 mt-3">
+                                <Spinner size={16} /><span className={`text-sm ${T.muted}`}>Generating…</span>
+                              </div>
+                            )}
+                            {aiFollowup && (
+                              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                                className={`mt-4 rounded-xl border p-4 text-sm leading-relaxed whitespace-pre-wrap transition-colors ${T.followCard}`}>
+                                {aiFollowup}
+                              </motion.div>
+                            )}
                           </div>
-                        )}
-
-                        {aiFollowup && (
-                          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                            className={`mt-4 rounded-xl border p-4 text-sm leading-relaxed whitespace-pre-wrap transition-colors ${T.followCard}`}>
-                            {aiFollowup}
-                          </motion.div>
                         )}
                       </div>
-                    )}
-                  </div>
-                )}
 
-                {/* ── Similar Questions — auto-shown after solution ───── */}
-                {solutionRequested && Q && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
-                  >
-                    <SimilarQuestionsPanel
-                      mainQuestion={Q}
-                      chapterTitle={chapterTitle}
-                      subjectName={subject}
-                      imageKey={imageKey}
-                      isDark={isDark}
-                      addToast={addToast}
-                      dbTable={DB_TABLE}
-                    />
-                  </motion.div>
+                      {/* ── Similar Questions ── */}
+                      {Q && (
+                        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
+                          <SimilarQuestionsPanel
+                            mainQuestion={Q}
+                            chapterTitle={chapterTitle}
+                            subjectName={subject}
+                            imageKey={imageKey}
+                            isDark={isDark}
+                            addToast={addToast}
+                            dbTable={DB_TABLE}
+                          />
+                        </motion.div>
+                      )}
+                    </>
+                  ) : (
+                    /* ── Free limit reached — upgrade wall ── */
+                    <motion.div
+                      key="upgrade-wall"
+                      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                      className="rounded-2xl border overflow-hidden"
+                      style={{
+                        background: isDark ? 'linear-gradient(135deg,#09091f,#0e0b2e,#0c1a3a)' : 'linear-gradient(135deg,#f5f3ff,#ede9fe)',
+                        border: isDark ? '1px solid rgba(139,92,246,0.35)' : '1px solid rgba(139,92,246,0.25)',
+                      }}
+                    >
+                      <div className="px-5 py-6 text-center">
+                        <div className="w-12 h-12 mx-auto mb-3 rounded-2xl flex items-center justify-center"
+                          style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.35)' }}>
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                          </svg>
+                        </div>
+                        <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: 'rgba(165,180,252,0.6)' }}>Daily limit reached</p>
+                        <h3 className={`text-base font-extrabold mb-1 ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
+                          You&apos;ve used {SOL_LIMIT} free solutions today
+                        </h3>
+                        <p className={`text-sm mb-4 max-w-xs mx-auto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                          Get Rookie Pass for unlimited AI solutions, similar questions, and JEE Advanced access.
+                        </p>
+                        <motion.button
+                          whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.02 }}
+                          onClick={async () => {
+                            try {
+                              const { supabase: sb } = await import('../../public/src/utils/supabase')
+                              const { triggerCheckout, bustPassCache } = await import('../../lib/rookiePass')
+                              const { data: { session } } = await sb.auth.getSession()
+                              if (!session) { alert('Please sign in to purchase.'); return }
+                              const raw = typeof window !== 'undefined' ? localStorage.getItem('@user') : null
+                              const user = raw ? JSON.parse(raw) : null
+                              await triggerCheckout({
+                                token:   session.access_token,
+                                userId:  session.user.id,
+                                email:   session.user.email,
+                                name:    user?.name ?? null,
+                                onSuccess: () => { bustPassCache(); setHasPass(true) },
+                                onError:   (msg: string) => alert(msg),
+                              })
+                            } catch (e) { console.error(e) }
+                          }}
+                          className="relative overflow-hidden inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white"
+                          style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 4px 16px rgba(99,102,241,0.4)' }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+                          </svg>
+                          Get Rookie Pass — ₹299/year
+                        </motion.button>
+                        <p className="text-[10px] mt-2" style={{ color: 'rgba(148,163,184,0.45)' }}>
+                          Resets tomorrow · {Math.max(0, SOL_LIMIT - solViewsToday)} free views left today
+                        </p>
+                      </div>
+                    </motion.div>
+                  )
                 )}
               </>
             )}
-
 
             {/* Loading more indicator */}
             {loadingMore && (

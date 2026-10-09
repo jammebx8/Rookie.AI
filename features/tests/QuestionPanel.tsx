@@ -73,7 +73,9 @@ export function QuestionPanel({
     clearBtn:  isDark ? 'bg-[#0d1117] border-[#1e2538] text-slate-400 hover:text-white' : 'bg-white border-[#E5E7EB] text-gray-500 hover:text-gray-800',
     footer:    isDark ? 'bg-[#07090f]/95 border-[#1e2538]' : 'bg-white/95 border-[#E5E7EB]',
     navBtn:    isDark ? 'bg-[#0d1117] border-[#1e2538] text-white hover:bg-[#151e2e]' : 'bg-white border-[#E5E7EB] text-[#0f172a] hover:bg-gray-50',
-    nextBtn:   'bg-indigo-600 hover:bg-indigo-700 text-white',
+    nextBtn:    isDark
+                ? 'bg-white text-black hover:bg-gray-100'
+                : 'bg-[#0f172a] text-white hover:bg-[#1e293b]',
   }
 
   const optionText = (key: typeof OPTION_KEYS[number]): string | null =>
@@ -84,7 +86,7 @@ export function QuestionPanel({
   const hasOptions = OPTION_KEYS.some(k => optionText(k) || optionImg(k))
 
   return (
-    <div className={`flex flex-col min-h-[calc(100vh-56px)] ${T.page}`}>
+    <div className={`flex flex-col h-[calc(100vh-56px)] ${T.page}`}>
       {/* Subject chip row */}
       <div className="px-4 sm:px-6 pt-4 pb-0">
         {question.subject && (
@@ -96,8 +98,8 @@ export function QuestionPanel({
         )}
       </div>
 
-      {/* Main scrollable area */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-4 pb-6" style={{ scrollbarWidth: 'none' }}>
+      {/* Main scrollable area — flex-1 + min-h-0 so it never pushes the footer */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 pt-4 pb-6" style={{ scrollbarWidth: 'none' }}>
 
         {/* Question label + controls */}
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -214,8 +216,8 @@ export function QuestionPanel({
         )}
       </div>
 
-      {/* Footer nav */}
-      <div className={`sticky bottom-0 border-t px-4 sm:px-6 py-3 flex items-center justify-between gap-3 ${T.footer}`}
+      {/* Footer nav — always pinned at bottom of the fixed-height column */}
+      <div className={`flex-shrink-0 border-t px-4 sm:px-6 py-3 flex items-center justify-between gap-3 ${T.footer}`}
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       >
         <button

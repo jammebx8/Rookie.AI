@@ -87,7 +87,7 @@ export function QuestionPalette({ isDark, questions, answers, currentIndex, onGo
   }
 
   return (
-    <div className={`flex flex-col h-full ${T.bg}`}>
+    <div className={`flex flex-col h-full min-h-0 ${T.bg}`}>
       {/* Header */}
       <div className={`flex items-center justify-between px-4 py-3 border-b flex-shrink-0 ${T.border}`}>
         <p className={`text-sm font-bold ${T.text}`}>Question Palette</p>
@@ -129,8 +129,8 @@ export function QuestionPalette({ isDark, questions, answers, currentIndex, onGo
         </p>
       </div>
 
-      {/* Palette grid per subject */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-5" style={{ scrollbarWidth: 'none' }}>
+      {/* Palette grid per subject — scrollable, takes remaining height */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-5" style={{ scrollbarWidth: 'none' }}>
         {Object.entries(grouped).map(([subj, qs]) => {
           const attempted = countBySubject(subj)
           const total     = qs.length

@@ -1734,13 +1734,13 @@ function RookiePassBanner() {
            Rookie Pass 
         </p>
         <h2 className="text-xl font-extrabold leading-tight tracking-tight text-white mb-1">
-          JEE Advanced PYQs —{' '}
+         Your complete JEE toolkit —{' '}
           <span style={{ background: 'linear-gradient(90deg, #a78bfa, #818cf8, #c084fc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            All Years Unlocked
+           Unlocked.
           </span>
         </h2>
         <p className="text-sm leading-relaxed mb-5" style={{ color: 'rgba(203,213,225,0.65)' }}>
-          Every JEE Advanced question ever asked. AI solutions, buddy explanations, and performance tracking — one pass.
+         JEE (Main + Advanced) PYQs · Full PYQ Mocks · Unlimited Tests · AI Solutions · Similar Questions · Recommendations
         </p>
 
         <div className="flex items-end justify-between gap-3">

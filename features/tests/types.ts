@@ -23,7 +23,7 @@ export const EXAM_OPTIONS: ExamOption[] = [
   {
     id:          'jee_advanced',
     label:       'JEE Advanced',
-    available:   false,
+    available:   true,
     description: 'Joint Entrance Examination — Advanced',
   },
   {
