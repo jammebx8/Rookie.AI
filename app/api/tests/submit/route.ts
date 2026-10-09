@@ -55,8 +55,9 @@ export async function POST(req: NextRequest) {
 
     // ── Fetch question data (with correct answers) ────────────────────────────
     const questionIds: string[] = attempt.question_ids ?? []
+    const dbTable = (attempt.config as Record<string, unknown>)?.dbTable === 'jee_adv' ? 'jee_adv' : 'jee_mains'
     const { data: questions, error: qErr } = await supabaseAdmin
-      .from('jee_mains')
+      .from(dbTable)
       .select('question_id,question_text,option_a,option_b,option_c,option_d,option_a_img,option_b_img,option_c_img,option_d_img,question_img_url,solution,solution_image_url,correct_option,subject,chapter,exam_shift')
       .in('question_id', questionIds)
 

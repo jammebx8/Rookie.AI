@@ -1,14 +1,66 @@
-'use client'
+﻿'use client'
 
 import React, { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ClipboardList, Plus, Clock, CheckCircle2, XCircle, Minus, ChevronRight, RotateCcw } from 'lucide-react'
+import { ClipboardList, Plus, Clock, CheckCircle2, XCircle, Minus, ChevronRight, RotateCcw, BookOpen, ChevronDown, Loader2, FlaskConical } from 'lucide-react'
 import { supabase } from '../../../public/src/utils/supabase'
 import type { TestAttemptRow } from '../../../features/tests/types'
 import { WizardModal } from '../../../features/tests/WizardModal'
 
-// ─── Theme hook (matches rest of app) ────────────────────────────────────────
+// ─── PYQ mock test data ───────────────────────────────────────────────────────
+interface PYQShift {
+  exam_shift: string
+  physics:    number
+  chemistry:  number
+  maths:      number
+  total:      number
+  dbTable:    'jee_mains' | 'jee_adv'
+  durationSeconds: number
+}
+
+const JEE_MAIN_SHIFTS: PYQShift[] = [
+  { exam_shift: 'JEE Main 2024 (Online) 9th April Evening Shift',   physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2024 (Online) 6th April Morning Shift',   physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2024 (Online) 4th April Morning Shift',   physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2023 (Online) 24th January Morning Shift',physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2023 (Online) 1st February Morning Shift',physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2023 (Online) 1st February Evening Shift',physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2023 (Online) 11th April Morning Shift',  physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2023 (Online) 11th April Evening Shift',  physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2023 (Online) 13th April Morning Shift',  physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2022 (Online) 24th June Morning Shift',   physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2022 (Online) 29th June Evening Shift',   physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2022 (Online) 25th July Morning Shift',   physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2022 (Online) 26th July Morning Shift',   physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2021 (Online) 26th February Morning Shift',physics:30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2021 (Online) 16th March Morning Shift',  physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2021 (Online) 20th July Morning Shift',   physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2021 (Online) 25th July Morning Shift',   physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2021 (Online) 25th July Evening Shift',   physics: 30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+  { exam_shift: 'JEE Main 2021 (Online) 1st September Evening Shift',physics:30, chemistry: 30, maths: 30, total: 90, dbTable: 'jee_mains', durationSeconds: 10800 },
+]
+
+const JEE_ADV_SHIFTS: PYQShift[] = [
+  { exam_shift: 'JEE Advanced 2024 Paper 1 Online', physics: 17, chemistry: 17, maths: 17, total: 51, dbTable: 'jee_adv', durationSeconds: 10800 },
+  { exam_shift: 'JEE Advanced 2023 Paper 1 Online', physics: 17, chemistry: 17, maths: 17, total: 51, dbTable: 'jee_adv', durationSeconds: 10800 },
+]
+
+type ExamFilter = 'JEE Main' | 'JEE Advanced'
+const EXAM_OPTIONS: ExamFilter[] = ['JEE Main', 'JEE Advanced']
+
+// Strip "JEE Main YYYY (Online) " / "JEE Advanced YYYY " prefix for a clean label
+function shiftLabel(shift: string): string {
+  return shift
+    .replace(/^JEE Main \d{4} \(Online\) /, '')
+    .replace(/^JEE Advanced \d{4} /, '')
+}
+
+function shiftYear(shift: string): string {
+  return shift.match(/\d{4}/)?.[0] ?? ''
+}
+
+// ─── Theme hook ────────────────────────────────────────────────────────────────
 function useTheme() {
   const [isDark, setIsDark] = useState(true)
   useEffect(() => {
@@ -24,7 +76,7 @@ function useTheme() {
   return isDark
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(date: string) {
   return new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
@@ -34,7 +86,7 @@ function fmtDur(seconds: number | null) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`
 }
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
+// ─── Skeleton ──────────────────────────────────────────────────────────────────
 function Skeleton({ isDark }: { isDark: boolean }) {
   const base = isDark ? 'bg-[#1e2538]' : 'bg-gray-200'
   return (
@@ -46,86 +98,57 @@ function Skeleton({ isDark }: { isDark: boolean }) {
   )
 }
 
-// ─── Score donut ──────────────────────────────────────────────────────────────
+// ─── Score donut ───────────────────────────────────────────────────────────────
 function ScoreDonut({
   correct, incorrect, unattempted, isDark,
 }: { correct: number; incorrect: number; unattempted: number; isDark: boolean }) {
   const total = correct + incorrect + unattempted || 1
   const r = 36, cx = 44, cy = 44
   const circ = 2 * Math.PI * r
-
-  const correctPct    = correct    / total
-  const incorrectPct  = incorrect  / total
-
+  const correctPct   = correct   / total
+  const incorrectPct = incorrect / total
   const correctDash   = circ * correctPct
   const incorrectDash = circ * incorrectPct
-
-  const correctOffset   = 0
-  const incorrectOffset = -(circ * correctPct)
+  const correctOffset     = 0
+  const incorrectOffset   = -(circ * correctPct)
   const unattemptedOffset = -(circ * (correctPct + incorrectPct))
-
   return (
     <svg width={88} height={88} viewBox="0 0 88 88" aria-hidden="true">
-      {/* track */}
       <circle cx={cx} cy={cy} r={r} fill="none" stroke={isDark ? '#1e2538' : '#e5e7eb'} strokeWidth={10} />
-      {/* un-attempted */}
-      <circle cx={cx} cy={cy} r={r} fill="none"
-        stroke={isDark ? '#334155' : '#cbd5e1'} strokeWidth={10}
-        strokeDasharray={`${circ} ${circ}`}
-        strokeDashoffset={unattemptedOffset}
-        strokeLinecap="butt"
-        style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px` }}
-      />
-      {/* incorrect */}
-      <circle cx={cx} cy={cy} r={r} fill="none"
-        stroke="#ef4444" strokeWidth={10}
-        strokeDasharray={`${incorrectDash} ${circ}`}
-        strokeDashoffset={incorrectOffset}
-        strokeLinecap="butt"
-        style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px` }}
-      />
-      {/* correct */}
-      <circle cx={cx} cy={cy} r={r} fill="none"
-        stroke="#22c55e" strokeWidth={10}
-        strokeDasharray={`${correctDash} ${circ}`}
-        strokeDashoffset={correctOffset}
-        strokeLinecap="butt"
-        style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px` }}
-      />
-      <text x={cx} y={cy - 5} textAnchor="middle" fill={isDark ? '#f1f5f9' : '#0f172a'} fontSize={13} fontWeight={700}>
-        {correct}
-      </text>
-      <text x={cx} y={cy + 11} textAnchor="middle" fill={isDark ? '#94a3b8' : '#64748b'} fontSize={9}>
-        correct
-      </text>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={isDark ? '#334155' : '#cbd5e1'} strokeWidth={10}
+        strokeDasharray={`${circ} ${circ}`} strokeDashoffset={unattemptedOffset} strokeLinecap="butt"
+        style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px` }} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#ef4444" strokeWidth={10}
+        strokeDasharray={`${incorrectDash} ${circ}`} strokeDashoffset={incorrectOffset} strokeLinecap="butt"
+        style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px` }} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#22c55e" strokeWidth={10}
+        strokeDasharray={`${correctDash} ${circ}`} strokeDashoffset={correctOffset} strokeLinecap="butt"
+        style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px` }} />
+      <text x={cx} y={cy - 5} textAnchor="middle" fill={isDark ? '#f1f5f9' : '#0f172a'} fontSize={13} fontWeight={700}>{correct}</text>
+      <text x={cx} y={cy + 11} textAnchor="middle" fill={isDark ? '#94a3b8' : '#64748b'} fontSize={9}>correct</text>
     </svg>
   )
 }
 
-// ─── Overall analytics card ───────────────────────────────────────────────────
-function OverallCard({
-  attempts, isDark,
-}: { attempts: TestAttemptRow[]; isDark: boolean }) {
+// ─── Overall analytics card ────────────────────────────────────────────────────
+function OverallCard({ attempts, isDark }: { attempts: TestAttemptRow[]; isDark: boolean }) {
   const submitted = attempts.filter(a => a.status === 'submitted')
-  const totalCorrect    = submitted.reduce((s, a) => s + (a.correct_count    ?? 0), 0)
-  const totalIncorrect  = submitted.reduce((s, a) => s + (a.incorrect_count  ?? 0), 0)
-  const totalUnattempted= submitted.reduce((s, a) => s + (a.unattempted_count ?? 0), 0)
-  const totalScore      = submitted.reduce((s, a) => s + (a.score            ?? 0), 0)
-  const maxScore        = submitted.reduce((s, a) => s + (a.max_score        ?? 0), 0)
-
+  const totalCorrect     = submitted.reduce((s, a) => s + (a.correct_count    ?? 0), 0)
+  const totalIncorrect   = submitted.reduce((s, a) => s + (a.incorrect_count  ?? 0), 0)
+  const totalUnattempted = submitted.reduce((s, a) => s + (a.unattempted_count ?? 0), 0)
+  const totalScore       = submitted.reduce((s, a) => s + (a.score            ?? 0), 0)
+  const maxScore         = submitted.reduce((s, a) => s + (a.max_score        ?? 0), 0)
   const T = {
     card:  isDark ? 'bg-[#0d1117] border-[#1e2538]' : 'bg-white border-[#E5E7EB]',
     muted: isDark ? 'text-slate-400' : 'text-slate-500',
     text:  isDark ? 'text-white' : 'text-[#0f172a]',
   }
-
   const stats = [
-    { label: 'Tests taken',   value: submitted.length,   icon: <ClipboardList size={14} />, color: isDark ? '#818cf8' : '#4f46e5' },
-    { label: 'Correct',       value: totalCorrect,       icon: <CheckCircle2  size={14} />, color: '#22c55e' },
-    { label: 'Incorrect',     value: totalIncorrect,     icon: <XCircle       size={14} />, color: '#ef4444' },
-    { label: 'Not answered',  value: totalUnattempted,   icon: <Minus         size={14} />, color: isDark ? '#475569' : '#94a3b8' },
+    { label: 'Tests taken',  value: submitted.length,    icon: <ClipboardList size={14} />, color: isDark ? '#818cf8' : '#4f46e5' },
+    { label: 'Correct',      value: totalCorrect,        icon: <CheckCircle2  size={14} />, color: '#22c55e' },
+    { label: 'Incorrect',    value: totalIncorrect,      icon: <XCircle       size={14} />, color: '#ef4444' },
+    { label: 'Not answered', value: totalUnattempted,    icon: <Minus         size={14} />, color: isDark ? '#475569' : '#94a3b8' },
   ]
-
   return (
     <div className={`rounded-2xl border p-5 ${T.card}`}>
       <p className={`text-xs font-bold uppercase tracking-widest mb-4 ${T.muted}`}>Overall Analysis</p>
@@ -148,57 +171,36 @@ function OverallCard({
       {maxScore > 0 && (
         <div className={`mt-4 pt-4 border-t flex items-center justify-between ${isDark ? 'border-[#1e2538]' : 'border-gray-100'}`}>
           <span className={`text-xs ${T.muted}`}>Cumulative score</span>
-          <span className={`text-sm font-bold tabular-nums ${T.text}`}>
-            {totalScore} / {maxScore}
-          </span>
+          <span className={`text-sm font-bold tabular-nums ${T.text}`}>{totalScore} / {maxScore}</span>
         </div>
       )}
     </div>
   )
 }
 
-// ─── Past attempt row ─────────────────────────────────────────────────────────
-function AttemptRow({
-  attempt, isDark, onView,
-}: { attempt: TestAttemptRow; isDark: boolean; onView: () => void }) {
+// ─── Past attempt row ──────────────────────────────────────────────────────────
+function AttemptRow({ attempt, isDark, onView }: { attempt: TestAttemptRow; isDark: boolean; onView: () => void }) {
   const T = {
-    card:    isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-[#2a3548]' : 'bg-white border-[#E5E7EB] hover:border-gray-300',
-    muted:   isDark ? 'text-slate-400' : 'text-slate-500',
-    text:    isDark ? 'text-white' : 'text-[#0f172a]',
-    badge:   isDark ? 'bg-[#111827] text-slate-300' : 'bg-gray-100 text-slate-600',
+    card:  isDark ? 'bg-[#0d1117] border-[#1e2538] hover:border-[#2a3548]' : 'bg-white border-[#E5E7EB] hover:border-gray-300',
+    muted: isDark ? 'text-slate-400' : 'text-slate-500',
+    text:  isDark ? 'text-white' : 'text-[#0f172a]',
+    badge: isDark ? 'bg-[#111827] text-slate-300' : 'bg-gray-100 text-slate-600',
   }
-
   const pct = attempt.max_score && attempt.max_score > 0
-    ? Math.round(((attempt.score ?? 0) / attempt.max_score) * 100)
-    : null
-
+    ? Math.round(((attempt.score ?? 0) / attempt.max_score) * 100) : null
   const scoreColor = pct === null ? T.muted
-    : pct >= 70 ? 'text-emerald-500'
-    : pct >= 40 ? 'text-amber-500'
-    : 'text-rose-500'
-
+    : pct >= 70 ? 'text-emerald-500' : pct >= 40 ? 'text-amber-500' : 'text-rose-500'
   return (
-    <motion.div
-      whileHover={{ scale: 1.005 }}
-      whileTap={{ scale: 0.998 }}
-      onClick={onView}
-      role="button"
-      tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter') onView() }}
-      aria-label={`View result for ${attempt.title}`}
+    <motion.div whileHover={{ scale: 1.005 }} whileTap={{ scale: 0.998 }} onClick={onView}
+      role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') onView() }}
       className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all duration-200 ${T.card}`}
     >
-      {/* Score circle */}
       <div className="w-12 h-12 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-        style={{ borderColor: pct === null ? (isDark ? '#1e2538' : '#e5e7eb') : pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444' }}
-      >
+        style={{ borderColor: pct === null ? (isDark ? '#1e2538' : '#e5e7eb') : pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444' }}>
         {pct !== null
           ? <span className={`text-sm font-bold tabular-nums ${scoreColor}`}>{pct}%</span>
-          : <span className={`text-xs ${T.muted}`}>—</span>
-        }
+          : <span className={`text-xs ${T.muted}`}>—</span>}
       </div>
-
-      {/* Info */}
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-semibold truncate ${T.text}`}>{attempt.title}</p>
         <div className={`flex items-center gap-2 mt-1 text-xs ${T.muted} flex-wrap`}>
@@ -209,32 +211,26 @@ function AttemptRow({
             {fmtDur(attempt.time_taken_seconds ?? attempt.duration_seconds)}
           </span>
           {attempt.correct_count !== null && (
-            <>
-              <span>·</span>
-              <span className="text-emerald-500 font-medium">{attempt.correct_count} correct</span>
-            </>
+            <><span>·</span><span className="text-emerald-500 font-medium">{attempt.correct_count} correct</span></>
           )}
         </div>
       </div>
-
-      {/* Config pills */}
       <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
         {(attempt.config?.subjects ?? []).slice(0, 2).map((s: string) => (
           <span key={s} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${T.badge}`}>{s}</span>
         ))}
       </div>
-
       <ChevronRight size={16} className={T.muted} />
     </motion.div>
   )
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
+// ─── Empty state ───────────────────────────────────────────────────────────────
 function EmptyState({ isDark, onNew }: { isDark: boolean; onNew: () => void }) {
   const T = {
-    muted: isDark ? 'text-slate-500' : 'text-slate-400',
-    text:  isDark ? 'text-white' : 'text-[#0f172a]',
-    border:isDark ? 'border-[#1e2538]' : 'border-gray-200',
+    muted:  isDark ? 'text-slate-500' : 'text-slate-400',
+    text:   isDark ? 'text-white' : 'text-[#0f172a]',
+    border: isDark ? 'border-[#1e2538]' : 'border-gray-200',
   }
   return (
     <div className={`flex flex-col items-center justify-center py-14 rounded-2xl border border-dashed text-center gap-3 ${T.border}`}>
@@ -244,26 +240,201 @@ function EmptyState({ isDark, onNew }: { isDark: boolean; onNew: () => void }) {
         <path d="M16 22l4 4 8-8" stroke={isDark ? '#475569' : '#94a3b8'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
       <p className={`text-base font-semibold ${T.text}`}>No tests yet</p>
-      <p className={`text-sm ${T.muted} max-w-xs`}>
-        Build your first custom test from JEE PYQs and track your progress over time.
-      </p>
-      <motion.button
-  whileTap={{ scale: 0.97 }}
-  onClick={onNew}
-  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex-shrink-0 ${
-    isDark
-      ? 'bg-white text-black hover:bg-gray-100'
-      : 'bg-gray-900 text-white hover:bg-gray-800'
-  }`}
->
-  <Plus size={16} />
-  Create your first test
-</motion.button>
+      <p className={`text-sm ${T.muted} max-w-xs`}>Build your first custom test from JEE PYQs and track your progress over time.</p>
+      <motion.button whileTap={{ scale: 0.97 }} onClick={onNew}
+        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-gray-900 text-white hover:bg-gray-800'}`}>
+        <Plus size={16} />Create your first test
+      </motion.button>
     </div>
   )
 }
 
-// ─── Hero card ────────────────────────────────────────────────────────────────
+// ─── PYQ Mock Section ──────────────────────────────────────────────────────────
+function PYQMockSection({ isDark, onStarted }: { isDark: boolean; onStarted: () => void }) {
+  const router = useRouter()
+  const [expanded, setExpanded]     = useState(false)
+  const [filterExam, setFilterExam] = useState<ExamFilter>('JEE Main')
+  const [starting, setStarting]     = useState<string | null>(null) // exam_shift being launched
+
+  const T = {
+    card:         isDark ? 'bg-[#0d1117] border-[#1e2538]'  : 'bg-white border-[#E5E7EB]',
+    cardHover:    isDark ? 'hover:border-[#2a3548]'          : 'hover:border-gray-300',
+    muted:        isDark ? 'text-slate-400'                  : 'text-slate-500',
+    text:         isDark ? 'text-white'                      : 'text-[#0f172a]',
+    shiftCard:    isDark ? 'bg-[#0a0f1a] border-[#1e2538] hover:border-white/70' : 'bg-gray-50 border-[#E5E7EB] hover:border-indigo-400',
+    badge:        isDark ? 'bg-[#111827] text-slate-400'     : 'bg-gray-100 text-slate-500',
+    filterActive: isDark ? 'bg-white text-black border-white'                        : 'bg-[#0f172a] text-white border-[#0f172a]',
+    filterIdle:   isDark ? 'bg-transparent text-slate-400 border-[#1e2538] hover:border-slate-500 hover:text-slate-200'
+                         : 'bg-transparent text-slate-500 border-gray-200 hover:border-gray-400 hover:text-slate-700',
+  }
+
+  const shifts = filterExam === 'JEE Main' ? JEE_MAIN_SHIFTS : JEE_ADV_SHIFTS
+
+  const handleStart = async (shift: PYQShift) => {
+    setStarting(shift.exam_shift)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token ?? ''
+      const res = await fetch('/api/tests/create-pyq', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          examShift:       shift.exam_shift,
+          dbTable:         shift.dbTable,
+          title:           shift.exam_shift,
+          durationSeconds: shift.durationSeconds,
+        }),
+      })
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? 'Failed'); }
+      const { attemptId } = await res.json()
+      onStarted()
+      router.push(`/tests/${attemptId}`)
+    } catch (err) {
+      console.error('[PYQMock] start error:', err)
+      alert('Could not start test. Please try again.')
+    } finally {
+      setStarting(null)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.38 }}
+      className={`rounded-2xl border overflow-hidden transition-colors ${T.card}`}
+    >
+      {/* ── Collapsed header (always visible) ── */}
+      <button
+        className="w-full text-left"
+        onClick={() => setExpanded(p => !p)}
+        aria-expanded={expanded}
+      >
+        <div className={`flex items-center justify-between gap-4 p-5 sm:p-6 transition-colors ${expanded ? '' : T.cardHover}`}>
+          <div className="flex items-start gap-4">
+            {/* icon */}
+            <div className={`hidden sm:flex w-14 h-14 rounded-2xl items-center justify-center flex-shrink-0 ${isDark ? 'bg-indigo-900/40' : 'bg-indigo-50'}`}>
+              <FlaskConical size={28} className={isDark ? 'text-indigo-400' : 'text-indigo-600'} />
+            </div>
+            <div>
+           
+              <h2 className={`text-xl sm:text-2xl font-extrabold leading-tight ${T.text}`}>
+                Practice Full Paper Mocks
+              </h2>
+              <p className={`text-sm mt-1 max-w-sm ${T.muted}`}>
+                Attempt real JEE question papers — exact shifts, full 90 Q in 3 hours.
+              </p>
+            </div>
+          </div>
+          <motion.div
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={{ duration: 0.22 }}
+            className="flex-shrink-0"
+          >
+            <ChevronDown size={20} className={T.muted} />
+          </motion.div>
+        </div>
+      </button>
+
+      {/* ── Expanded: filter chips + shift list ── */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.28, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            <div className={`border-t px-5 sm:px-6 pt-4 pb-6 ${isDark ? 'border-[#1e2538]' : 'border-gray-100'}`}>
+
+              {/* Filter chips */}
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.08, duration: 0.3 }}
+                className="flex gap-2 overflow-x-auto pb-1 mb-5"
+                style={{ scrollbarWidth: 'none' }}
+              >
+                {EXAM_OPTIONS.map(ex => (
+                  <motion.button
+                    key={ex}
+                    onClick={() => setFilterExam(ex)}
+                    whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                    className={`flex-shrink-0 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold border transition-all duration-200 ${ex === filterExam ? T.filterActive : T.filterIdle}`}
+                  >
+                    {ex}
+                  </motion.button>
+                ))}
+              </motion.div>
+
+              {/* Shift list */}
+              <div className="space-y-2.5">
+                {shifts.map((shift, i) => {
+                  const isLoading = starting === shift.exam_shift
+                  const year  = shiftYear(shift.exam_shift)
+                  const label = shiftLabel(shift.exam_shift)
+                  return (
+                    <motion.button
+                      key={shift.exam_shift}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.03 }}
+                      whileHover={isLoading ? {} : { scale: 1.005 }}
+                      whileTap={isLoading ? {} : { scale: 0.998 }}
+                      disabled={!!starting}
+                      onClick={() => handleStart(shift)}
+                      className={`w-full text-left flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200 ${T.shiftCard} ${starting && !isLoading ? 'opacity-50' : ''}`}
+                    >
+                      {/* Year badge */}
+                      <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-xs font-black ${isDark ? 'bg-[#1e2538] text-slate-300' : 'bg-white border border-gray-200 text-slate-600'}`}>
+                        {year}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold truncate ${T.text}`}>{label}</p>
+                        <div className={`flex items-center gap-3 mt-1 text-xs ${T.muted}`}>
+                          <span className="flex items-center gap-1">
+                            <BookOpen size={11} />
+                            {shift.total} Questions
+                          </span>
+                          <span>·</span>
+                          <span className="flex items-center gap-1">
+                            <Clock size={11} />
+                            3 hrs
+                          </span>
+                          <span className="hidden sm:flex items-center gap-1.5">
+                            <span>·</span>
+                            {(['Physics', 'Chemistry', 'Maths'] as const).map(s => (
+                              <span key={s} className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${T.badge}`}>{s}</span>
+                            ))}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* CTA */}
+                      <div className="flex-shrink-0">
+                        {isLoading ? (
+                          <Loader2 size={18} className="animate-spin text-indigo-400" />
+                        ) : (
+                          <div className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors ${isDark ? 'bg-indigo-600/20 text-indigo-400 group-hover:bg-indigo-600/30' : 'bg-indigo-50 text-indigo-600'}`}>
+                            Start
+                            <ChevronRight size={13} />
+                          </div>
+                        )}
+                      </div>
+                    </motion.button>
+                  )
+                })}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+}
+
+// ─── Hero card ─────────────────────────────────────────────────────────────────
 function HeroCard({ isDark, onNew }: { isDark: boolean; onNew: () => void }) {
   const T = {
     card: isDark
@@ -275,33 +446,21 @@ function HeroCard({ isDark, onNew }: { isDark: boolean; onNew: () => void }) {
       initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
       className={`rounded-2xl border p-5 sm:p-6 relative overflow-hidden ${T.card}`}
     >
-      {/* Decorative glow */}
       <div className="absolute -top-10 -right-10 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="relative z-10">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-          
             <h2 className={`text-xl sm:text-2xl font-extrabold mb-2 ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
               Create Your Own Test
             </h2>
             <p className={`text-sm mb-5 max-w-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               Pick any year, subject and chapter from 10,000+ PYQs. Set your duration and go.
             </p>
-            <motion.button
-  whileTap={{ scale: 0.97 }}
-  onClick={onNew}
-  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex-shrink-0 ${
-    isDark
-      ? 'bg-white text-black hover:bg-gray-100'
-      : 'bg-gray-900 text-white hover:bg-gray-800'
-  }`}
->
-  <Plus size={16} />
-  Build a Test
-</motion.button>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={onNew}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-gray-900 text-white hover:bg-gray-800'}`}>
+              <Plus size={16} />Build a Test
+            </motion.button>
           </div>
-
-          {/* Clipboard illustration */}
           <div className={`hidden sm:flex w-20 h-20 rounded-2xl items-center justify-center flex-shrink-0 ${isDark ? 'bg-indigo-900/40' : 'bg-indigo-100'}`}>
             <ClipboardList size={40} className={isDark ? 'text-indigo-400' : 'text-indigo-600'} />
           </div>
@@ -311,14 +470,14 @@ function HeroCard({ isDark, onNew }: { isDark: boolean; onNew: () => void }) {
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Main page ─────────────────────────────────────────────────────────────────
 export default function TestsPage() {
   const isDark  = useTheme()
   const router  = useRouter()
-  const [wizardOpen, setWizardOpen]     = useState(false)
-  const [attempts, setAttempts]         = useState<TestAttemptRow[]>([])
-  const [loading, setLoading]           = useState(true)
-  const [userId, setUserId]             = useState<string | null>(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [attempts,   setAttempts]   = useState<TestAttemptRow[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [userId,     setUserId]     = useState<string | null>(null)
 
   const T = {
     page:  isDark ? 'bg-[#07090f] text-white' : 'bg-[#F0F2FA] text-[#0f172a]',
@@ -339,12 +498,8 @@ export default function TestsPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserId(user.id)
-        loadAttempts(user.id)
-      } else {
-        setLoading(false)
-      }
+      if (user) { setUserId(user.id); loadAttempts(user.id) }
+      else setLoading(false)
     })
   }, [loadAttempts])
 
@@ -353,11 +508,8 @@ export default function TestsPage() {
   }, [userId, loadAttempts])
 
   const handleView = (attempt: TestAttemptRow) => {
-    if (attempt.status === 'in_progress') {
-      router.push(`/tests/${attempt.id}`)
-    } else {
-      router.push(`/tests/${attempt.id}/result`)
-    }
+    if (attempt.status === 'in_progress') router.push(`/tests/${attempt.id}`)
+    else router.push(`/tests/${attempt.id}/result`)
   }
 
   const inProgress = attempts.filter(a => a.status === 'in_progress')
@@ -373,11 +525,16 @@ export default function TestsPage() {
             style={{ fontFamily: "'Sora', sans-serif" }}>
             Tests
           </h1>
-          <p className={`text-sm mt-1 ${T.muted}`}>Build and take custom tests from JEE PYQs</p>
+        
         </motion.div>
 
-        {/* Hero */}
-        <HeroCard isDark={isDark} onNew={() => setWizardOpen(true)} />
+        {/* ── PYQ Mock Tests (new) ── */}
+        <PYQMockSection isDark={isDark} onStarted={handleTestCreated} />
+
+        {/* ── Create Your Own Test ── */}
+        <div className="mt-4">
+          <HeroCard isDark={isDark} onNew={() => setWizardOpen(true)} />
+        </div>
 
         {/* Resume in-progress */}
         <AnimatePresence>
@@ -388,9 +545,7 @@ export default function TestsPage() {
             >
               <div className="flex items-center gap-2 mb-3">
                 <RotateCcw size={14} className="text-amber-500" />
-                <p className={`text-sm font-bold ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
-                  Resume in progress
-                </p>
+                <p className={`text-sm font-bold ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>Resume in progress</p>
               </div>
               <div className="space-y-2">
                 {inProgress.map(a => (
@@ -414,10 +569,9 @@ export default function TestsPage() {
         {/* Past tests list */}
         <div className="mt-6">
           <p className={`text-sm font-bold mb-3 ${isDark ? 'text-white' : 'text-[#0f172a]'}`}>
-            Past tests
+            Previous tests
             {submitted.length > 0 && <span className={`ml-2 text-xs font-normal ${T.muted}`}>({submitted.length})</span>}
           </p>
-
           {loading ? (
             <Skeleton isDark={isDark} />
           ) : submitted.length === 0 ? (
@@ -425,12 +579,7 @@ export default function TestsPage() {
           ) : (
             <div className="space-y-2">
               {submitted.map((a, i) => (
-                <motion.div
-                  key={a.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                >
+                <motion.div key={a.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
                   <AttemptRow attempt={a} isDark={isDark} onView={() => handleView(a)} />
                 </motion.div>
               ))}
@@ -442,11 +591,7 @@ export default function TestsPage() {
       {/* Wizard */}
       <AnimatePresence>
         {wizardOpen && (
-          <WizardModal
-            isDark={isDark}
-            onClose={() => setWizardOpen(false)}
-            onTestCreated={handleTestCreated}
-          />
+          <WizardModal isDark={isDark} onClose={() => setWizardOpen(false)} onTestCreated={handleTestCreated} />
         )}
       </AnimatePresence>
     </main>

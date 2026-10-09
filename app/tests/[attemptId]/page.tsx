@@ -36,6 +36,12 @@ const Q_SELECT = [
   'question_img_url','subject','chapter','exam_shift',
 ].join(',')
 
+// ─── Resolve which DB table to query ─────────────────────────────────────────
+function resolveTable(config: Record<string, unknown> | null | undefined): string {
+  if (config?.dbTable === 'jee_adv') return 'jee_adv'
+  return 'jee_mains'
+}
+
 // ─── Autosave debounce (ms) ────────────────────────────────────────────────────
 const AUTOSAVE_MS = 1500
 
@@ -112,8 +118,9 @@ export default function TestEnginePage() {
 
         // Fetch questions (no correct_option)
         const qids: string[] = att.question_ids ?? []
+        const dbTable = resolveTable(att.config as Record<string, unknown>)
         const { data: qRows } = await supabase
-          .from('jee_mains')
+          .from(dbTable)
           .select(Q_SELECT)
           .in('question_id', qids)
 

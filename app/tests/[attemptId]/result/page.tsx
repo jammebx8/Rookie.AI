@@ -74,8 +74,9 @@ export default function ResultPage() {
 
         // Fetch questions WITH correct answers (safe here — test already submitted)
         const qids: string[] = att.question_ids ?? []
+        const dbTable = (att.config as Record<string, unknown>)?.dbTable === 'jee_adv' ? 'jee_adv' : 'jee_mains'
         const { data: qRows } = await supabase
-          .from('jee_mains')
+          .from(dbTable)
           .select('question_id,question_text,option_a,option_b,option_c,option_d,option_a_img,option_b_img,option_c_img,option_d_img,question_img_url,correct_option,solution,solution_image_url,subject,chapter,exam_shift')
           .in('question_id', qids)
 
