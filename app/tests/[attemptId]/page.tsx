@@ -361,7 +361,7 @@ export default function TestEnginePage() {
   )
 
   return (
-    <div className={`flex flex-col min-h-screen ${T.page}`}>
+    <div className={`flex flex-col h-screen overflow-hidden ${T.page}`}>
       {/* Header */}
       <TestHeader
         title={attempt.title}
@@ -374,8 +374,8 @@ export default function TestEnginePage() {
       {/* Body — question + palette side by side on desktop */}
       <div className="flex flex-1 min-h-0">
 
-        {/* Question panel */}
-        <div className="flex-1 min-w-0 overflow-y-auto">
+        {/* Question panel — manages its own internal scroll + fixed footer */}
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
           {currentQ && (
             <QuestionPanel
               isDark={isDark}
@@ -393,8 +393,8 @@ export default function TestEnginePage() {
           )}
         </div>
 
-        {/* Desktop palette — fixed right rail */}
-        <aside className={`hidden lg:flex flex-col w-72 border-l overflow-hidden ${T.palette}`}>
+        {/* Desktop palette — fills the body row height, scrolls internally */}
+        <aside className={`hidden lg:flex flex-col w-72 border-l h-full overflow-hidden ${T.palette}`}>
           <QuestionPalette
             isDark={isDark}
             questions={questions}
@@ -429,8 +429,8 @@ export default function TestEnginePage() {
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 340, damping: 30 }}
-              className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl border-t overflow-hidden ${T.palette}`}
-              style={{ maxHeight: '75vh' }}
+              className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl border-t flex flex-col ${T.palette}`}
+              style={{ height: '75vh' }}
             >
               <QuestionPalette
                 isDark={isDark}
