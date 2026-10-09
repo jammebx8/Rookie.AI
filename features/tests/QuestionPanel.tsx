@@ -86,7 +86,7 @@ export function QuestionPanel({
   const hasOptions = OPTION_KEYS.some(k => optionText(k) || optionImg(k))
 
   return (
-    <div className={`flex flex-col h-[calc(100vh-56px)] ${T.page}`}>
+    <div className={`flex flex-col h-full ${T.page}`}>
       {/* Subject chip row */}
       <div className="px-4 sm:px-6 pt-4 pb-0">
         {question.subject && (
