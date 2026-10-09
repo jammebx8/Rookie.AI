@@ -826,6 +826,7 @@ export default function QuestionViewerClient() {
   const examName     = sp.get('examName')     || 'JEE Main'
   const startQId     = sp.get('qid')          || ''   // SEO: specific question_id
   const startIndex   = parseInt(sp.get('startIndex') || sp.get('index') || '0', 10)
+  const yearFilter   = sp.get('year')         || ''   // e.g. '2024'; empty = all years
 
   // Pick the right Supabase table based on exam
   const DB_TABLE = examName === 'JEE Advanced' ? DB_TABLE_ADV : DB_TABLE_MAIN
@@ -977,11 +978,13 @@ export default function QuestionViewerClient() {
       setLoading(true)
       try {
         // Count total for progress bar
-        const { count } = await supabase
+        let countQuery = supabase
           .from(DB_TABLE)
           .select('*', { count: 'exact', head: true })
           .eq('subject', subject)
           .eq('chapter', chapterTitle)
+        if (yearFilter) countQuery = (countQuery as any).ilike('exam_shift', `%${yearFilter}%`)
+        const { count } = await countQuery
         setTotalCount(count ?? 0)
 
         // If a specific question_id is in the URL, find its offset first
@@ -989,14 +992,16 @@ export default function QuestionViewerClient() {
 
         if (startQId) {
           // Find position of this question_id by fetching just IDs in order
-          const { data: idRows } = await supabase
+          let idQuery = supabase
             .from(DB_TABLE)
             .select('question_id')
             .eq('subject', subject)
             .eq('chapter', chapterTitle)
             .order('question', { ascending: true })
+          if (yearFilter) idQuery = (idQuery as any).ilike('exam_shift', `%${yearFilter}%`)
+          const { data: idRows } = await idQuery
           if (idRows) {
-            const pos = idRows.findIndex(r => r.question_id === startQId)
+            const pos = idRows.findIndex((r: { question_id: string }) => r.question_id === startQId)
             if (pos >= 0) {
               windowStart = Math.max(0, pos - Math.floor(PAGE_SIZE / 2))
               setGlobalIndex(pos)
@@ -1004,13 +1009,15 @@ export default function QuestionViewerClient() {
           }
         }
 
-        const { data, error } = await supabase
+        let dataQuery = supabase
           .from(DB_TABLE)
           .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,option_a_percent,option_b_percent,option_c_percent,option_d_percent,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
           .eq('subject', subject)
           .eq('chapter', chapterTitle)
           .order('question', { ascending: true })
           .range(windowStart, windowStart + PAGE_SIZE - 1)
+        if (yearFilter) dataQuery = (dataQuery as any).ilike('exam_shift', `%${yearFilter}%`)
+        const { data, error } = await dataQuery
 
         if (error || !data) { setQuestions([]); return }
 
@@ -1029,7 +1036,7 @@ export default function QuestionViewerClient() {
       }
     }
     load()
-  }, [chapterTitle, subject])
+  }, [chapterTitle, subject, yearFilter])
 
   // ── Prefetch next window ───────────────────────────────────────────────────
   useEffect(() => {
@@ -1044,13 +1051,15 @@ export default function QuestionViewerClient() {
       setLoadingMore(true)
       const nextStart = pageOffset + questions.length
       try {
-        const { data } = await supabase
+        let nextQuery = supabase
           .from(DB_TABLE)
           .select('id,question,question_id,question_text,option_a,option_b,option_c,option_d,correct_option,exam_shift,source_url,solution,question_img_url,solution_image_url,option_a_img,option_b_img,option_c_img,option_d_img,subject,chapter,option_a_percent,option_b_percent,option_c_percent,option_d_percent,buddy_jeetu,buddy_riya,buddy_rei,buddy_ritu,buddy_shreya,buddy_neha')
           .eq('subject', subject)
           .eq('chapter', chapterTitle)
           .order('question', { ascending: true })
           .range(nextStart, nextStart + PAGE_SIZE - 1)
+        if (yearFilter) nextQuery = (nextQuery as any).ilike('exam_shift', `%${yearFilter}%`)
+        const { data } = await nextQuery
 
         if (data && data.length > 0) {
           // Sort new window easy-first before appending
@@ -1061,7 +1070,7 @@ export default function QuestionViewerClient() {
       }
     }
     loadNext()
-  }, [currentIndex, questions.length, pageOffset, totalCount, loadingMore, loading, chapterTitle, subject])
+  }, [currentIndex, questions.length, pageOffset, totalCount, loadingMore, loading, chapterTitle, subject, yearFilter])
 
   // ── Update URL with current question for SEO + session continuity ─────────
   useEffect(() => {
