@@ -11,9 +11,8 @@ type UserRow = {
   avatar_url?: string | null;
   rookieCoinsEarned?: number | null;
   email?: string | null;
+  isPaid?: boolean;
 };
-
-
 
 // ─── Theme hook ──────────────────────────────────────────────────────────────
 function useTheme() {
@@ -31,6 +30,18 @@ function useTheme() {
   return isDark;
 }
 
+// ─── Rookie Pass row styling: CSS ────────────────────────────────────────────
+const GLOBAL_CSS = `
+.rk-shine{position:relative;overflow:hidden}
+.rk-shine::after{content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.75),transparent);
+  transform:skewX(-20deg);animation:rkSweep 2.8s ease-in-out infinite}
+@keyframes rkSweep{0%{left:-60%}55%,100%{left:140%}}
+.rk-pulse-border{animation:rkGlow 2.6s ease-in-out infinite}
+@keyframes rkGlow{0%,100%{box-shadow:0 0 14px rgba(245,158,11,.30),inset 0 0 18px rgba(245,158,11,.08)}
+  50%{box-shadow:0 0 26px rgba(245,158,11,.55),inset 0 0 26px rgba(245,158,11,.16)}}
+`;
+
 // ─── Avatar component ────────────────────────────────────────────────────────
 function Avatar({ src, name, size = 48, className = "" }: {
   src?: string | null; name?: string | null; size?: number; className?: string;  style?: React.CSSProperties;
@@ -39,8 +50,6 @@ function Avatar({ src, name, size = 48, className = "" }: {
   const initials = (name ?? "?").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
   const palette = ["#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6","#ef4444","#14b8a6"];
   const color = palette[(name?.charCodeAt(0) ?? 0) % palette.length];
-
-
 
   if (!src || errored) {
     return (
@@ -78,6 +87,82 @@ const CrownIcon = ({ color = "#F59E0B", size = 16 }: { color?: string; size?: nu
     <path d="M2 19h20v2H2v-2zm0-3l3-8 4 4 3-7 3 7 4-4 3 8H2z"/>
   </svg>
 );
+
+// ─── Gold crown (pass holder rows) ───────────────────────────────────────────
+const GoldCrown = ({ size = 16, uid = "gc" }: { size?: number; uid?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" style={{ filter: "drop-shadow(0 2px 6px rgba(245,158,11,.7))" }}>
+    <defs>
+      <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#FEF3C7" />
+        <stop offset="0.5" stopColor="#FBBF24" />
+        <stop offset="1" stopColor="#B45309" />
+      </linearGradient>
+    </defs>
+    <path d="M2 19h20v2H2v-2zm0-3l3-8 4 4 3-7 3 7 4-4 3 8H2z" fill={`url(#${uid})`} />
+    <circle cx="12" cy="12.5" r="1.4" fill="#A78BFA" />
+  </svg>
+);
+
+// ─── Deterministic pseudo-random (SSR safe) ──────────────────────────────────
+const rnd = (i: number, k: number) => {
+  const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+// ─── Embers: sparks blown by the wind (pass holder rows) ─────────────────────
+function Embers({ count = 16 }: { count?: number }) {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+      {Array.from({ length: count }).map((_, i) => {
+        const s = 2 + rnd(i, 1) * 2.6;
+        const color = ["#FDE68A", "#FBBF24", "#FB923C", "#F97316"][Math.floor(rnd(i, 2) * 4)];
+        return (
+          <motion.span
+            key={i}
+            className="absolute rounded-full"
+            style={{
+              width: s, height: s, background: color, boxShadow: `0 0 6px ${color}`,
+              left: `${30 + rnd(i, 3) * 65}%`, top: `${15 + rnd(i, 4) * 70}%`,
+            }}
+            animate={{ x: [0, 60 + rnd(i, 5) * 110], y: [0, -(6 + rnd(i, 6) * 26)], opacity: [0, 1, 0] }}
+            transition={{ duration: 2.2 + rnd(i, 7) * 2.6, delay: rnd(i, 8) * 3, repeat: Infinity, ease: "easeOut" }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Rookie Pass badge (shining gold) ────────────────────────────────────────
+function PassBadge() {
+  return (
+    <span
+      className="rk-shine inline-flex items-center rounded-md font-extrabold uppercase tracking-wide text-[#3b2406] text-[9px] px-1.5 py-[2px]"
+      style={{
+        background: "linear-gradient(120deg,#B7791F 0%,#FDE68A 35%,#F59E0B 60%,#B7791F 100%)",
+        boxShadow: "0 2px 10px rgba(245,158,11,.45), inset 0 1px 0 rgba(255,255,255,.55)",
+      }}
+    >
+      Rookie Pass
+    </span>
+  );
+}
+
+// ─── Row avatar for pass holders (gold + purple ring, crown) ─────────────────
+function PassRowAvatar({ user, idx }: { user: UserRow; idx: number }) {
+  return (
+    <div className="relative flex items-center justify-center flex-shrink-0" style={{ width: 54, height: 54, marginLeft: -4, marginRight: -4 }}>
+      <div className="relative rounded-full p-[2px]" style={{ background: "linear-gradient(135deg,#C4B5FD,#7C3AED)" }}>
+        <div className="rounded-full p-[1.5px]" style={{ background: "linear-gradient(135deg,#FDE68A,#F59E0B)" }}>
+          <Avatar src={user.avatar_url} name={user.name} size={38} className="border-2 border-[#1b1405]" />
+        </div>
+      </div>
+      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: -4 }}>
+        <GoldCrown size={16} uid={`rgc-${idx}`} />
+      </div>
+    </div>
+  );
+}
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
 function SkeletonRow({ isDark }: { isDark: boolean }) {
@@ -127,7 +212,6 @@ export default function LeaderboardPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const currentUserRowRef = React.useRef<HTMLDivElement | null>(null);
 
-  
   useEffect(() => {
     try {
       const raw = typeof window !== "undefined" ? localStorage.getItem("@user") : null;
@@ -136,59 +220,100 @@ export default function LeaderboardPage() {
   }, []);
 
   const fetchLeaderboard = async (examFilter = filterExam) => {
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    let query: any = supabase
-      .from("users")
-      .select("id, name, email, avatar_url, rookieCoinsEarned, exam")
-      .order("rookieCoinsEarned", { ascending: false });
-
-    if (examFilter !== "All") {
-      query = query.eq("exam", examFilter);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      setUsers([]);
-      return;
-    }
-
-    const sanitized: UserRow[] = (data || []).map((d: any) => ({
-      id: d.id,
-      name: d.name ?? d.email ?? "-",
-      email: d.email ?? null,
-      avatar_url: d.avatar_url ?? null,
-      rookieCoinsEarned:
-        typeof d.rookieCoinsEarned === "number"
-          ? d.rookieCoinsEarned
-          : Number(d.rookieCoinsEarned) || 0,
-      exam: d.exam ?? null,
-    }));
-
-    setUsers(sanitized);
-
-    // IMPORTANT:
-    // Only generate the filter options from the unfiltered dataset.
-    // Otherwise clicking an exam removes all the other filters.
-    if (examFilter === "All") {
-      const examsSet = new Set<string>();
-
-      sanitized.forEach((u) => {
-        if (u.exam) examsSet.add(u.exam);
+      // 1. Primary: Fetch leaderboard with verified paid status from Supabase entitlements
+      const res = await fetch(`/api/leaderboard?exam=${encodeURIComponent(examFilter)}`, {
+        cache: "no-store",
       });
 
-      setExamOptions(["All", ...Array.from(examsSet).sort()]);
-    }
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.users)) {
+          setUsers(json.users);
+          if (json.allExams && Array.isArray(json.allExams)) {
+            setExamOptions(json.allExams);
+          }
+          return;
+        }
+      }
 
-  } catch {
-    setUsers([]);
-  } finally {
-    setLoading(false);
-  }
-};
-  useEffect(() => { fetchLeaderboard(filterExam).catch(() => {}); }, [filterExam]);
+      // 2. Fallback: Direct query to Supabase users table
+      let query: any = supabase
+        .from("users")
+        .select("id, name, email, avatar_url, rookieCoinsEarned, exam")
+        .order("rookieCoinsEarned", { ascending: false });
+
+      if (examFilter !== "All") {
+        query = query.eq("exam", examFilter);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        setUsers([]);
+        return;
+      }
+
+      // Attempt reading active entitlements directly if RLS policy permits
+      let activePaidIds = new Set<string>();
+      try {
+        const { data: entData } = await supabase
+          .from("entitlements")
+          .select("user_id")
+          .eq("plan_id", "rookie_pass_yearly")
+          .gt("access_until", new Date().toISOString());
+        if (entData) {
+          activePaidIds = new Set(entData.map((e: any) => e.user_id));
+        }
+      } catch {
+        /* no-op fallback */
+      }
+
+      const sanitized: UserRow[] = (data || []).map((d: any) => {
+        const name = d.name ?? d.email ?? "-";
+        return {
+          id: d.id,
+          name,
+          email: d.email ?? null,
+          avatar_url: d.avatar_url ?? null,
+          rookieCoinsEarned:
+            typeof d.rookieCoinsEarned === "number"
+              ? d.rookieCoinsEarned
+              : Number(d.rookieCoinsEarned) || 0,
+          exam: d.exam ?? null,
+          isPaid: activePaidIds.has(d.id),
+        };
+      });
+
+      setUsers(sanitized);
+
+      if (examFilter === "All") {
+        const examsSet = new Set<string>();
+        sanitized.forEach((u) => {
+          if (u.exam) examsSet.add(u.exam);
+        });
+        setExamOptions(["All", ...Array.from(examsSet).sort()]);
+      }
+    } catch {
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeaderboard(filterExam).catch(() => {});
+  }, [filterExam]);
+
+  // Re-fetch when Rookie Pass is purchased or updated in the app
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchLeaderboard(filterExam).catch(() => {});
+    };
+    window.addEventListener("rookiePassUpdated", handleUpdate);
+    return () => window.removeEventListener("rookiePassUpdated", handleUpdate);
+  }, [filterExam]);
 
   const topThree = useMemo(() => users.slice(0, 3), [users]);
   const rest = useMemo(() => users.slice(3), [users]);
@@ -226,6 +351,7 @@ export default function LeaderboardPage() {
   return (
     <main className={`min-h-screen ${T.page} ${T.text} transition-colors duration-300`}
       style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+      <style>{GLOBAL_CSS}</style>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 pb-40">
 
@@ -370,6 +496,7 @@ export default function LeaderboardPage() {
                 const isCurrent = item.id === currentUserId;
                 const isTop3 = rank <= 3;
                 const medal = isTop3 ? MEDALS[rank - 1] : null;
+                const paid = !!item.isPaid;
 
                 return (
                   <>
@@ -387,15 +514,42 @@ export default function LeaderboardPage() {
   initial={{ opacity:0, y:5 }}
   animate={{ opacity:1, y:0 }}
   transition={{ duration:0.28, delay: Math.min(idx * 0.02, 0.25) }}
-  whileHover={{ scale:1.004 }}
-  className={`flex items-center gap-3 px-3 py-3 rounded-xl border transition-all duration-200 ${
-    isCurrent
-      ? `${T.rowHighlight} ${rank <= 3 ? "ring-1 ring-yellow-400/60" : "ring-1 ring-yellow-400/60"}`
-      : `${T.card} ${T.border}`
+ 
+  className={`relative flex items-center gap-3 px-3 ${paid ? "py-3.5 overflow-hidden  border-[1.5px] border-[#F5B731]" : "py-3"} rounded-xl border transition-all duration-200 ${
+    paid
+      ? ""
+      : isCurrent
+        ? `${T.rowHighlight} ${rank <= 3 ? "ring-1 ring-yellow-400/60" : "ring-1 ring-yellow-400/60"}`
+        : `${T.card} ${T.border}`
   }`}
+  style={paid ? { background: "linear-gradient(90deg,rgba(124,82,12,.62) 0%,rgba(58,40,10,.78) 45%,rgba(84,58,12,.6) 100%)" } : undefined}
 >
+                      {/* Pass holder: golden wind streak + embers */}
+                      {paid && (
+                        <>
+                          <svg className="absolute right-0 top-0 h-full w-3/4 pointer-events-none" viewBox="0 0 400 60" preserveAspectRatio="none" aria-hidden>
+                            <defs>
+                              <linearGradient id={`wind-${idx}`} x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0" stopColor="#F59E0B" stopOpacity="0" />
+                                <stop offset="0.6" stopColor="#FBBF24" stopOpacity="0.35" />
+                                <stop offset="1" stopColor="#FDE68A" stopOpacity="0" />
+                              </linearGradient>
+                            </defs>
+                            <path d="M0 52 C 90 58, 190 8, 300 22 S 390 14, 400 8" stroke={`url(#wind-${idx})`} strokeWidth="9" fill="none" strokeLinecap="round" style={{ filter: "blur(4px)" }} />
+                          </svg>
+                          <Embers count={16} />
+                        </>
+                      )}
+
                       {/* Rank / medal box */}
-                      {isTop3 && medal ? (
+                      {paid ? (
+                        <div
+                          className="relative w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-extrabold text-[#3b2406] border border-amber-200/60"
+                          style={{ background: "linear-gradient(135deg,#FDE68A,#F59E0B)", boxShadow: "0 2px 12px rgba(245,158,11,.5)" }}
+                        >
+                          {rank}
+                        </div>
+                      ) : isTop3 && medal ? (
                         <div
                           className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
                           style={{ background: medal.bg, boxShadow: `0 2px 10px ${medal.glow}` }}
@@ -409,35 +563,42 @@ export default function LeaderboardPage() {
                       )}
 
                       {/* Avatar */}
-                      <Avatar src={item.avatar_url} name={item.name} size={40}
-                        className={isTop3 && medal ? `ring-2 ring-offset-1 ${isDark ? "ring-offset-[#0d1117]" : "ring-offset-white"}` : ""}
-                        style={isTop3 && medal ? { boxShadow:`0 0 0 2px ${medal.bg}` } as React.CSSProperties : undefined}
-                      />
+                      {paid ? (
+                        <PassRowAvatar user={item} idx={idx} />
+                      ) : (
+                        <Avatar src={item.avatar_url} name={item.name} size={40}
+                          className={isTop3 && medal ? `ring-2 ring-offset-1 ${isDark ? "ring-offset-[#0d1117]" : "ring-offset-white"}` : ""}
+                          style={isTop3 && medal ? { boxShadow:`0 0 0 2px ${medal.bg}` } as React.CSSProperties : undefined}
+                        />
+                      )}
 
                       {/* Name + exam */}
-                      <div className="flex-1 mr-10 min-w-0">
-                        <div className={`font-semibold text-sm truncate ${T.text} ${isCurrent ? "font-bold" : ""}`}>
+                      <div className="relative flex-1 mr-10 min-w-0">
+                        <div className={`font-semibold text-sm truncate ${paid ? "text-white" : T.text} ${isCurrent ? "font-bold" : ""}`}>
                           {item.name ?? "-"}
                           {isCurrent && (
                             <span className="ml-1.5 text-[9px] font-extrabold text-yellow-500 tracking-wide align-middle uppercase">You</span>
                           )}
                         </div>
-                        {item.exam && (
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded mt-0.5 inline-block ${T.examTag}`}>
-                            {item.exam}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {item.exam && (
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded inline-block ${paid ? "bg-white/10 text-slate-200" : T.examTag}`}>
+                              {item.exam}
+                            </span>
+                          )}
+                          {paid && <PassBadge />}
+                        </div>
                       </div>
 
                       {/* Coins */}
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="relative flex items-center gap-1.5 flex-shrink-0">
                         <img
                          src="coin (1).svg"
                          alt="Coins"
                          width={16}
                          height={16}
                        />
-                        <span className={`font-extrabold text-sm ${T.text}`}>
+                        <span className={`font-extrabold text-sm ${paid ? "text-white" : T.text}`}>
                           {(item.rookieCoinsEarned ?? 0).toLocaleString()}
                         </span>
                       </div>

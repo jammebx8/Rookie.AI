@@ -1542,28 +1542,75 @@ function HomeSurveyModal({ isDark, userId, onDone }: {
 // ─── Rookie Pass Banner ───────────────────────────────────────────────────────
 // ─── Rookie Pass Banner ───────────────────────────────────────────────────────
 function RookiePassBanner() {
+  const isDark = useTheme();
   const ref = React.useRef<HTMLDivElement>(null);
   const [mouse, setMouse] = React.useState({ x: 0.5, y: 0.5 });
   const [hovered, setHovered] = React.useState(false);
   const [shinePos, setShinePos] = React.useState(-100);
   const shineRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
-  const [passExpiry, setPassExpiry] = React.useState<string | null>(null);
-  const [passChecked, setPassChecked] = React.useState(false);
+
+  // ── Synchronously hydrate from sessionStorage so repeat page views within
+  //    5 minutes skip the skeleton entirely.  On a fresh load (no cache) we
+  //    intentionally start with passChecked=false so the skeleton shows while
+  //    the DB round-trip completes — preventing the free-banner flash.
+  const [passExpiry, setPassExpiry] = React.useState<string | null>(() => {
+    try {
+      if (typeof window === 'undefined') return null;
+      const rawUser = localStorage.getItem('@user');
+      const uid = rawUser ? JSON.parse(rawUser)?.id : null;
+      if (uid) {
+        const rawCache = sessionStorage.getItem(`rookie_pass_cache_${uid}`);
+        if (rawCache) {
+          const c = JSON.parse(rawCache);
+          // Cache must be fresh AND belong to this user
+          if (c.user_id === uid && Date.now() - c.fetched_at < 5 * 60 * 1000) {
+            // has_pass: true → return expiry; has_pass: false → return null (free)
+            return c.has_pass ? (c.access_until ?? null) : null;
+          }
+        }
+      }
+    } catch {}
+    return null;
+  });
+
+  const [passChecked, setPassChecked] = React.useState<boolean>(() => {
+    try {
+      if (typeof window === 'undefined') return false;
+      const rawUser = localStorage.getItem('@user');
+      const uid = rawUser ? JSON.parse(rawUser)?.id : null;
+      if (uid) {
+        const rawCache = sessionStorage.getItem(`rookie_pass_cache_${uid}`);
+        if (rawCache) {
+          const c = JSON.parse(rawCache);
+          // Accept cache hit for BOTH paid and free users within TTL
+          if (c.user_id === uid && Date.now() - c.fetched_at < 5 * 60 * 1000) {
+            return true;
+          }
+        }
+      }
+    } catch {}
+    // No valid cache → show skeleton until the async check completes
+    return false;
+  });
 
   // Check if user already has an active pass from DB
   React.useEffect(() => {
+    let mounted = true;
     const checkPass = async () => {
       try {
         const expiry = await getPassExpiry();
-        setPassExpiry(expiry);
+        if (mounted) setPassExpiry(expiry);
       } catch { /* no-op */ } finally {
-        setPassChecked(true);
+        if (mounted) setPassChecked(true);
       }
     };
     checkPass();
     const handleUpdate = () => { checkPass(); };
     window.addEventListener('rookiePassUpdated', handleUpdate);
-    return () => window.removeEventListener('rookiePassUpdated', handleUpdate);
+    return () => {
+      mounted = false;
+      window.removeEventListener('rookiePassUpdated', handleUpdate);
+    };
   }, []);
 
   const handleMouseMove = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -1599,14 +1646,80 @@ function RookiePassBanner() {
     } catch (e) { console.error(e); }
   }, []);
 
+  // ── Skeleton loader while determining paid vs free status ───────────────────
+  if (!passChecked) {
+    return (
+      <motion.div
+        key="pass-skeleton"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="relative rounded-2xl overflow-hidden px-5 pt-5 pb-5 select-none animate-pulse"
+        style={{
+          background: 'linear-gradient(135deg, #0d0221 0%, #0a0a2e 40%, #0d1a3a 70%, #0a1628 100%)',
+          border: '1px solid rgba(99,102,241,0.25)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+          minHeight: '190px',
+        }}
+      >
+        {/* Dot texture */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.15) 1px, transparent 1px)',
+            backgroundSize: '14px 14px',
+          }}
+        />
+
+        <div className="relative z-10 flex flex-col justify-between h-full">
+          <div>
+            {/* Tag skeleton */}
+            <div className="h-3 w-28 rounded-full bg-indigo-400/25 mb-3" />
+
+            {/* Title skeleton */}
+            <div className="space-y-2 mb-3">
+              <div className="h-6 w-3/4 rounded-lg bg-white/20" />
+              <div className="h-5 w-1/2 rounded-lg bg-white/10" />
+            </div>
+
+            {/* Subtext skeleton */}
+            <div className="h-3.5 w-5/6 rounded-lg bg-white/10 mb-6 hidden sm:block" />
+          </div>
+
+          {/* Bottom row */}
+          <div className="flex items-end justify-between pt-2">
+            <div className="space-y-1.5">
+              <div className="h-7 w-24 rounded-lg bg-white/20" />
+              <div className="h-3.5 w-16 rounded-full bg-emerald-400/20" />
+            </div>
+            <div className="h-10 w-36 rounded-xl bg-indigo-500/30" />
+          </div>
+        </div>
+
+        {/* Bottom subtle glow line */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-[2px] pointer-events-none"
+          style={{
+            background: 'linear-gradient(90deg, transparent, rgba(129,140,248,0.5) 40%, rgba(168,85,247,0.5) 60%, transparent)',
+          }}
+        />
+      </motion.div>
+    );
+  }
+
   // ── Active pass view ────────────────────────────────────────────────────────
-  if (passChecked && passExpiry) {
+  if (passExpiry) {
     const expiryDate     = new Date(passExpiry);
     const formattedExpiry = expiryDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
     const daysLeft       = Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / 86400000));
 
     return (
-      <div
+      <motion.div
+        key="pass-paid"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.25 }}
         ref={ref}
         onMouseMove={handleMouseMove}
         onMouseEnter={() => setHovered(true)}
@@ -1671,13 +1784,17 @@ function RookiePassBanner() {
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-[2px] pointer-events-none"
           style={{ background: 'linear-gradient(90deg, transparent, rgba(74,222,128,0.6) 40%, rgba(52,211,153,0.6) 60%, transparent)' }} />
-      </div>
+      </motion.div>
     );
   }
 
-  // ── Upsell (no pass / loading) view ────────────────────────────────────────
+  // ── Upsell (no pass) view ────────────────────────────────────────────────
   return (
-    <div
+    <motion.div
+      key="pass-free"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.25 }}
       ref={ref}
       role="button"
       tabIndex={0}
@@ -1787,7 +1904,7 @@ function RookiePassBanner() {
 
       <div className="absolute bottom-0 left-0 right-0 h-[2px] pointer-events-none"
         style={{ background: 'linear-gradient(90deg, transparent, rgba(129,140,248,0.6) 40%, rgba(168,85,247,0.6) 60%, transparent)' }} />
-    </div>
+    </motion.div>
   );
 }
 
