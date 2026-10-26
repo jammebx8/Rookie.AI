@@ -1,0 +1,794 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '../../../public/src/utils/supabase';
+
+// Types
+type ClassType = '12th' | '11th' | 'Dropper' | 'Other';
+type ExamType = 'JEE Mains' | 'JEE Advanced' | 'NEET' | 'CUET' | 'Other';
+
+interface AIBuddy {
+  id: number;
+  name: string;
+  description: string;
+  image: string;
+  prompts: {
+    onCorrect: string;
+    onWrong: string;
+    solutionPrefix: string;
+  };
+  prompt?: string;
+  text?: string;
+}
+
+// Constants
+const CLASS_OPTIONS: ClassType[] = ['12th', '11th', 'Dropper', 'Other'];
+const EXAM_OPTIONS: ExamType[] = ['JEE Mains', 'JEE Advanced', 'NEET', 'CUET', 'Other'];
+
+const aiBuddies: AIBuddy[] = [
+  {
+    id: 1,
+    name: 'Jeetu Bhaiya',
+    description: 'No description needed, he is the legend himself.',
+    image: '/HD-wallpaper-kota-factory-lip-jeetu-bhaiya.jpg',
+    prompts: {
+      onCorrect: "Give a short not more than 15 words, cheerful message for getting a question correct.you are jeetu bhaiya who talks in hinglish.you call your students as bhai or didi as sarcasm. as Jeetu Bhaiya in hinglish.encourage them to solve more questions.",
+      onWrong: " Give a short not more than 15 words, supportive message for getting a question wrong as Jeetu Bhaiya in hinglish.encourage them to solve more questions.",
+      solutionPrefix: "you are jeetu bhaiya who talks in hinglish.you call your students as bhai or didi as sarcasm. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+    },
+  },
+  {
+    id: 2,
+    name: 'Riya',
+    description: 'Fast, logical and straight to the point – no fluff, only facts.',
+    image: '/assets_task_01jstrf4hqff7r4gs3jwmbq5kd_1745728563_img_0.webp',
+    prompts: {
+      onCorrect: "You are Riya, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, cheerful message for getting a question correct.encourage them to solve more questions.",
+      onWrong: "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, supportive message for getting a question wrong. Encourage them casually.encourage them to solve more questions.",
+      solutionPrefix: "You are Riya, a fun, teenage girl who replies in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+    },
+  },
+  {
+    id: 3,
+    name: 'Rei',
+    description: 'A charming anime boy with a sharp mind and soft heart — flirty, focused, and everyones secret crush 💫',
+    image: '/download (17).jpeg',
+    prompts: {
+      onCorrect: "You are Rei, a handsome anime boy with a calm voice and playful charm. Give a short not more than 15 words, cheerful message for getting a question correct. Keep it sweet and a bit cheeky — like a guy who's lowkey impressed.encourage them to solve more questions.",
+      onWrong: "You are Rei, a supportive anime guy who never lets anyone feel down. Give a short not more than 15 words, supportive message for getting a question wrong. Sound gentle, as if you're cheering them up personally. Use casual Hindi-English mix.encourage them to solve more questions.",
+      solutionPrefix: "You are Rei, a cool and intelligent anime boy. Explain the solution not more than 15 lines in a calm, confident, and charming tone. Keep it clear, concise, and step-by-step. Use Unicode math symbols (like ½, √, ²). Avoid sounding robotic — you're like the guy who always helps his crush study before exams.",
+    },
+    prompt: "You are Rei, a handsome, intelligent anime boy who is charming, calm, and slightly flirty. Use Hindi-English like a modern teen. Speak naturally, be a bit teasing but always respectful and kind. You're the type who girls secretly admire in class.",
+    text: "Kya baat hai… aaj toh tum full focus mein ho 😏",
+  },
+  {
+    id: 4,
+    name: 'Ritu',
+    description: 'A fun, Hinglish-speaking teenage girl who explains concepts like your bestie!',
+    image: '/girlinchair.png',
+    prompts: {
+      onCorrect: "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, cheerful message for getting a question correct.encourage them to solve more questions.",
+      onWrong: "You are Ritu, a fun, teenage girl who replies in Hinglish. Avoid long responses. You never give boring answers. Be informal and talk like a high school girl from India. Give a short not more than 15 words, supportive message for getting a question wrong. Encourage them casually.encourage them to solve more questions.",
+      solutionPrefix: "You are Ritu, a fun, teenage girl who replies in Hinglish. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical, keep it friendly and encouraging.",
+    },
+    prompt: 'You are Ritu, a fun, teenage girl who replies in Hinglish.avoid giving long responses. You never give boring answers. Be informal and talk like a high school girl from India.',
+    text: 'hey bestie, kya haal chaal 😉 ?',
+  },
+  {
+    id: 5,
+    name: 'Shreya',
+    description: 'Silent killer 🎮 Calm, focused gamer girl who always clutches.',
+    image: '/shery11.jpeg',
+    prompts: {
+      onCorrect: "You are Shreya. You speak in short, chill Hinglish sentences. Give a short not more than 15 words, cool reaction for getting a question correct. No drama, just cool vibes.encourage them to solve more questions.",
+      onWrong: "You are Shreya. Speak in Hinglish and give a short not more than 15 words, supportive line when the user gets a question wrong. Avoid drama, focus on motivation.encourage them to solve more questions.",
+      solutionPrefix: "You are Shreya. Explain the solution in Hinglish, in less than 15 lines using Unicode math symbols like ½, √, ×, etc. Avoid LaTeX. Be clear and to the point, like you're giving callouts in a game. Friendly but minimal tone.",
+    },
+    prompt: "You are Shreya, an Indian gamer girl who is introverted but sharp. You speak calmly and prefer short Hinglish lines. You're confident like someone who top-frags quietly. Be cool, concise, and real.",
+    text: "yo, headset on. ready to win?",
+  },
+  {
+    id: 6,
+    name: 'Neha',
+    description: 'Spicy & sassy 💅',
+    image: '/assets_task_01jttq36fkem8br965ak8qh0sp_1746800911_img_2.webp',
+    prompts: {
+      onCorrect: "you are Neha, a 17-year old indian girl who is a little sassy,You speak in a fun, casual Hinglish style, using lots of emojis and slang. Give a short not more than 15 words, cheerful message for getting a question correct.Avoid long responses.encourage them to solve more questions.",
+      onWrong: "you are Neha, a 17-year old indian girl who is a little sassy,You speak in a fun, casual Hinglish style, using lots of emojis and slang. Give a short not more than 15 words, supportive message for getting a question wrong. Encourage them casually.Avoid long responses.encourage them to solve more questions.",
+      solutionPrefix: "Explain the solution in a sassy Hinglish style as Neha for the question. Give a clear, concise, and simple step-by-step solution/explanation not more than 15 lines to the following question using plain text with Unicode math symbols (like ½, ×, √, ²) instead of LaTeX. Avoid using any dollar signs or LaTeX formatting. Write everything in plain, friendly text a high school student can understand. Avoid being too technical.",
+    },
+    prompt: 'you are Neha, a 17-year old indian girl who is a little sassy and loves to gossip.avoid giving long responses. You speak in a fun, casual Hinglish style, using lots of emojis and slang. Youre all about the drama.',
+    text: 'hey, Neha this side 🙃',
+  },
+  
+];
+
+// ─── useTheme hook ────────────────────────────────────────────────────────────
+function useTheme() {
+  const [isDark, setIsDark] = useState(true);
+  
+  useEffect(() => {
+    try {
+      setIsDark(localStorage.getItem('theme') !== 'light');
+    } catch {}
+    
+    const observer = new MutationObserver(() => {
+      try {
+        setIsDark(localStorage.getItem('theme') !== 'light');
+      } catch {}
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    
+    const onStorage = () => {
+      try {
+        setIsDark(localStorage.getItem('theme') !== 'light');
+      } catch {}
+    };
+    window.addEventListener('storage', onStorage);
+    
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+  
+  return isDark;
+}
+
+// ─── Theme-aware color classes ────────────────────────────────────────────────
+function getThemeClasses(isDark: boolean) {
+  return {
+    page: isDark ? 'bg-[#000000] text-white' : 'bg-[#F9FAFB] text-[#0f172a]',
+    card: isDark ? 'bg-[#0C111D] border-[#1D2939]' : 'bg-white border-[#E5E7EB]',
+    input: isDark
+      ? 'bg-transparent border-[#344054] text-white placeholder-gray-600'
+      : 'bg-white border-[#D1D5DB] text-[#0f172a] placeholder-gray-400',
+    inputDisabled: isDark ? 'opacity-70 cursor-not-allowed' : 'opacity-60 cursor-not-allowed',
+    button: {
+      primary: isDark ? 'bg-white text-[#181f2b]' : 'bg-[#0f172a] text-white',
+      secondary: isDark ? 'bg-[#181f2b] text-white border-[#344054]' : 'bg-white text-[#0f172a] border-[#D1D5DB]',
+      selected: isDark ? 'bg-white text-[#181f2b]' : 'bg-[#0f172a] text-white',
+      unselected: isDark
+        ? 'bg-[#181f2b] text-white border-[#344054]'
+        : 'bg-white text-[#0f172a] border-[#D1D5DB]',
+    },
+    text: {
+      primary: isDark ? 'text-white' : 'text-[#0f172a]',
+      secondary: isDark ? 'text-gray-400' : 'text-gray-500',
+      muted: isDark ? 'text-gray-500' : 'text-gray-400',
+    },
+    modal: {
+      bg: isDark ? 'bg-black/75' : 'bg-white/75',
+      card: isDark ? 'bg-[#0C111D] border-[#1D2939]' : 'bg-white border-[#E5E7EB]',
+    },
+    progressTrack: isDark ? 'bg-[#1D2939]' : 'bg-gray-200',
+    border: isDark ? 'border-[#344054]' : 'border-[#E5E7EB]',
+    delete: isDark ? 'bg-[#101828] border-[#1D2939]' : 'bg-red-50 border-red-200',
+  };
+}
+
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5 },
+  },
+};
+
+const buttonVariants = {
+  rest: { scale: 1 },
+  hover: { scale: 1.02, transition: { duration: 0.2 } },
+  tap: { scale: 0.98 },
+};
+
+const cardVariants = {
+  rest: { scale: 1 },
+  hover: { scale: 1.01, transition: { duration: 0.3 } },
+};
+
+const progressBarVariants = {
+  initial: { width: 0 },
+  animate: (percentage: number) => ({
+    width: `${percentage}%`,
+    transition: { duration: 1 },
+  }),
+};
+
+const modalVariants = {
+  hidden: { opacity: 0, scale: 0.9 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { duration: 0.3 },
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.9,
+    transition: { duration: 0.2 },
+  },
+};
+
+export default function ProfilePage() {
+  const router = useRouter();
+  const isDark = useTheme();
+  const themeClasses = getThemeClasses(isDark);
+  
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [profileImageModalVisible, setProfileImageModalVisible] = useState<number | null>(null);
+
+  // User data state
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [selectedClass, setSelectedClass] = useState<ClassType>('12th');
+  const [targetExam, setTargetExam] = useState<ExamType>('JEE Mains');
+  const [selectedBuddy, setSelectedBuddy] = useState(1);
+  const [goal, setGoal] = useState('');
+
+  // Stats
+  const [questionsToday, setQuestionsToday] = useState(0);
+  const [questionsWeek, setQuestionsWeek] = useState(0);
+  const [questionsMonth, setQuestionsMonth] = useState(0);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [longestStreak, setLongestStreak] = useState(0);
+
+ 
+ 
+  const loadUserData = async () => {
+    // Reset daily count if it's a new day
+    const storedTodayDate = localStorage.getItem('questionsToday_date');
+    if (storedTodayDate !== new Date().toDateString()) {
+      localStorage.setItem('questionsToday', '0');
+      localStorage.setItem('questionsToday_date', new Date().toDateString());
+    }
+    try {
+      const storedUser = localStorage.getItem('@user');
+
+
+
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        setName(userData.name || '');
+        setEmail(userData.email || '');
+        setSelectedClass(userData.class || '12th');
+        setTargetExam(userData.exam || 'JEE Mains');
+      }
+
+
+      
+
+
+
+      const storedBuddy = parseInt(localStorage.getItem('selectedBuddy') || '1');
+      const storedGoal = localStorage.getItem('goal') || '';
+      const storedQuestionsToday = parseInt(localStorage.getItem('questionsToday') || '0');
+      const storedQuestionsWeek = parseInt(localStorage.getItem('questionsWeek') || '0');
+      const storedQuestionsMonth = parseInt(localStorage.getItem('questionsMonth') || '0');
+      const storedCurrentStreak = parseInt(localStorage.getItem('currentStreak') || '0');
+      const storedLongestStreak = parseInt(localStorage.getItem('longestStreak') || '0');
+
+      setSelectedBuddy(storedBuddy);
+      setGoal(storedGoal);
+      setQuestionsToday(storedQuestionsToday);
+      setQuestionsWeek(storedQuestionsWeek);
+      setQuestionsMonth(storedQuestionsMonth);
+      setCurrentStreak(storedCurrentStreak);
+      setLongestStreak(storedLongestStreak);
+
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      setLoading(false);
+    }
+  };
+
+
+
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      // 1. Update localStorage
+      const storedUser = localStorage.getItem('@user');
+      let userId: string | null = null;
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        userId = userData.id || userData.user_id || null;
+        const updatedUser = {
+          ...userData,
+          name,
+          cl: selectedClass,
+          exam: targetExam,
+        };
+        localStorage.setItem('@user', JSON.stringify(updatedUser));
+      }
+
+      localStorage.setItem('selectedClass', selectedClass);
+      localStorage.setItem('targetExam', targetExam);
+      localStorage.setItem('selectedBuddy', selectedBuddy.toString());
+      localStorage.setItem('goal', goal);
+
+      // 2. Sync to Supabase users table
+      if (!userId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id ?? null;
+      }
+
+      if (userId) {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            name,
+            cl: selectedClass,
+            exam: targetExam,
+           
+          })
+          .eq('id', userId);
+
+        if (error) {
+          console.error('Supabase update error:', error);
+          setSaveError('Saved locally, but failed to sync to server.');
+        }
+      }
+
+      setEditing(false);
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      setSaveError('Something went wrong while saving.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSelectBuddy = (buddyId: number) => {
+    setSelectedBuddy(buddyId);
+    localStorage.setItem('selectedBuddy', buddyId.toString());
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteInput.trim().toLowerCase() !== 'delete') return;
+    try {
+      localStorage.clear();
+      router.push('/auth/terms-agree');
+    } catch (error) {
+      console.error('Error deleting account:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try { await supabase.auth.signOut(); } catch {}
+    try {
+      const { bustPassCache } = await import('@/lib/rookiePass');
+      bustPassCache();
+    } catch {}
+    localStorage.clear();
+    sessionStorage.clear();
+    router.push('/');
+  };
+
+  return (
+    <div className={`min-h-screen transition-colors duration-300 ${themeClasses.page}`}>
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        variants={containerVariants}
+        className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-24"
+      >
+        {/* Header */}
+        <motion.div variants={itemVariants} className="flex items-center justify-between mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold">Profile</h1>
+          <motion.button
+            variants={buttonVariants}
+            initial="rest"
+            whileHover="hover"
+            whileTap="tap"
+            onClick={handleLogout}
+            className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-semibold text-sm sm:text-base transition-all ${themeClasses.button.primary}`}
+          >
+            Logout
+          </motion.button>
+        </motion.div>
+
+        {/* Profile Card */}
+        <motion.div
+          variants={itemVariants}
+          className={`border rounded-2xl sm:rounded-3xl p-5 sm:p-7 mb-6 sm:mb-8 transition-all ${themeClasses.card}`}
+        >
+          {!editing && (
+            <motion.button
+              variants={buttonVariants}
+              initial="rest"
+              whileHover="hover"
+              whileTap="tap"
+              onClick={() => setEditing(true)}
+              className={`mb-4 sm:mb-6 px-5 sm:px-6 py-2 sm:py-2.5 rounded-full font-semibold text-sm sm:text-base w-full sm:w-auto transition-all ${themeClasses.button.primary}`}
+            >
+              Edit Profile
+            </motion.button>
+          )}
+
+          {/* Name */}
+          <div className="mb-5 sm:mb-6">
+            <label className={`block text-xs sm:text-sm mb-2 ${themeClasses.text.secondary}`}>Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={!editing}
+              className={`w-full border px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base transition-all ${
+                themeClasses.input
+              } ${!editing && themeClasses.inputDisabled}`}
+            />
+          </div>
+
+          {/* Email */}
+          <div className="mb-5 sm:mb-6">
+            <label className={`block text-xs sm:text-sm mb-2 ${themeClasses.text.secondary}`}>Email</label>
+            <input
+              type="email"
+              value={email}
+              disabled={true}
+              className={`w-full border px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base transition-all ${
+                themeClasses.input
+              } ${themeClasses.inputDisabled}`}
+            />
+          </div>
+
+          {/* Goal */}
+          <div className="mb-5 sm:mb-6">
+            <label className={`block text-xs sm:text-sm mb-2 ${themeClasses.text.secondary}`}>Goal (Optional)</label>
+            <input
+              type="text"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              disabled={!editing}
+              placeholder="e.g., Get 99 percentile in JEE"
+              className={`w-full border px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base transition-all ${
+                themeClasses.input
+              } ${!editing && themeClasses.inputDisabled}`}
+            />
+          </div>
+
+          {/* Class Selection */}
+          <div className="mb-5 sm:mb-6">
+            <label className={`block ${themeClasses.text.primary} text-sm sm:text-base font-medium mb-3`}>
+              Which class are you in?
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+              {CLASS_OPTIONS.map((cls) => (
+                <motion.button
+                  key={cls}
+                  variants={buttonVariants}
+                  initial="rest"
+                  whileHover={editing ? "hover" : "rest"}
+                  whileTap={editing ? "tap" : "rest"}
+                  onClick={() => editing && setSelectedClass(cls)}
+                  disabled={!editing}
+                  className={`py-2.5 sm:py-3 rounded-xl font-medium text-sm sm:text-base border transition-all ${
+                    selectedClass === cls
+                      ? themeClasses.button.selected
+                      : themeClasses.button.unselected
+                  } ${!editing && themeClasses.inputDisabled}`}
+                >
+                  {cls}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+
+          {/* Exam Selection */}
+          <div className="mb-6">
+            <label className={`block ${themeClasses.text.primary} text-sm sm:text-base font-medium mb-3`}>
+              Goal exam
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+              {EXAM_OPTIONS.map((exam) => (
+                <motion.button
+                  key={exam}
+                  variants={buttonVariants}
+                  initial="rest"
+                  whileHover={editing ? "hover" : "rest"}
+                  whileTap={editing ? "tap" : "rest"}
+                  onClick={() => editing && setTargetExam(exam)}
+                  disabled={!editing}
+                  className={`py-2.5 sm:py-3 rounded-xl font-medium text-xs sm:text-sm border transition-all ${
+                    targetExam === exam
+                      ? themeClasses.button.selected
+                      : themeClasses.button.unselected
+                  } ${!editing && themeClasses.inputDisabled}`}
+                >
+                  {exam}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <AnimatePresence>
+            {editing && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+              >
+                <div className={`border-t my-5 sm:my-6 transition-colors ${themeClasses.border}`} />
+                {saveError && (
+                  <p className="text-red-400 text-xs sm:text-sm mb-3 text-center">{saveError}</p>
+                )}
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                  <motion.button
+                    variants={buttonVariants}
+                    initial="rest"
+                    whileHover="hover"
+                    whileTap="tap"
+                    onClick={() => { setEditing(false); setSaveError(''); }}
+                    className={`flex-1 py-3 rounded-full font-medium text-sm sm:text-base border transition-all ${themeClasses.button.secondary}`}
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    variants={buttonVariants}
+                    initial="rest"
+                    whileHover={saving ? "rest" : "hover"}
+                    whileTap={saving ? "rest" : "tap"}
+                    onClick={handleSave}
+                    disabled={saving}
+                    className={`flex-1 py-3 rounded-full font-semibold text-sm sm:text-base transition-all ${themeClasses.button.primary} ${saving ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  >
+                    {saving ? 'Saving…' : 'Save'}
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+       
+
+        {/* Select Mentor */}
+        <motion.div variants={itemVariants} className="mb-6 sm:mb-8">
+          <h2 className={`text-lg sm:text-xl font-semibold mb-2 sm:mb-3 ${themeClasses.text.primary}`}>Select mentor</h2>
+          <p className={`text-xs sm:text-sm mb-4 sm:mb-5 ${themeClasses.text.secondary}`}>
+            A mentor is that character who will guide through your practice journey.
+          </p>
+
+          <div className="space-y-3 sm:space-y-4">
+            {aiBuddies.map((buddy) => (
+              <motion.button
+                key={buddy.id}
+                variants={cardVariants}
+                initial="rest"
+                whileHover="hover"
+                whileTap="tap"
+                onClick={() => handleSelectBuddy(buddy.id)}
+                className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all border ${
+                  selectedBuddy === buddy.id
+                    ? isDark
+                      ? 'bg-[#102A56] border-2 border-[#1570EF]'
+                      : 'bg-blue-50 border-2 border-[#1570EF]'
+                    : themeClasses.card
+                }`}
+              >
+                <motion.div
+                  className="relative w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0 group"
+                  whileTap={{ scale: 0.9 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setProfileImageModalVisible(buddy.id);
+                  }}
+                >
+                  <Image
+                    src={buddy.image}
+                    alt={buddy.name}
+                    fill
+                    className="rounded-full object-cover border-2 border-white"
+                  />
+                  <div className="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+                    </svg>
+                  </div>
+                </motion.div>
+                <div className="flex-1 text-left">
+                  <h3 className={`font-medium text-sm sm:text-base ${themeClasses.text.primary}`}>{buddy.name}</h3>
+                  <p className={`text-xs sm:text-sm line-clamp-2 ${themeClasses.text.secondary}`}>{buddy.description}</p>
+                </div>
+                <AnimatePresence>
+                  {selectedBuddy === buddy.id && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                      className="relative w-6 h-6 sm:w-7 sm:h-7 flex-shrink-0"
+                    >
+                      <Image src="/ticck.png" alt="Selected" fill className="object-contain" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Delete Account */}
+        <motion.div variants={itemVariants}>
+          <motion.button
+            variants={buttonVariants}
+            initial="rest"
+            whileHover="hover"
+            whileTap="tap"
+            onClick={() => setDeleteModalVisible(true)}
+            className={`w-full border py-3 sm:py-4 rounded-full font-medium text-sm sm:text-base mb-4 sm:mb-6 flex items-center justify-center gap-2 transition-all ${
+              isDark
+                ? 'bg-[#101828] border-[#1D2939] text-white'
+                : 'bg-red-50 border-red-200 text-red-600'
+            }`}
+          >
+            <div className="relative w-4 h-4 sm:w-5 sm:h-5">
+              <Image src="/bin.png" alt="Delete" fill className="object-contain" />
+            </div>
+            Delete Account
+          </motion.button>
+
+          <p className={`text-center text-xs sm:text-sm ${themeClasses.text.muted}`}>v2.3.1</p>
+        </motion.div>
+      </motion.div>
+
+      {/* Profile Image Modal */}
+      <AnimatePresence>
+        {profileImageModalVisible !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={`fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 px-4 transition-all ${themeClasses.modal.bg}`}
+            onClick={() => setProfileImageModalVisible(null)}
+          >
+            <motion.div
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={(e) => e.stopPropagation()}
+              className={`border rounded-2xl sm:rounded-3xl p-6 sm:p-8 max-w-xs w-full flex flex-col items-center gap-4 transition-all ${themeClasses.modal.card}`}
+            >
+              <div className="relative w-48 h-48 sm:w-56 sm:h-56 rounded-2xl overflow-hidden shadow-xl">
+                <Image
+                  src={aiBuddies.find((b) => b.id === profileImageModalVisible)?.image || ''}
+                  alt="Profile"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+              <div className="text-center">
+                <h3 className={`font-semibold text-lg ${themeClasses.text.primary}`}>
+                  {aiBuddies.find((b) => b.id === profileImageModalVisible)?.name}
+                </h3>
+                <p className={`text-xs sm:text-sm mt-1 ${themeClasses.text.secondary}`}>
+                  {aiBuddies.find((b) => b.id === profileImageModalVisible)?.description}
+                </p>
+              </div>
+              <motion.button
+                variants={buttonVariants}
+                initial="rest"
+                whileHover="hover"
+                whileTap="tap"
+                onClick={() => setProfileImageModalVisible(null)}
+                className={`px-8 py-2.5 rounded-full font-medium text-sm transition-all border ${themeClasses.button.secondary}`}
+              >
+                Close
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Modal */}
+      <AnimatePresence>
+        {deleteModalVisible && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={`fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 px-4 transition-all ${themeClasses.modal.bg}`}
+            onClick={() => {
+              setDeleteModalVisible(false);
+              setDeleteInput('');
+            }}
+          >
+            <motion.div
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={(e) => e.stopPropagation()}
+              className={`border rounded-2xl sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full transition-all ${themeClasses.modal.card}`}
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
+                className="flex justify-center mb-4 sm:mb-5"
+              >
+                <div className="relative w-8 h-8 sm:w-10 sm:h-10">
+                  <Image src="/bin.png" alt="Delete" fill className="object-contain" />
+                </div>
+              </motion.div>
+              <p className={`text-center mb-5 sm:mb-6 text-sm sm:text-base ${themeClasses.text.primary}`}>
+                Enter <span className="font-bold">Delete</span> to delete your account.
+              </p>
+              <motion.input
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                type="text"
+                value={deleteInput}
+                onChange={(e) => setDeleteInput(e.target.value)}
+                placeholder="Delete"
+                className={`w-full border text-center py-2.5 sm:py-3 rounded-xl mb-5 sm:mb-6 font-semibold text-sm sm:text-base transition-all ${
+                  isDark
+                    ? 'bg-transparent border-[#344054] text-[#F04438] placeholder-[#F04438]/50'
+                    : 'bg-red-50 border-red-200 text-red-600 placeholder-red-400'
+                }`}
+              />
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <motion.button
+                  variants={buttonVariants}
+                  initial="rest"
+                  whileHover="hover"
+                  whileTap="tap"
+                  onClick={() => {
+                    setDeleteModalVisible(false);
+                    setDeleteInput('');
+                  }}
+                  className={`flex-1 border py-2.5 sm:py-3 rounded-full font-medium text-sm sm:text-base transition-all ${themeClasses.button.secondary}`}
+                >
+                  Go Back
+                </motion.button>
+                <motion.button
+                  variants={buttonVariants}
+                  initial="rest"
+                  whileHover={deleteInput.trim().toLowerCase() === 'delete' ? "hover" : "rest"}
+                  whileTap={deleteInput.trim().toLowerCase() === 'delete' ? "tap" : "rest"}
+                  onClick={handleDeleteAccount}
+                  disabled={deleteInput.trim().toLowerCase() !== 'delete'}
+                  className={`flex-1 py-2.5 sm:py-3 rounded-full font-bold text-sm sm:text-base transition-all ${
+                    isDark
+                      ? 'bg-[#FEE4E2] text-[#D92D20]'
+                      : 'bg-[#FEE4E2] text-[#D92D20]'
+                  } ${deleteInput.trim().toLowerCase() !== 'delete' && 'opacity-60 cursor-not-allowed'}`}
+                >
+                  Delete
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
