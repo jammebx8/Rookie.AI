@@ -35,6 +35,7 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<SolutionData | null>(null);
   const [analysisStatusText, setAnalysisStatusText] = useState<string>('Scanning image...');
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   if (!isOpen) return null;
 
@@ -76,8 +77,6 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
       setStep('invalid');
     }
   };
-
-  const [isRegenerating, setIsRegenerating] = useState(false);
 
   // Redo / Regenerate Solution without re-cropping
   const handleRegenerate = async () => {
