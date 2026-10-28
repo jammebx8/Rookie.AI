@@ -17,6 +17,7 @@ import { updateAbilityVector } from '../../lib/recommendation'
 import { sortByDifficulty, autoBookmarkWrong } from '../../lib/adaptivePractice'
 import { renderContent } from '../components/renderContent'
 import { track, startSolutionTimer } from '../../lib/analytics'
+import { QuestionViewerAskAI } from '../components/snap/QuestionViewerAskAI'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const API_BASE       = 'https://rookie-backend.vercel.app'
@@ -1959,6 +1960,25 @@ export default function QuestionViewerClient() {
           <FiArrowLeft size={15} />
           <span className="hidden sm:inline">Previous</span>
         </motion.button>
+
+        {/* ── Ask AI Button at Center of Footer ── */}
+        {Q && (
+          <QuestionViewerAskAI
+            questionText={Q.question_text || Q.question || ''}
+            solutionText={solution || Q.solution || ''}
+            optionsText={[
+              Q.option_a ? `A) ${Q.option_a}` : '',
+              Q.option_b ? `B) ${Q.option_b}` : '',
+              Q.option_c ? `C) ${Q.option_c}` : '',
+              Q.option_d ? `D) ${Q.option_d}` : '',
+            ].filter(Boolean).join('\n')}
+            subject={subject || Q.subject}
+            chapter={chapterTitle || Q.chapter}
+            questionId={Q.question_id || String(Q.id)}
+            hasPass={hasPass}
+            isDark={isDark}
+          />
+        )}
 
         <div className="flex items-center gap-2">
           <motion.button

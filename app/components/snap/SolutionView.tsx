@@ -12,10 +12,15 @@ import {
   Square,
   FileText,
   ChevronDown,
+  RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { renderContent } from '../renderContent';
 import 'katex/dist/katex.min.css';
+import 'katex/dist/contrib/mhchem.js';
+import { checkDoubtQuota, recordDoubtAsked, recordAskAIClicked } from '@/lib/doubtQuota';
+import { DoubtLimitModal } from './DoubtLimitModal';
+import { hasRookiePass } from '@/lib/rookiePass';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://rookie-backend.vercel.app';
 
@@ -27,6 +32,9 @@ interface SolutionViewProps {
   subject?: string;
   topic?: string;
   onBack: () => void;
+  onRedo?: () => void;
+  isRegenerating?: boolean;
+  hasPass?: boolean | null;
   isDark?: boolean;
 }
 
@@ -40,12 +48,27 @@ export function SolutionView({
   subject,
   topic,
   onBack,
+  onRedo,
+  isRegenerating = false,
+  hasPass,
   isDark = true,
 }: SolutionViewProps) {
   // Top nav states
   const [showMenu, setShowMenu] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+
+  // Quota & Pass state
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [userHasPass, setUserHasPass] = useState<boolean | null>(hasPass ?? null);
+
+  useEffect(() => {
+    if (hasPass !== undefined && hasPass !== null) {
+      setUserHasPass(hasPass);
+    } else {
+      hasRookiePass().then(p => setUserHasPass(p)).catch(() => setUserHasPass(false));
+    }
+  }, [hasPass]);
 
   // Voice AI Tutor states
   const [isAuraActive, setIsAuraActive] = useState(false);
@@ -241,6 +264,12 @@ export function SolutionView({
 
   // Start microphone recording (Hold to talk)
   const startRecording = async () => {
+    const quota = checkDoubtQuota(userHasPass);
+    if (!quota.allowed) {
+      setShowLimitModal(true);
+      return;
+    }
+
     unlockAudio();
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
@@ -358,6 +387,9 @@ export function SolutionView({
         // Auto-show explanation card so student can see equations
         setShowExplanationCard(true);
 
+        // Record doubt count & analytics
+        await recordDoubtAsked('home_snap', undefined, subject);
+
         // 3. Play generated speech (with Web Speech API fallback)
         if (doubtData.audio_base64) {
           await playAudio(
@@ -423,59 +455,101 @@ export function SolutionView({
         {/* Title */}
         <h1 className="text-lg sm:text-xl font-bold tracking-tight">Solution</h1>
 
-        {/* 3-dots Menu Button */}
-        <div className="relative">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-              isDark
-                ? 'hover:bg-neutral-800 text-neutral-300'
-                : 'hover:bg-neutral-100 text-neutral-700'
-            }`}
-            aria-label="More"
-          >
-            <MoreVertical className="w-5 h-5" />
-          </button>
-
-          {/* Dropdown Menu */}
-          {showMenu && (
-            <>
-              <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)} />
-              <div
-                className={`absolute right-0 mt-2 w-48 rounded-2xl shadow-2xl py-2 z-30 border transition-all ${
-                  isDark
-                    ? 'bg-[#14161d] border-neutral-700 text-white'
-                    : 'bg-white border-neutral-200 text-neutral-900'
-                }`}
-              >
-                <button
-                  onClick={handleSave}
-                  className={`w-full px-4 py-2.5 flex items-center gap-3 text-sm font-medium transition-colors ${
-                    isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-50'
-                  }`}
-                >
-                  <Bookmark
-                    className={`w-4 h-4 ${isSaved ? 'fill-blue-500 text-blue-500' : ''}`}
-                  />
-                  <span>{isSaved ? 'Saved' : 'Save'}</span>
-                </button>
-                <div
-                  className={`my-1 border-t ${
-                    isDark ? 'border-neutral-800' : 'border-neutral-100'
-                  }`}
-                />
-                <button
-                  onClick={handleShare}
-                  className={`w-full px-4 py-2.5 flex items-center gap-3 text-sm font-medium transition-colors ${
-                    isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-50'
-                  }`}
-                >
-                  <Share2 className="w-4 h-4" />
-                  <span>Share</span>
-                </button>
-              </div>
-            </>
+        {/* Right Header Actions: Redo Button + 3-dots Menu */}
+        <div className="flex items-center gap-2">
+          {onRedo && (
+            <button
+              onClick={onRedo}
+              disabled={isRegenerating}
+              className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold border transition-all ${
+                isDark
+                  ? 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-200 border-neutral-700'
+                  : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border-neutral-300'
+              } ${isRegenerating ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
+              title="Regenerate solution"
+              aria-label="Regenerate solution"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin text-blue-400' : ''}`} />
+              <span>{isRegenerating ? 'Redoing...' : 'Redo'}</span>
+            </button>
           )}
+
+          {/* 3-dots Menu Button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                isDark
+                  ? 'hover:bg-neutral-800 text-neutral-300'
+                  : 'hover:bg-neutral-100 text-neutral-700'
+              }`}
+              aria-label="More"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)} />
+                <div
+                  className={`absolute right-0 mt-2 w-48 rounded-2xl shadow-2xl py-2 z-30 border transition-all ${
+                    isDark
+                      ? 'bg-[#14161d] border-neutral-700 text-white'
+                      : 'bg-white border-neutral-200 text-neutral-900'
+                  }`}
+                >
+                  {onRedo && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setShowMenu(false);
+                          onRedo();
+                        }}
+                        disabled={isRegenerating}
+                        className={`w-full px-4 py-2.5 flex items-center gap-3 text-sm font-medium transition-colors ${
+                          isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-50'
+                        }`}
+                      >
+                        <RotateCcw className="w-4 h-4 text-blue-500" />
+                        <span>Regenerate</span>
+                      </button>
+                      <div
+                        className={`my-1 border-t ${
+                          isDark ? 'border-neutral-800' : 'border-neutral-100'
+                        }`}
+                      />
+                    </>
+                  )}
+                  <button
+                    onClick={handleSave}
+                    className={`w-full px-4 py-2.5 flex items-center gap-3 text-sm font-medium transition-colors ${
+                      isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-50'
+                    }`}
+                  >
+                    <Bookmark
+                      className={`w-4 h-4 ${isSaved ? 'fill-blue-500 text-blue-500' : ''}`}
+                    />
+                    <span>{isSaved ? 'Saved' : 'Save'}</span>
+                  </button>
+                  <div
+                    className={`my-1 border-t ${
+                      isDark ? 'border-neutral-800' : 'border-neutral-100'
+                    }`}
+                  />
+                  <button
+                    onClick={handleShare}
+                    className={`w-full px-4 py-2.5 flex items-center gap-3 text-sm font-medium transition-colors ${
+                      isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-50'
+                    }`}
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>Share</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -590,6 +664,12 @@ export function SolutionView({
 
               <button
                 onClick={() => {
+                  recordAskAIClicked('home_snap', undefined, subject);
+                  const quota = checkDoubtQuota(userHasPass);
+                  if (!quota.allowed) {
+                    setShowLimitModal(true);
+                    return;
+                  }
                   unlockAudio();
                   setIsAuraActive(true);
                 }}
@@ -697,6 +777,14 @@ export function SolutionView({
           />
         </div>
       )}
+
+      {/* Quota Limit Upgrade Modal */}
+      <DoubtLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        onPassGranted={() => setUserHasPass(true)}
+        isDark={isDark}
+      />
     </div>
   );
 }

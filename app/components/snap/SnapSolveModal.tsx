@@ -7,6 +7,7 @@ import { CropView } from './CropView';
 import { InvalidView } from './InvalidView';
 import { SolutionView } from './SolutionView';
 import { Loader2, Sparkles } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://rookie-backend.vercel.app';
 
@@ -73,6 +74,34 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
         error: "This doesn't look like schoolwork. Snap a question from your book or notebook.",
       });
       setStep('invalid');
+    }
+  };
+
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  // Redo / Regenerate Solution without re-cropping
+  const handleRegenerate = async () => {
+    if (!croppedImage || isRegenerating) return;
+    setIsRegenerating(true);
+    toast.loading('Regenerating solution...', { id: 'regen-toast' });
+    try {
+      const response = await fetch(`${BACKEND_URL}/snap-solve/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_base64: croppedImage }),
+      });
+      const data: SolutionData = await response.json();
+      if (response.ok && data.is_schoolwork) {
+        setAnalysisResult(data);
+        toast.success('Solution regenerated!', { id: 'regen-toast' });
+      } else {
+        toast.error('Could not regenerate solution. Please try again.', { id: 'regen-toast' });
+      }
+    } catch (err) {
+      console.error('Regenerate error:', err);
+      toast.error('Failed to regenerate solution.', { id: 'regen-toast' });
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -158,6 +187,8 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
             subject={analysisResult.subject}
             topic={analysisResult.topic}
             onBack={handleRetake}
+            onRedo={handleRegenerate}
+            isRegenerating={isRegenerating}
             isDark={isDark}
           />
         )}

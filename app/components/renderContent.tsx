@@ -17,6 +17,7 @@
 
 import React from 'react'
 import { InlineMath, BlockMath } from 'react-katex'
+import 'katex/dist/contrib/mhchem.js'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -51,12 +52,45 @@ function normaliseDelimiters(text: string): string {
   let out = text.replace(/\\\[([\s\S]+?)\\\]/g, (_m, inner: string) => `$$${inner.trim()}$$`)
   out = out.replace(/\\\(([\s\S]+?)\\\)/g, (_m, inner: string) => `$${inner.trim()}$`)
 
-  // Pass 2 — wrap bare LaTeX lines (from DB solutions).
-  // Never touch table rows: a cell containing \alpha must not wrap the whole row.
+  // Pass 2 — chemical formulas (mhchem \ce{...} and \pu{...}) outside $ delimiters
+  out = out.replace(/(?<!\$)\\ce\{([^}]+)\}(?!\$)/g, '$\\ce{$1}$')
+  out = out.replace(/(?<!\$)\\pu\{([^}]+)\}(?!\$)/g, '$\\pu{$1}$')
+
+  // Pass 3 — multiline LaTeX environments (\begin{aligned} ... \end{aligned}, cases, matrix, etc.)
+  // Wrap entire environment as an atomic $$ block if not already inside $$ delimiters
+  const ENV_NAMES = 'aligned|align\\*?|gather\\*?|matrix|pmatrix|bmatrix|vmatrix|cases|array|split|equation\\*?'
+  const envRegex = new RegExp(`(?<!\\$\\$)(?:^|\\n)(\\\\begin\\{(?:${ENV_NAMES})\\}[\\s\\S]*?\\\\end\\{(?:${ENV_NAMES})\\})(?!\\$\\$)`, 'g')
+  out = out.replace(envRegex, (_m, block: string) => `\n\n$$${block.trim()}$$\n\n`)
+
+  // Normalise document-level align environments to KaTeX-supported aligned
+  out = out.replace(/\\begin\{align\*?\}/g, '\\begin{aligned}')
+  out = out.replace(/\\end\{align\*?\}/g, '\\end{aligned}')
+  out = out.replace(/\\begin\{equation\*?\}/g, '')
+  out = out.replace(/\\end\{equation\*?\}/g, '')
+
+  // Pass 4 — wrap single bare LaTeX lines (from DB solutions).
+  // Never touch table rows, and never touch lines already inside a multiline $$...$$ block!
   const result: string[] = []
+  let inDisplayBlock = false
+
   for (const line of out.split('\n')) {
+    const trimmed = line.trim()
+
+    // Track whether we are currently inside a multiline $$ block
+    const dollarCount = (line.match(/\$\$/g) || []).length
+    if (dollarCount % 2 === 1) {
+      inDisplayBlock = !inDisplayBlock
+      result.push(line)
+      continue
+    }
+
+    if (inDisplayBlock) {
+      result.push(line)
+      continue
+    }
+
     if (!isTableLine(line) && isBareLaTeXLine(line)) {
-      result.push(`$$${line.trim()}$$`)
+      result.push(`$$${trimmed}$$`)
     } else {
       result.push(line)
     }
@@ -275,10 +309,14 @@ function renderInlineSegment(text: string, baseKey: string): React.ReactNode {
     const key = `${baseKey}-${i}`
 
     if (part.length > 4 && part.startsWith('$$') && part.endsWith('$$')) {
-      return <BlockMath key={key} math={part.slice(2, -2)} />
+      let math = part.slice(2, -2).trim()
+      math = math.replace(/\\begin\{align\*?\}/g, '\\begin{aligned}').replace(/\\end\{align\*?\}/g, '\\end{aligned}')
+      return <BlockMath key={key} math={math} errorColor="#ef4444" />
     }
     if (part.length > 2 && part.startsWith('$') && part.endsWith('$')) {
-      return <InlineMath key={key} math={part.slice(1, -1)} />
+      let math = part.slice(1, -1).trim()
+      math = math.replace(/\\begin\{align\*?\}/g, '\\begin{aligned}').replace(/\\end\{align\*?\}/g, '\\end{aligned}')
+      return <InlineMath key={key} math={math} errorColor="#ef4444" />
     }
 
     // Bold (**text**) + newlines inside plain text segments
