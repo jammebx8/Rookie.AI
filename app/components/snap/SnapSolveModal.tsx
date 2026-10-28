@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { CameraView } from './CameraView';
 import { CropView } from './CropView';
@@ -8,12 +8,17 @@ import { InvalidView } from './InvalidView';
 import { SolutionView } from './SolutionView';
 import { Loader2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { checkDoubtQuota, recordDoubtAsked, syncDoubtQuotaWithServer } from '@/lib/doubtQuota';
+import { DoubtLimitModal } from './DoubtLimitModal';
+import { hasRookiePass } from '@/lib/rookiePass';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://rookie-backend.vercel.app';
 
 interface SnapSolveModalProps {
   isOpen: boolean;
   onClose: () => void;
+  hasPass?: boolean | null;
+  userId?: string | null;
   isDark?: boolean;
 }
 
@@ -29,13 +34,32 @@ interface SolutionData {
   error?: string;
 }
 
-export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModalProps) {
+export function SnapSolveModal({
+  isOpen,
+  onClose,
+  hasPass,
+  userId,
+  isDark = true,
+}: SnapSolveModalProps) {
   const [step, setStep] = useState<Step>('camera');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<SolutionData | null>(null);
   const [analysisStatusText, setAnalysisStatusText] = useState<string>('Scanning image...');
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [userHasPass, setUserHasPass] = useState<boolean | null>(hasPass ?? null);
+
+  useEffect(() => {
+    if (hasPass !== undefined && hasPass !== null) {
+      setUserHasPass(hasPass);
+    } else {
+      hasRookiePass(userId || undefined).then((p) => setUserHasPass(p)).catch(() => setUserHasPass(false));
+    }
+    if (userId) {
+      syncDoubtQuotaWithServer(userId);
+    }
+  }, [hasPass, userId]);
 
   if (!isOpen) return null;
 
@@ -47,6 +71,14 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
 
   // Step 2: Image Cropped & Confirmed
   const handleCropConfirm = async (croppedBase64: string) => {
+    // Check doubt quota before analyzing
+    const quota = checkDoubtQuota(userHasPass, userId);
+    if (!quota.allowed) {
+      setShowLimitModal(true);
+      toast.error('Daily limit of 3 free doubts reached. Upgrade to Rookie Pass for unlimited solutions!');
+      return;
+    }
+
     setCroppedImage(croppedBase64);
     setStep('analyzing');
     setAnalysisStatusText('Checking schoolwork...');
@@ -66,6 +98,8 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
       if (!response.ok || !data.is_schoolwork) {
         setStep('invalid');
       } else {
+        // Record successfully solved doubt against quota and log analytics
+        recordDoubtAsked('home_snap', undefined, data.subject, userId);
         setStep('solution');
       }
     } catch (err: any) {
@@ -81,6 +115,15 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
   // Redo / Regenerate Solution without re-cropping
   const handleRegenerate = async () => {
     if (!croppedImage || isRegenerating) return;
+
+    // Check quota before regenerating
+    const quota = checkDoubtQuota(userHasPass, userId);
+    if (!quota.allowed) {
+      setShowLimitModal(true);
+      toast.error('Daily limit reached. Upgrade to Rookie Pass for unlimited regenerations!');
+      return;
+    }
+
     setIsRegenerating(true);
     toast.loading('Regenerating solution...', { id: 'regen-toast' });
     try {
@@ -91,6 +134,7 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
       });
       const data: SolutionData = await response.json();
       if (response.ok && data.is_schoolwork) {
+        recordDoubtAsked('home_snap', undefined, data.subject, userId);
         setAnalysisResult(data);
         toast.success('Solution regenerated!', { id: 'regen-toast' });
       } else {
@@ -188,10 +232,21 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
             onBack={handleRetake}
             onRedo={handleRegenerate}
             isRegenerating={isRegenerating}
+            hasPass={userHasPass}
             isDark={isDark}
           />
         )}
       </AnimatePresence>
+
+      <DoubtLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        onPassGranted={() => {
+          setUserHasPass(true);
+          setShowLimitModal(false);
+        }}
+        isDark={isDark}
+      />
     </div>
   );
 }

@@ -6,10 +6,17 @@ import { ChevronRight, Camera, Sparkles } from 'lucide-react';
 
 interface SnapQuestionBannerProps {
   onClick: () => void;
+  hasPass?: boolean | null;
+  doubtsRemaining?: number;
   isDark?: boolean;
 }
 
-export function SnapQuestionBanner({ onClick, isDark = true }: SnapQuestionBannerProps) {
+export function SnapQuestionBanner({
+  onClick,
+  hasPass,
+  doubtsRemaining,
+  isDark = true,
+}: SnapQuestionBannerProps) {
   return (
     <motion.div
       whileHover={{ scale: 1.01 }}
@@ -31,10 +38,25 @@ export function SnapQuestionBanner({ onClick, isDark = true }: SnapQuestionBanne
         {/* Left Section: Text & Action */}
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-white font-semibold text-lg sm:text-xl tracking-tight group-hover:text-blue-300 transition-colors">
                 Snap a question
               </span>
+              {hasPass ? (
+                <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                  Unlimited Pass
+                </span>
+              ) : doubtsRemaining !== undefined ? (
+                <span
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                    doubtsRemaining <= 0
+                      ? 'text-amber-300 bg-amber-500/20 border-amber-500/30'
+                      : 'text-blue-300 bg-blue-500/20 border-blue-500/30'
+                  }`}
+                >
+                  {doubtsRemaining <= 0 ? 'Limit reached · Upgrade' : `${doubtsRemaining}/3 doubts left today`}
+                </span>
+              ) : null}
               <ChevronRight className="w-5 h-5 text-neutral-400 group-hover:text-white group-hover:translate-x-1 transition-all duration-300" />
             </div>
             <span className="text-neutral-400 text-xs sm:text-sm mt-0.5 font-normal">

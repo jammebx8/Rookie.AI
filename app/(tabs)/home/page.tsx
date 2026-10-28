@@ -21,6 +21,8 @@ import {
 } from '../../../lib/adaptivePractice';
 import { SnapQuestionBanner } from '../../components/snap/SnapQuestionBanner';
 import { SnapSolveModal } from '../../components/snap/SnapSolveModal';
+import { DoubtLimitModal } from '../../components/snap/DoubtLimitModal';
+import { checkDoubtQuota, syncDoubtQuotaWithServer } from '../../../lib/doubtQuota';
 
 
 
@@ -1924,6 +1926,30 @@ export default function HomePage() {
   const [showSurvey, setShowSurvey] = useState(false);
   const [surveyUserId, setSurveyUserId] = useState<string | null>(null);
   const [showSnapSolve, setShowSnapSolve] = useState(false);
+  const [showDoubtLimitModal, setShowDoubtLimitModal] = useState(false);
+  const [hasPass, setHasPass] = useState<boolean | null>(null);
+
+  // Fetch Rookie Pass status & sync quota directly with Supabase DB
+  useEffect(() => {
+    hasRookiePass(user?.id)
+      .then((p) => setHasPass(p))
+      .catch(() => setHasPass(false));
+
+    if (user?.id) {
+      syncDoubtQuotaWithServer(user.id);
+    }
+  }, [user?.id]);
+
+  const doubtQuota = checkDoubtQuota(hasPass, user?.id);
+
+  const handleSnapClick = () => {
+    const quota = checkDoubtQuota(hasPass, user?.id);
+    if (!quota.allowed) {
+      setShowDoubtLimitModal(true);
+      return;
+    }
+    setShowSnapSolve(true);
+  };
 
   // Apply body background on theme change
   useEffect(() => {
@@ -2122,7 +2148,12 @@ export default function HomePage() {
           <RookiePassBanner />
 
           {/* ── Snap a Question Banner ── */}
-          <SnapQuestionBanner onClick={() => setShowSnapSolve(true)} isDark={isDark} />
+          <SnapQuestionBanner
+            onClick={handleSnapClick}
+            hasPass={hasPass}
+            doubtsRemaining={doubtQuota.remaining}
+            isDark={isDark}
+          />
         </motion.section>
 
         {/* ── Streak & Daily Goal ── */}
@@ -2347,6 +2378,19 @@ export default function HomePage() {
       <SnapSolveModal
         isOpen={showSnapSolve}
         onClose={() => setShowSnapSolve(false)}
+        hasPass={hasPass}
+        userId={user?.id}
+        isDark={isDark}
+      />
+
+      {/* ── Doubt Limit Paywall Modal ── */}
+      <DoubtLimitModal
+        isOpen={showDoubtLimitModal}
+        onClose={() => setShowDoubtLimitModal(false)}
+        onPassGranted={() => {
+          setHasPass(true);
+          setShowDoubtLimitModal(false);
+        }}
         isDark={isDark}
       />
     </main>
