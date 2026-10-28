@@ -66,6 +66,10 @@ export function SolutionView({
     return () => {
       if (currentAudioRef.current) {
         currentAudioRef.current.pause();
+        currentAudioRef.current.src = '';
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
       }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         try {
@@ -119,10 +123,131 @@ export function SolutionView({
     }
   };
 
+  // Unlock audio context for mobile browsers on user interaction
+  const unlockAudio = () => {
+    try {
+      if (typeof window !== 'undefined') {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          ctx.resume();
+        }
+      }
+    } catch {}
+  };
+
+  // Browser speech synthesis fallback
+  const speakWithBrowserTTS = (text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setTutorState('idle');
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+
+      // Clean LaTeX & markdown for pleasant speech
+      const spokenText = text
+        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1 over $2')
+        .replace(/\\sqrt\{([^}]+)\}/g, 'square root of $1')
+        .replace(/\$\$[\s\S]*?\$\$/g, ' equation ')
+        .replace(/\$[^\$]*?\$/g, (m) => m.replace(/\$/g, ''))
+        .replace(/[\*_#`~]/g, '')
+        .replace(/\\text\{([^}]+)\}/g, '$1')
+        .replace(/\\[a-zA-Z]+/g, ' ')
+        .trim();
+
+      const utterance = new SpeechSynthesisUtterance(spokenText);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+
+      // Select an English natural voice if present
+      const voices = window.speechSynthesis.getVoices();
+      const englishVoice =
+        voices.find(
+          (v) =>
+            v.lang.startsWith('en') &&
+            (v.name.includes('Natural') ||
+              v.name.includes('Google') ||
+              v.name.includes('Samantha') ||
+              v.name.includes('Aaron'))
+        ) || voices.find((v) => v.lang.startsWith('en'));
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+      }
+
+      utterance.onstart = () => {
+        setTutorState('speaking');
+      };
+      utterance.onend = () => {
+        setTutorState('idle');
+      };
+      utterance.onerror = () => {
+        setTutorState('idle');
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setTutorState('idle');
+    }
+  };
+
+  // Play audio response with fallback
+  const playAudio = async (
+    audioBase64: string,
+    mimeType: string = 'audio/wav',
+    fallbackText: string = ''
+  ) => {
+    try {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.src = '';
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+
+      const audio = new Audio(`data:${mimeType};base64,${audioBase64}`);
+      currentAudioRef.current = audio;
+
+      audio.onplay = () => {
+        setTutorState('speaking');
+      };
+
+      audio.onended = () => {
+        setTutorState('idle');
+      };
+
+      audio.onerror = (e) => {
+        console.warn('Audio playback error, falling back to Web Speech:', e);
+        if (fallbackText) {
+          speakWithBrowserTTS(fallbackText);
+        } else {
+          setTutorState('idle');
+        }
+      };
+
+      await audio.play();
+      setTutorState('speaking');
+    } catch (err) {
+      console.warn('Audio play failed, falling back to Web Speech:', err);
+      if (fallbackText) {
+        speakWithBrowserTTS(fallbackText);
+      } else {
+        setTutorState('idle');
+      }
+    }
+  };
+
   // Start microphone recording (Hold to talk)
   const startRecording = async () => {
+    unlockAudio();
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
+      currentAudioRef.current.src = '';
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
 
     try {
@@ -233,11 +358,15 @@ export function SolutionView({
         // Auto-show explanation card so student can see equations
         setShowExplanationCard(true);
 
-        // 3. Play generated speech
+        // 3. Play generated speech (with Web Speech API fallback)
         if (doubtData.audio_base64) {
-          playAudio(doubtData.audio_base64);
+          await playAudio(
+            doubtData.audio_base64,
+            doubtData.audio_mime || 'audio/wav',
+            tutorReply
+          );
         } else {
-          setTutorState('idle');
+          speakWithBrowserTTS(tutorReply);
         }
       } catch (err: any) {
         console.error('Voice processing error:', err);
@@ -247,34 +376,14 @@ export function SolutionView({
     };
   };
 
-  // Play audio response
-  const playAudio = (audioBase64: string) => {
-    try {
-      const audio = new Audio(`data:audio/wav;base64,${audioBase64}`);
-      currentAudioRef.current = audio;
-
-      audio.onplay = () => {
-        setTutorState('speaking');
-      };
-
-      audio.onended = () => {
-        setTutorState('idle');
-      };
-
-      audio.onerror = () => {
-        setTutorState('idle');
-      };
-
-      audio.play();
-    } catch {
-      setTutorState('idle');
-    }
-  };
-
   // Stop playback / recording
   const handleStop = () => {
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
+      currentAudioRef.current.src = '';
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       try {
@@ -458,18 +567,6 @@ export function SolutionView({
       {/* BOTTOM AI TUTOR INTERFACE (Screenshots 2, 3, 4, 5)            */}
       {/* ───────────────────────────────────────────────────────────── */}
       <div className="fixed bottom-0 inset-x-0 z-40 pointer-events-none pb-6 pt-10 flex flex-col items-center justify-end">
-        {/* Voice Aura Waveform (Spreads across bottom into both corners) */}
-        {isAuraActive && (
-          <div className="absolute inset-x-0 bottom-0 h-32 pointer-events-none overflow-hidden transition-opacity duration-700 opacity-100">
-            {/* Left corner aura */}
-            <div className="absolute -left-12 bottom-0 w-64 h-28 bg-blue-500/30 dark:bg-blue-600/35 rounded-full blur-3xl animate-pulse" />
-            {/* Center spreading aura */}
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-full max-w-2xl h-28 bg-gradient-to-t from-blue-500/25 via-indigo-500/20 to-transparent blur-2xl" />
-            {/* Right corner aura */}
-            <div className="absolute -right-12 bottom-0 w-64 h-28 bg-blue-500/30 dark:bg-blue-600/35 rounded-full blur-3xl animate-pulse" />
-          </div>
-        )}
-
         {/* State text above button */}
         {isAuraActive && tutorState !== 'idle' && (
           <div className="relative z-10 mb-2 pointer-events-auto">
@@ -486,13 +583,16 @@ export function SolutionView({
         {/* Bottom Button Row */}
         <div className="relative z-10 flex items-center justify-center gap-3 pointer-events-auto px-4">
           {!isAuraActive ? (
-            /* Initial State: Ask AI Button with Static Audio Waves Icon */
+            /* Initial State: Ask AI Button with Static Audio Waves Icon & Aura underneath */
             <div className="relative">
               {/* Subtle Aura directly underneath button */}
-              <div className="absolute -inset-1.5 bg-blue-500/40 rounded-full blur-lg opacity-80" />
+              <div className="absolute -inset-1.5 bg-blue-500/40 rounded-full blur-lg opacity-80 animate-pulse pointer-events-none" />
 
               <button
-                onClick={() => setIsAuraActive(true)}
+                onClick={() => {
+                  unlockAudio();
+                  setIsAuraActive(true);
+                }}
                 className="relative px-7 py-3.5 rounded-full bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white font-semibold text-base flex items-center gap-2.5 shadow-xl hover:scale-102 active:scale-98 transition-all duration-200 border border-neutral-200 dark:border-neutral-700"
               >
                 {/* Static Soundwave Bars Icon (No animation) */}
@@ -511,7 +611,7 @@ export function SolutionView({
               </button>
             </div>
           ) : (
-            /* Active State: [ Document/Chevron button ] + [ Hold to talk / Stop button ] */
+            /* Active State: [ Document/Chevron button ] + [ Center Voice Button with Aura ] */
             <>
               {/* Left Circular Button (Toggle explanation sheet or collapse) */}
               <button
@@ -527,45 +627,50 @@ export function SolutionView({
                 )}
               </button>
 
-              {/* Center Main Voice Button */}
-              {tutorState === 'speaking' || tutorState === 'thinking' ? (
-                /* Stop button (Screenshot 1, 4, 5) */
-                <button
-                  onClick={handleStop}
-                  className="px-7 py-3.5 rounded-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white font-semibold text-base flex items-center gap-2.5 shadow-xl hover:scale-102 active:scale-98 transition-all"
-                >
-                  <span className="w-3.5 h-3.5 rounded-xs bg-red-500" />
-                  <span>Stop</span>
-                </button>
-              ) : (
-                /* Hold to talk button (Screenshot 3) */
-                <button
-                  onPointerDown={startRecording}
-                  onPointerUp={stopRecording}
-                  onClick={() => {
-                    // Tap fallback
-                    if (tutorState === 'listening') {
-                      stopRecording();
-                    } else if (tutorState === 'idle') {
-                      startRecording();
-                    }
-                  }}
-                  className={`px-7 py-3.5 rounded-full font-semibold text-base flex items-center gap-2.5 shadow-xl active:scale-98 transition-all select-none ${
-                    tutorState === 'listening'
-                      ? 'bg-red-500 text-white shadow-red-500/30'
-                      : 'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white'
-                  }`}
-                >
-                  <Mic
-                    className={`w-5 h-5 ${
-                      tutorState === 'listening' ? 'text-white' : 'text-neutral-800 dark:text-white'
+              {/* Center Main Voice Button with Aura directly underneath */}
+              <div className="relative">
+                {/* Subtle Aura directly underneath button */}
+                <div className="absolute -inset-1.5 bg-blue-500/40 rounded-full blur-lg opacity-80 animate-pulse pointer-events-none" />
+
+                {tutorState === 'speaking' || tutorState === 'thinking' ? (
+                  /* Stop button (Screenshot 1, 4, 5) */
+                  <button
+                    onClick={handleStop}
+                    className="relative px-7 py-3.5 rounded-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white font-semibold text-base flex items-center gap-2.5 shadow-xl hover:scale-102 active:scale-98 transition-all"
+                  >
+                    <span className="w-3.5 h-3.5 rounded-xs bg-red-500" />
+                    <span>Stop</span>
+                  </button>
+                ) : (
+                  /* Hold to talk button (Screenshot 3) */
+                  <button
+                    onPointerDown={startRecording}
+                    onPointerUp={stopRecording}
+                    onClick={() => {
+                      // Tap fallback
+                      if (tutorState === 'listening') {
+                        stopRecording();
+                      } else if (tutorState === 'idle') {
+                        startRecording();
+                      }
+                    }}
+                    className={`relative px-7 py-3.5 rounded-full font-semibold text-base flex items-center gap-2.5 shadow-xl active:scale-98 transition-all select-none ${
+                      tutorState === 'listening'
+                        ? 'bg-red-500 text-white shadow-red-500/30'
+                        : 'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white'
                     }`}
-                  />
-                  <span>
-                    {tutorState === 'listening' ? 'Release to send' : 'Hold to talk'}
-                  </span>
-                </button>
-              )}
+                  >
+                    <Mic
+                      className={`w-5 h-5 ${
+                        tutorState === 'listening' ? 'text-white' : 'text-neutral-800 dark:text-white'
+                      }`}
+                    />
+                    <span>
+                      {tutorState === 'listening' ? 'Release to send' : 'Hold to talk'}
+                    </span>
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>
