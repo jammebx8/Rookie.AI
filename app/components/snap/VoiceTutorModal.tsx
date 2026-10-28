@@ -15,6 +15,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { renderContent } from '../renderContent';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://rookie-backend.vercel.app';
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -202,8 +204,8 @@ export function VoiceTutorModal({
       const base64Audio = reader.result as string;
 
       try {
-        // Step 1: Deepgram Nova-3 Speech to Text
-        const sttResp = await fetch('/api/snap-solve/transcribe', {
+        // Step 1: Deepgram Nova-3 Speech to Text via rookie_backend
+        const sttResp = await fetch(`${BACKEND_URL}/snap-solve/transcribe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -223,7 +225,7 @@ export function VoiceTutorModal({
         // Add user question to messages
         setMessages((prev) => [...prev, { role: 'user', content: userTranscript }]);
 
-        // Step 2: Solve doubt with GPT-OSS-120B and Groq TTS
+        // Step 2: Solve doubt with GPT-OSS-120B and Groq TTS via rookie_backend
         await solveDoubtWithAI(userTranscript);
       } catch (err) {
         console.error('Voice processing error:', err);
@@ -237,7 +239,7 @@ export function VoiceTutorModal({
     setTutorState('thinking');
 
     try {
-      const resp = await fetch('/api/snap-solve/voice-doubt', {
+      const resp = await fetch(`${BACKEND_URL}/snap-solve/voice-doubt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

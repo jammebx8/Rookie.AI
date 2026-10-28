@@ -9,6 +9,8 @@ import { SolutionView } from './SolutionView';
 import { VoiceTutorModal } from './VoiceTutorModal';
 import { Loader2, Sparkles } from 'lucide-react';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://rookie-backend.vercel.app';
+
 interface SnapSolveModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -50,9 +52,9 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
     setAnalysisStatusText('Inspecting schoolwork with Qwen 27B Vision...');
 
     try {
-      // Send to analyze API
+      // Send to rookie_backend analyze API
       setAnalysisStatusText('Verifying question & extracting equations...');
-      const response = await fetch('/api/snap-solve/analyze', {
+      const response = await fetch(`${BACKEND_URL}/snap-solve/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_base64: croppedBase64 }),
