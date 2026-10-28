@@ -21,7 +21,6 @@ import 'katex/dist/contrib/mhchem.js';
 import { checkDoubtQuota, recordDoubtAsked, recordAskAIClicked } from '@/lib/doubtQuota';
 import { DoubtLimitModal } from './DoubtLimitModal';
 import { hasRookiePass } from '@/lib/rookiePass';
-import { SimilarQuestionsSection } from './SimilarQuestionsSection';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://rookie-backend.vercel.app';
 
@@ -603,15 +602,6 @@ export function SolutionView({
             {renderContent(solutionText)}
           </div>
         </div>
-
-        {/* Similar PYQ Questions to Practice */}
-        <SimilarQuestionsSection
-          embedding={embedding}
-          questionText={questionText}
-          subject={subject}
-          topic={topic}
-          isDark={isDark}
-        />
       </main>
 
       {/* ───────────────────────────────────────────────────────────── */}
