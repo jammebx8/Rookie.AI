@@ -6,7 +6,6 @@ import { CameraView } from './CameraView';
 import { CropView } from './CropView';
 import { InvalidView } from './InvalidView';
 import { SolutionView } from './SolutionView';
-import { VoiceTutorModal } from './VoiceTutorModal';
 import { Loader2, Sparkles } from 'lucide-react';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://rookie-backend.vercel.app';
@@ -34,8 +33,7 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<SolutionData | null>(null);
-  const [analysisStatusText, setAnalysisStatusText] = useState<string>('Scanning image with Qwen 27B Vision...');
-  const [showVoiceTutor, setShowVoiceTutor] = useState<boolean>(false);
+  const [analysisStatusText, setAnalysisStatusText] = useState<string>('Scanning image...');
 
   if (!isOpen) return null;
 
@@ -49,11 +47,11 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
   const handleCropConfirm = async (croppedBase64: string) => {
     setCroppedImage(croppedBase64);
     setStep('analyzing');
-    setAnalysisStatusText('Inspecting schoolwork with Qwen 27B Vision...');
+    setAnalysisStatusText('Checking schoolwork...');
 
     try {
       // Send to rookie_backend analyze API
-      setAnalysisStatusText('Verifying question & extracting equations...');
+      setAnalysisStatusText('Solving question step-by-step...');
       const response = await fetch(`${BACKEND_URL}/snap-solve/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,7 +81,6 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
     setCapturedImage(null);
     setCroppedImage(null);
     setAnalysisResult(null);
-    setShowVoiceTutor(false);
     setStep('camera');
   };
 
@@ -136,13 +133,6 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
             <p className="text-neutral-400 text-sm max-w-xs leading-relaxed">
               {analysisStatusText}
             </p>
-            <div className="mt-6 flex items-center gap-2 text-xs text-neutral-500 font-mono">
-              <span>Groq Cloud</span>
-              <span>•</span>
-              <span>qwen/qwen3.8-27b</span>
-              <span>•</span>
-              <span>gpt-oss-120b</span>
-            </div>
           </div>
         )}
 
@@ -160,29 +150,16 @@ export function SnapSolveModal({ isOpen, onClose, isDark = true }: SnapSolveModa
         )}
 
         {step === 'solution' && croppedImage && analysisResult && (
-          <>
-            <SolutionView
-              imageSrc={croppedImage}
-              solutionText={analysisResult.solution || 'No solution provided.'}
-              title={analysisResult.title}
-              subject={analysisResult.subject}
-              topic={analysisResult.topic}
-              onBack={handleRetake}
-              onAskAI={() => setShowVoiceTutor(true)}
-              isDark={isDark}
-            />
-
-            {/* Voice AI Tutor Modal */}
-            {showVoiceTutor && (
-              <VoiceTutorModal
-                questionText={analysisResult.question_text || ''}
-                solutionText={analysisResult.solution || ''}
-                title={analysisResult.title}
-                onClose={() => setShowVoiceTutor(false)}
-                isDark={isDark}
-              />
-            )}
-          </>
+          <SolutionView
+            imageSrc={croppedImage}
+            solutionText={analysisResult.solution || 'No solution provided.'}
+            questionText={analysisResult.question_text || ''}
+            title={analysisResult.title}
+            subject={analysisResult.subject}
+            topic={analysisResult.topic}
+            onBack={handleRetake}
+            isDark={isDark}
+          />
         )}
       </AnimatePresence>
     </div>

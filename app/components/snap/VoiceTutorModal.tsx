@@ -389,7 +389,7 @@ export function VoiceTutorModal({
                     : tutorState === 'listening'
                     ? 'Listening to you...'
                     : tutorState === 'transcribing'
-                    ? 'Transcribing audio (Deepgram)...'
+                    ? 'Transcribing audio (Groq Whisper)...'
                     : tutorState === 'thinking'
                     ? 'Reasoning (GPT-OSS-120B)...'
                     : 'AI Tutor Speaking...'}
@@ -630,7 +630,7 @@ export function VoiceTutorModal({
               </span>
             </button>
             <span className="text-[11px] text-neutral-400 mt-1.5 font-normal">
-              Deepgram Nova-3 STT • GPT-OSS-120B • CanopyLabs Orpheus TTS
+              Groq Whisper Large v3 STT • GPT-OSS-120B • CanopyLabs Orpheus TTS
             </span>
           </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ArrowLeft,
   MoreVertical,
@@ -8,37 +8,72 @@ import {
   Share2,
   Maximize2,
   X,
-  Sparkles,
-  Volume2,
+  Mic,
+  Square,
+  FileText,
+  ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { renderContent } from '../renderContent';
 import 'katex/dist/katex.min.css';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://rookie-backend.vercel.app';
+
 interface SolutionViewProps {
   imageSrc: string;
   solutionText: string;
+  questionText?: string;
   title?: string;
   subject?: string;
   topic?: string;
   onBack: () => void;
-  onAskAI: () => void;
   isDark?: boolean;
 }
+
+type TutorState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
 export function SolutionView({
   imageSrc,
   solutionText,
+  questionText = '',
   title,
   subject,
   topic,
   onBack,
-  onAskAI,
   isDark = true,
 }: SolutionViewProps) {
+  // Top nav states
   const [showMenu, setShowMenu] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+
+  // Voice AI Tutor states
+  const [isAuraActive, setIsAuraActive] = useState(false);
+  const [tutorState, setTutorState] = useState<TutorState>('idle');
+  const [showExplanationCard, setShowExplanationCard] = useState(false);
+  const [explanationText, setExplanationText] = useState<string>('');
+  const [conversationHistory, setConversationHistory] = useState<
+    { role: 'user' | 'assistant'; content: string }[]
+  >([]);
+
+  // Audio recording & playback refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {}
+      }
+    };
+  }, []);
 
   // Handle Save
   const handleSave = () => {
@@ -56,9 +91,9 @@ export function SolutionView({
       };
       localStorage.setItem('saved_snap_solutions', JSON.stringify([newItem, ...savedItems]));
       setIsSaved(true);
-      toast.success('Solution saved to library!');
-    } catch (err) {
-      toast.success('Saved locally!');
+      toast.success('Solution saved to library');
+    } catch {
+      toast.success('Saved');
     }
   };
 
@@ -73,31 +108,194 @@ export function SolutionView({
           text: shareText,
           url: window.location.href,
         });
-      } catch (err) {
-        // User cancelled or not supported
-      }
+      } catch {}
     } else {
       try {
         await navigator.clipboard.writeText(shareText);
-        toast.success('Solution copied to clipboard!');
+        toast.success('Solution copied to clipboard');
       } catch {
         toast.error('Could not copy link');
       }
     }
   };
 
+  // Start microphone recording (Hold to talk)
+  const startRecording = async () => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : 'audio/wav';
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        if (blob.size > 0) {
+          await processVoiceInput(blob, mimeType);
+        } else {
+          setTutorState('idle');
+        }
+      };
+
+      recorder.start();
+      setTutorState('listening');
+    } catch (err) {
+      console.error('Microphone error:', err);
+      setTutorState('idle');
+      toast.error('Microphone permission required');
+    }
+  };
+
+  // Stop recording
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setTutorState('thinking');
+    }
+  };
+
+  // Process voice input -> Transcribe via rookie_backend -> Doubt reasoning -> Voice playback
+  const processVoiceInput = async (audioBlob: Blob, mimeType: string) => {
+    setTutorState('thinking');
+
+    const reader = new FileReader();
+    reader.readAsDataURL(audioBlob);
+    reader.onloadend = async () => {
+      const base64Audio = reader.result as string;
+
+      try {
+        // 1. Transcribe speech using rookie_backend
+        const sttResp = await fetch(`${BACKEND_URL}/snap-solve/transcribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            audio_base64: base64Audio,
+            mime_type: mimeType,
+          }),
+        });
+
+        const sttData = await sttResp.json();
+        const userTranscript = (sttData.transcript || '').trim();
+
+        if (!userTranscript) {
+          setTutorState('idle');
+          return;
+        }
+
+        const updatedHistory = [
+          ...conversationHistory,
+          { role: 'user' as const, content: userTranscript },
+        ];
+        setConversationHistory(updatedHistory);
+
+        // 2. Reason doubt & generate speech via rookie_backend
+        const doubtResp = await fetch(`${BACKEND_URL}/snap-solve/voice-doubt`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question_text: questionText,
+            solution: solutionText,
+            user_doubt: userTranscript,
+            history: updatedHistory,
+            voice: 'autumn',
+          }),
+        });
+
+        const doubtData = await doubtResp.json();
+        if (!doubtResp.ok) {
+          throw new Error(doubtData.detail || doubtData.error || 'Failed to explain');
+        }
+
+        const tutorReply = doubtData.text || '';
+        setExplanationText(tutorReply);
+        setConversationHistory([
+          ...updatedHistory,
+          { role: 'assistant' as const, content: tutorReply },
+        ]);
+
+        // Auto-show explanation card so student can see equations
+        setShowExplanationCard(true);
+
+        // 3. Play generated speech
+        if (doubtData.audio_base64) {
+          playAudio(doubtData.audio_base64);
+        } else {
+          setTutorState('idle');
+        }
+      } catch (err: any) {
+        console.error('Voice processing error:', err);
+        setTutorState('idle');
+        toast.error('Could not process speech. Please try again.');
+      }
+    };
+  };
+
+  // Play audio response
+  const playAudio = (audioBase64: string) => {
+    try {
+      const audio = new Audio(`data:audio/wav;base64,${audioBase64}`);
+      currentAudioRef.current = audio;
+
+      audio.onplay = () => {
+        setTutorState('speaking');
+      };
+
+      audio.onended = () => {
+        setTutorState('idle');
+      };
+
+      audio.onerror = () => {
+        setTutorState('idle');
+      };
+
+      audio.play();
+    } catch {
+      setTutorState('idle');
+    }
+  };
+
+  // Stop playback / recording
+  const handleStop = () => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+    }
+    setTutorState('idle');
+  };
+
   return (
     <div
       className={`fixed inset-0 z-50 overflow-y-auto ${
-        isDark ? 'bg-[#0f1115] text-neutral-100' : 'bg-[#f6f7f9] text-neutral-900'
-      } transition-colors duration-300 pb-28`}
+        isDark ? 'bg-[#0b0c10] text-neutral-100' : 'bg-[#f8f9fa] text-neutral-900'
+      } transition-colors duration-300 pb-36`}
     >
       {/* Top Header */}
       <header
         className={`sticky top-0 z-40 px-4 sm:px-6 py-3.5 flex items-center justify-between backdrop-blur-md border-b ${
           isDark
-            ? 'bg-[#0f1115]/90 border-neutral-800/80'
-            : 'bg-white/90 border-neutral-200/80 shadow-sm'
+            ? 'bg-[#0b0c10]/90 border-neutral-800/80'
+            : 'bg-white/90 border-neutral-200/80 shadow-xs'
         }`}
       >
         {/* Back Button */}
@@ -108,7 +306,7 @@ export function SolutionView({
               ? 'bg-neutral-800/80 hover:bg-neutral-700 text-white'
               : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800'
           }`}
-          aria-label="Go Back"
+          aria-label="Back"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -125,22 +323,19 @@ export function SolutionView({
                 ? 'hover:bg-neutral-800 text-neutral-300'
                 : 'hover:bg-neutral-100 text-neutral-700'
             }`}
-            aria-label="More options"
+            aria-label="More"
           >
             <MoreVertical className="w-5 h-5" />
           </button>
 
-          {/* Dropdown Menu (Screenshot 5 style) */}
+          {/* Dropdown Menu */}
           {showMenu && (
             <>
-              <div
-                className="fixed inset-0 z-20"
-                onClick={() => setShowMenu(false)}
-              />
+              <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)} />
               <div
                 className={`absolute right-0 mt-2 w-48 rounded-2xl shadow-2xl py-2 z-30 border transition-all ${
                   isDark
-                    ? 'bg-[#181a20] border-neutral-700 text-white'
+                    ? 'bg-[#14161d] border-neutral-700 text-white'
                     : 'bg-white border-neutral-200 text-neutral-900'
                 }`}
               >
@@ -185,7 +380,7 @@ export function SolutionView({
         >
           <img
             src={imageSrc}
-            alt="Cropped Question"
+            alt="Question"
             className="w-full max-h-60 sm:max-h-72 object-contain bg-black/5 dark:bg-black/20 block cursor-pointer"
             onClick={() => setShowImageModal(true)}
           />
@@ -194,32 +389,22 @@ export function SolutionView({
           <button
             onClick={() => setShowImageModal(true)}
             className="absolute bottom-3 right-3 p-2 rounded-xl bg-black/60 hover:bg-black/80 text-white backdrop-blur-md transition-all active:scale-95 shadow-md"
-            title="Expand image"
             aria-label="Expand image"
           >
             <Maximize2 className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Notebook-Ruled Solution Container (Screenshot 5 authentic look) */}
+        {/* Clean Solution Container (NO notebook page lines) */}
         <div
           className={`rounded-3xl p-6 sm:p-8 shadow-sm border transition-all ${
             isDark
-              ? 'bg-[#13151b] border-neutral-800/80'
-              : 'bg-[#fafbfa] border-neutral-200/80'
+              ? 'bg-[#12141a] border-neutral-800/80 text-neutral-100'
+              : 'bg-white border-neutral-200/80 text-neutral-900'
           }`}
-          style={{
-            // Subtle notebook lined background pattern
-            backgroundImage: isDark
-              ? 'repeating-linear-gradient(transparent, transparent 29px, rgba(255, 255, 255, 0.04) 29px, rgba(255, 255, 255, 0.04) 30px)'
-              : 'repeating-linear-gradient(transparent, transparent 29px, rgba(0, 0, 0, 0.04) 29px, rgba(0, 0, 0, 0.04) 30px)',
-          }}
         >
-          {/* Solution Heading */}
           <div className="flex items-center justify-between border-b pb-4 mb-6 border-neutral-200/60 dark:border-neutral-800/80">
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">
-              Solution
-            </h2>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Solution</h2>
             {subject && (
               <span className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
                 {subject}
@@ -227,35 +412,162 @@ export function SolutionView({
             )}
           </div>
 
-          {/* Rendered Math & Markdown Solution */}
-          <div className="text-neutral-800 dark:text-neutral-200 leading-relaxed text-base space-y-4 font-normal">
+          {/* Rendered Math & Steps */}
+          <div className="leading-relaxed text-base space-y-4 font-normal">
             {renderContent(solutionText)}
           </div>
         </div>
       </main>
 
-      {/* Floating Bottom Button: "Ask AI" (Screenshot 5 style) */}
-      <div className="fixed bottom-6 left-0 right-0 flex justify-center z-40 pointer-events-none">
-        <div className="relative pointer-events-auto">
-          {/* Ambient Glowing Aura */}
-          <div className="absolute -inset-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-sky-400 rounded-full blur-md opacity-70 animate-pulse" />
-
-          {/* Pill Button */}
-          <button
-            onClick={onAskAI}
-            className="relative px-6 sm:px-8 py-3.5 rounded-full bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white font-semibold text-base sm:text-lg flex items-center gap-3 shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-neutral-200 dark:border-neutral-700"
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* FLOATING EXPLANATION CARD (Screenshot 1: media_1793201160728) */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {showExplanationCard && explanationText && (
+        <div className="fixed inset-x-0 bottom-24 z-40 max-w-lg mx-auto px-4">
+          <div
+            className="rounded-3xl p-6 shadow-2xl border transition-all max-h-[60vh] overflow-y-auto"
+            style={{
+              backgroundColor: isDark ? '#14161d' : '#1c1e24',
+              borderColor: 'rgba(255, 255, 255, 0.12)',
+              color: '#ffffff',
+            }}
           >
-            {/* Audio Waveform Stripes Icon */}
-            <div className="flex items-center gap-[2.5px] h-4">
-              <span className="w-1 bg-blue-500 rounded-full h-2 animate-[pulse_1s_ease-in-out_infinite]" />
-              <span className="w-1 bg-blue-500 rounded-full h-4 animate-[pulse_1.2s_ease-in-out_infinite]" />
-              <span className="w-1 bg-blue-500 rounded-full h-3 animate-[pulse_0.9s_ease-in-out_infinite]" />
-              <span className="w-1 bg-blue-500 rounded-full h-4 animate-[pulse_1.4s_ease-in-out_infinite]" />
-              <span className="w-1 bg-blue-500 rounded-full h-2 animate-[pulse_1.1s_ease-in-out_infinite]" />
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/10">
+              <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                Explanation
+              </h3>
+              <button
+                onClick={() => setShowExplanationCard(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                aria-label="Close explanation"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <span>Ask AI</span>
-          </button>
+            {/* LaTeX Rendered Speech Text */}
+            <div className="text-neutral-200 text-sm sm:text-base leading-relaxed space-y-3">
+              {renderContent(explanationText)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* BOTTOM AI TUTOR INTERFACE (Screenshots 2, 3, 4, 5)            */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <div className="fixed bottom-0 inset-x-0 z-40 pointer-events-none pb-6 pt-10 flex flex-col items-center justify-end">
+        {/* Voice Aura Waveform (Spreads across bottom into both corners) */}
+        {isAuraActive && (
+          <div className="absolute inset-x-0 bottom-0 h-32 pointer-events-none overflow-hidden transition-opacity duration-700 opacity-100">
+            {/* Left corner aura */}
+            <div className="absolute -left-12 bottom-0 w-64 h-28 bg-blue-500/30 dark:bg-blue-600/35 rounded-full blur-3xl animate-pulse" />
+            {/* Center spreading aura */}
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-full max-w-2xl h-28 bg-gradient-to-t from-blue-500/25 via-indigo-500/20 to-transparent blur-2xl" />
+            {/* Right corner aura */}
+            <div className="absolute -right-12 bottom-0 w-64 h-28 bg-blue-500/30 dark:bg-blue-600/35 rounded-full blur-3xl animate-pulse" />
+          </div>
+        )}
+
+        {/* State text above button */}
+        {isAuraActive && tutorState !== 'idle' && (
+          <div className="relative z-10 mb-2 pointer-events-auto">
+            <span className="text-xs sm:text-sm font-medium text-neutral-500 dark:text-neutral-400 capitalize tracking-wide">
+              {tutorState === 'listening'
+                ? 'Listening...'
+                : tutorState === 'thinking'
+                ? 'Thinking...'
+                : 'Speaking...'}
+            </span>
+          </div>
+        )}
+
+        {/* Bottom Button Row */}
+        <div className="relative z-10 flex items-center justify-center gap-3 pointer-events-auto px-4">
+          {!isAuraActive ? (
+            /* Initial State: Ask AI Button with Static Audio Waves Icon */
+            <div className="relative">
+              {/* Subtle Aura directly underneath button */}
+              <div className="absolute -inset-1.5 bg-blue-500/40 rounded-full blur-lg opacity-80" />
+
+              <button
+                onClick={() => setIsAuraActive(true)}
+                className="relative px-7 py-3.5 rounded-full bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white font-semibold text-base flex items-center gap-2.5 shadow-xl hover:scale-102 active:scale-98 transition-all duration-200 border border-neutral-200 dark:border-neutral-700"
+              >
+                {/* Static Soundwave Bars Icon (No animation) */}
+                <svg
+                  className="w-5 h-5 text-blue-500 fill-current"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect x="2" y="8" width="2.5" height="8" rx="1.25" />
+                  <rect x="6.5" y="4" width="2.5" height="16" rx="1.25" />
+                  <rect x="11" y="2" width="2.5" height="20" rx="1.25" />
+                  <rect x="15.5" y="5" width="2.5" height="14" rx="1.25" />
+                  <rect x="20" y="8" width="2.5" height="8" rx="1.25" />
+                </svg>
+                <span>Ask AI</span>
+              </button>
+            </div>
+          ) : (
+            /* Active State: [ Document/Chevron button ] + [ Hold to talk / Stop button ] */
+            <>
+              {/* Left Circular Button (Toggle explanation sheet or collapse) */}
+              <button
+                onClick={() => setShowExplanationCard(!showExplanationCard)}
+                className="w-12 h-12 rounded-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 shadow-lg flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:scale-105 active:scale-95 transition-all"
+                title={showExplanationCard ? 'Collapse explanation' : 'Show explanation'}
+                aria-label="Toggle explanation text"
+              >
+                {showExplanationCard ? (
+                  <ChevronDown className="w-5 h-5" />
+                ) : (
+                  <FileText className="w-5 h-5" />
+                )}
+              </button>
+
+              {/* Center Main Voice Button */}
+              {tutorState === 'speaking' || tutorState === 'thinking' ? (
+                /* Stop button (Screenshot 1, 4, 5) */
+                <button
+                  onClick={handleStop}
+                  className="px-7 py-3.5 rounded-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white font-semibold text-base flex items-center gap-2.5 shadow-xl hover:scale-102 active:scale-98 transition-all"
+                >
+                  <span className="w-3.5 h-3.5 rounded-xs bg-red-500" />
+                  <span>Stop</span>
+                </button>
+              ) : (
+                /* Hold to talk button (Screenshot 3) */
+                <button
+                  onPointerDown={startRecording}
+                  onPointerUp={stopRecording}
+                  onClick={() => {
+                    // Tap fallback
+                    if (tutorState === 'listening') {
+                      stopRecording();
+                    } else if (tutorState === 'idle') {
+                      startRecording();
+                    }
+                  }}
+                  className={`px-7 py-3.5 rounded-full font-semibold text-base flex items-center gap-2.5 shadow-xl active:scale-98 transition-all select-none ${
+                    tutorState === 'listening'
+                      ? 'bg-red-500 text-white shadow-red-500/30'
+                      : 'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white'
+                  }`}
+                >
+                  <Mic
+                    className={`w-5 h-5 ${
+                      tutorState === 'listening' ? 'text-white' : 'text-neutral-800 dark:text-white'
+                    }`}
+                  />
+                  <span>
+                    {tutorState === 'listening' ? 'Release to send' : 'Hold to talk'}
+                  </span>
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -274,7 +586,7 @@ export function SolutionView({
           </button>
           <img
             src={imageSrc}
-            alt="Full-size question"
+            alt="Original question"
             className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
