@@ -54,13 +54,13 @@ export function SnapQuestionBanner({
                       : 'text-blue-300 bg-blue-500/20 border-blue-500/30'
                   }`}
                 >
-                  {doubtsRemaining <= 0 ? 'Limit reached · Upgrade' : `${doubtsRemaining}/3 doubts left today`}
+                  {doubtsRemaining <= 0 ? 'Limit' : `${doubtsRemaining}/3 left`}
                 </span>
               ) : null}
               <ChevronRight className="w-5 h-5 text-neutral-400 group-hover:text-white group-hover:translate-x-1 transition-all duration-300" />
             </div>
             <span className="text-neutral-400 text-xs sm:text-sm mt-0.5 font-normal">
-              Get instant step-by-step solutions & voice tutor
+              Get instant step-by-step solutions
             </span>
           </div>
         </div>
