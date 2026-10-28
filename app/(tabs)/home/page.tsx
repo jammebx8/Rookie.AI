@@ -19,6 +19,8 @@ import {
   saveSurvey,
   ALL_SURVEY_CHAPTERS,
 } from '../../../lib/adaptivePractice';
+import { SnapQuestionBanner } from '../../components/snap/SnapQuestionBanner';
+import { SnapSolveModal } from '../../components/snap/SnapSolveModal';
 
 
 
@@ -1921,6 +1923,7 @@ export default function HomePage() {
   // Weekly chapter survey
   const [showSurvey, setShowSurvey] = useState(false);
   const [surveyUserId, setSurveyUserId] = useState<string | null>(null);
+  const [showSnapSolve, setShowSnapSolve] = useState(false);
 
   // Apply body background on theme change
   useEffect(() => {
@@ -2117,6 +2120,9 @@ export default function HomePage() {
           </p>
 
           <RookiePassBanner />
+
+          {/* ── Snap a Question Banner ── */}
+          <SnapQuestionBanner onClick={() => setShowSnapSolve(true)} isDark={isDark} />
         </motion.section>
 
         {/* ── Streak & Daily Goal ── */}
@@ -2336,6 +2342,13 @@ export default function HomePage() {
         </aside>
         </div>
       </motion.div>
+
+      {/* ── Snap a Question Modal & Voice AI Tutor ── */}
+      <SnapSolveModal
+        isOpen={showSnapSolve}
+        onClose={() => setShowSnapSolve(false)}
+        isDark={isDark}
+      />
     </main>
   );
 }
