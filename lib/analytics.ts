@@ -34,6 +34,9 @@ export type EventName =
   | 'test_started'
   | 'test_completed'
   | 'test_abandoned'
+  | 'snap_solution_landed'
+  | 'ask_ai_clicked'
+  | 'doubt_asked'
   // catch-all for future events
   | (string & Record<never, never>)
 

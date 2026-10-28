@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import { checkDoubtQuota, recordDoubtAsked, syncDoubtQuotaWithServer } from '@/lib/doubtQuota';
 import { DoubtLimitModal } from './DoubtLimitModal';
 import { hasRookiePass } from '@/lib/rookiePass';
+import { track } from '@/lib/analytics';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://rookie-backend.vercel.app';
 
@@ -31,6 +32,7 @@ interface SolutionData {
   topic?: string;
   title?: string;
   solution?: string;
+  embedding?: number[];
   error?: string;
 }
 
@@ -100,6 +102,17 @@ export function SnapSolveModal({
       } else {
         // Record successfully solved doubt against quota and log analytics
         recordDoubtAsked('home_snap', undefined, data.subject, userId);
+
+        // Track that student uploaded question and successfully landed on solution page
+        track('snap_solution_landed', {
+          feature: 'home_snap',
+          subject: data.subject,
+          metadata: {
+            topic: data.topic,
+            title: data.title,
+          },
+        });
+
         setStep('solution');
       }
     } catch (err: any) {
@@ -232,6 +245,7 @@ export function SnapSolveModal({
             onBack={handleRetake}
             onRedo={handleRegenerate}
             isRegenerating={isRegenerating}
+            embedding={analysisResult.embedding}
             hasPass={userHasPass}
             isDark={isDark}
           />
