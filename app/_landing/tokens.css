@@ -1,0 +1,97 @@
+/* ═════════════════════════════════════════════════════════════
+   Rookie — Pastel design system (v1)
+   Source: the owl mark (public/brand/rookie-owl.png) + wordmark.
+
+     Sky       ← the circle         #A3D4FF / #65B1FC
+     Clay      ← the feathers       #C38778 / #A65D4E / #734338
+     Marigold  ← the beak           #FFCE00 / #FDBA12
+     Ink       ← wordmark & pupils  #2E2E2E / #23272B
+     Mint      ← supporting (live / success), not in the logo
+
+   Two layers:
+   1. Primitives (--rk-<family>-<step>) on :root. Plain values, so the
+      dashboard's component library can map onto them too
+      (see lib/design-tokens.ts).
+   2. Roles per family (--<family>-surface | border | solid | strong | ink),
+      scoped to .rk. Light and "night owl" (dark) values. Components only
+      ever use roles, never primitives.
+
+   Contrast (checked): <family>-ink on <family>-surface ≥ 7:1 ·
+   ink on paper 12.9:1 · ink-3 on paper ≥ 4.5:1.
+   ═════════════════════════════════════════════════════════════ */
+
+/* Primitives (--rk-*) now come from Dropper: dropper/tokens/tokens.css (generated from tokens.ts). */
+
+/* ── Roles: light (landing .rk and dashboard .rk-app) ───────── */
+.rk, .rk-app {
+  --sky-surface: var(--rk-sky-100);
+  --sky-border:  var(--rk-sky-200);
+  --sky-solid:   var(--rk-sky-300);
+  --sky-strong:  var(--rk-sky-600);
+  --sky-ink:     var(--rk-sky-800);
+
+  --clay-surface: var(--rk-clay-100);
+  --clay-border:  var(--rk-clay-200);
+  --clay-solid:   var(--rk-clay-300);
+  --clay-strong:  var(--rk-clay-500);
+  --clay-ink:     var(--rk-clay-800);
+
+  --marigold-surface: var(--rk-marigold-100);
+  --marigold-border:  var(--rk-marigold-200);
+  --marigold-solid:   var(--rk-marigold-300);
+  --marigold-strong:  var(--rk-marigold-600);
+  --marigold-ink:     var(--rk-marigold-800);
+
+  --mint-surface: var(--rk-mint-100);
+  --mint-border:  var(--rk-mint-200);
+  --mint-solid:   var(--rk-mint-300);
+  --mint-strong:  var(--rk-mint-500);
+  --mint-ink:     var(--rk-mint-800);
+
+  /* Pastel gradients: 50 → 200 → 300 of each family, with a whisper of its neighbour */
+  --sky-grad:      linear-gradient(165deg, var(--rk-sky-50) 0%, var(--rk-sky-200) 55%, var(--rk-sky-300) 100%);
+  --clay-grad:     linear-gradient(165deg, var(--rk-clay-50) 0%, var(--rk-clay-200) 55%, var(--rk-clay-300) 100%);
+  --marigold-grad: linear-gradient(165deg, var(--rk-marigold-50) 0%, var(--rk-marigold-100) 50%, var(--rk-marigold-300) 100%);
+  --mint-grad:     linear-gradient(165deg, var(--rk-mint-50) 0%, var(--rk-mint-200) 55%, var(--rk-mint-300) 100%);
+  --brand-grad:    linear-gradient(115deg, var(--rk-sky-200) 0%, var(--rk-clay-100) 48%, var(--rk-marigold-200) 100%);
+}
+
+/* ── Roles: night owl ───────────────────────────────────────── */
+.rk[data-theme='dark'], .dark .rk-app, .rk-app.dark {
+  --sky-surface: rgba(163, 212, 255, 0.10);
+  --sky-border:  rgba(163, 212, 255, 0.22);
+  --sky-solid:   var(--rk-sky-300);
+  --sky-strong:  var(--rk-sky-300);
+  --sky-ink:     var(--rk-sky-200);
+
+  --clay-surface: rgba(224, 179, 162, 0.10);
+  --clay-border:  rgba(224, 179, 162, 0.22);
+  --clay-solid:   var(--rk-clay-300);
+  --clay-strong:  var(--rk-clay-300);
+  --clay-ink:     var(--rk-clay-200);
+
+  --marigold-surface: rgba(255, 216, 77, 0.10);
+  --marigold-border:  rgba(255, 216, 77, 0.22);
+  --marigold-solid:   var(--rk-marigold-300);
+  --marigold-strong:  var(--rk-marigold-300);
+  --marigold-ink:     var(--rk-marigold-200);
+
+  --mint-surface: rgba(134, 219, 174, 0.10);
+  --mint-border:  rgba(134, 219, 174, 0.22);
+  --mint-solid:   var(--rk-mint-300);
+  --mint-strong:  var(--rk-mint-300);
+  --mint-ink:     var(--rk-mint-200);
+
+  --sky-grad:      linear-gradient(165deg, rgba(163,212,255,.06) 0%, rgba(163,212,255,.16) 55%, rgba(163,212,255,.30) 100%);
+  --clay-grad:     linear-gradient(165deg, rgba(224,179,162,.06) 0%, rgba(224,179,162,.16) 55%, rgba(224,179,162,.30) 100%);
+  --marigold-grad: linear-gradient(165deg, rgba(255,216,77,.05) 0%, rgba(255,216,77,.14) 55%, rgba(255,216,77,.26) 100%);
+  --mint-grad:     linear-gradient(165deg, rgba(134,219,174,.06) 0%, rgba(134,219,174,.16) 55%, rgba(134,219,174,.28) 100%);
+  --brand-grad:    linear-gradient(115deg, #1d2a3a 0%, #2a2220 50%, #2e2814 100%);
+}
+
+/* ── Tone utility: any element with data-tone="<family>" gets
+      --t-* aliases, so one component style serves every pastel. ── */
+.rk [data-tone='sky'], .rk-app [data-tone='sky']      { --t-surface: var(--sky-surface);      --t-border: var(--sky-border);      --t-solid: var(--sky-solid);      --t-strong: var(--sky-strong);      --t-ink: var(--sky-ink); --t-grad: var(--sky-grad); }
+.rk [data-tone='clay'], .rk-app [data-tone='clay']     { --t-surface: var(--clay-surface);     --t-border: var(--clay-border);     --t-solid: var(--clay-solid);     --t-strong: var(--clay-strong);     --t-ink: var(--clay-ink); --t-grad: var(--clay-grad); }
+.rk [data-tone='marigold'], .rk-app [data-tone='marigold'] { --t-surface: var(--marigold-surface); --t-border: var(--marigold-border); --t-solid: var(--marigold-solid); --t-strong: var(--marigold-strong); --t-ink: var(--marigold-ink); --t-grad: var(--marigold-grad); }
+.rk [data-tone='mint'], .rk-app [data-tone='mint']     { --t-surface: var(--mint-surface);     --t-border: var(--mint-border);     --t-solid: var(--mint-solid);     --t-strong: var(--mint-strong);     --t-ink: var(--mint-ink); --t-grad: var(--mint-grad); }

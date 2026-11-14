@@ -1,0 +1,9 @@
+/* Dashboard-wide helpers (Tailwind handles the rest). */
+html:has(.rk-app) { font-size: 14px; }            /* dashboard base 14px; landing stays 16px */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.rk-app .recharts-cartesian-axis-tick-value { fill: var(--muted-foreground); }
+.rk-app [data-sidebar='menu-button'][data-active] { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); }
+.rk-app [data-sidebar='menu-button']:not([data-active]):hover { background: var(--muted); }
+/* KaTeX inherits our text colour */
+.rk-app .katex { color: inherit; }
