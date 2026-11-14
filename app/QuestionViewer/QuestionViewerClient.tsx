@@ -1312,16 +1312,6 @@ export default function QuestionViewerClient() {
     if (selectedOption !== null || pendingOption !== null) return
     const q = questions[currentIndex]; if (!q) return
 
-    // Limit check: Allow only 3 questions/attempts per day for free users
-    if (solViewsToday >= SOL_LIMIT) {
-      const isPaid = await ensurePassFresh()
-      if (!isPaid) {
-        setShowPassModal(true)
-        addToast(`You've used ${SOL_LIMIT} free solutions today. Get Rookie Pass to continue!`, 'warning')
-        return
-      }
-    }
-
     if (examName === 'JEE Advanced') {
       const isPaid = await ensurePassFresh()
       if (!isPaid) {
@@ -1342,8 +1332,10 @@ export default function QuestionViewerClient() {
     setSolutionBuddyId(activeBuddyId)
     // Record daily solution view the first time (not when navigating back to an already-seen Q)
     if (!solutionRequested) {
-      recordSolView()
-      if (hasPass === false && solViewsToday + 1 >= SOL_LIMIT) {
+      if (canViewSolution) {
+        recordSolView()
+      }
+      if (hasPass === false && (solViewsToday >= SOL_LIMIT || solViewsToday + 1 >= SOL_LIMIT)) {
         setTimeout(() => setShowPassModal(true), 1200)
       }
     }
@@ -1389,16 +1381,6 @@ export default function QuestionViewerClient() {
     if (isCorrect !== null) return
     const q = questions[currentIndex]; if (!q || !integerAnswer.trim()) return
 
-    // Limit check: Allow only 3 questions/attempts per day for free users
-    if (solViewsToday >= SOL_LIMIT) {
-      const isPaid = await ensurePassFresh()
-      if (!isPaid) {
-        setShowPassModal(true)
-        addToast(`You've used ${SOL_LIMIT} free solutions today. Get Rookie Pass to continue!`, 'warning')
-        return
-      }
-    }
-
     if (examName === 'JEE Advanced') {
       const isPaid = await ensurePassFresh()
       if (!isPaid) {
@@ -1418,8 +1400,10 @@ export default function QuestionViewerClient() {
     setSolutionBuddyId(activeBuddyId)
     // Record daily solution view the first time (not when navigating back to an already-seen Q)
     if (!solutionRequested) {
-      recordSolView()
-      if (hasPass === false && solViewsToday + 1 >= SOL_LIMIT) {
+      if (canViewSolution) {
+        recordSolView()
+      }
+      if (hasPass === false && (solViewsToday >= SOL_LIMIT || solViewsToday + 1 >= SOL_LIMIT)) {
         setTimeout(() => setShowPassModal(true), 1200)
       }
     }
@@ -1460,14 +1444,6 @@ export default function QuestionViewerClient() {
 
   // ── Navigation ────────────────────────────────────────────────────────────
   const goTo = async (delta: number) => {
-    if (delta > 0 && solViewsToday >= SOL_LIMIT) {
-      const isPaid = await ensurePassFresh()
-      if (!isPaid) {
-        setShowPassModal(true)
-        addToast(`You've used ${SOL_LIMIT} free solutions today. Get Rookie Pass to continue!`, 'warning')
-        return
-      }
-    }
     if (delta > 0 && examName === 'JEE Advanced') {
       const isPaid = await ensurePassFresh()
       if (!isPaid) {
@@ -1515,19 +1491,6 @@ export default function QuestionViewerClient() {
   const progressPct = totalCount > 0 ? ((globalIndex + 1) / totalCount) * 100 : 0
   const solLeft = Math.max(0, SOL_LIMIT - solViewsToday)
   const atLast = globalIndex >= (totalCount ? totalCount - 1 : questions.length - 1)
-
-  // Paywall nudge shown above the answer area once today's free solutions are used up.
-  const limitBanner = isLimitReached ? (
-    <div className="mb-4 flex flex-col items-start gap-3 rounded-control bg-muted px-4 py-3 sm:flex-row sm:items-center">
-      <p className="flex flex-1 items-center gap-2 text-body-sm text-foreground">
-        <Lock className="size-4 shrink-0 text-muted-foreground" />
-        You&apos;ve used {SOL_LIMIT} free solutions today. Get Rookie Pass to keep solving.
-      </p>
-      <Button variant="secondary" onClick={() => setShowPassModal(true)} className="h-8 rounded-control px-3">
-        Get Rookie Pass
-      </Button>
-    </div>
-  ) : null
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
@@ -1646,7 +1609,6 @@ export default function QuestionViewerClient() {
                 {isIntegerQ(Q) ? (
                   isCorrect === null ? (
                     <div>
-                      {limitBanner}
                       <label htmlFor="qv-integer" className="mb-2 block text-meta font-medium text-muted-foreground">Your answer</label>
                       <div className="flex gap-2">
                         <Input id="qv-integer" type="number" value={integerAnswer} onChange={e => setIntegerAnswer(e.target.value)}
@@ -1671,7 +1633,6 @@ export default function QuestionViewerClient() {
                 ) : (
                   /* ── MCQ: idle → pending (grey, no verdict) → right/wrong ── */
                   <div>
-                    {selectedOption === null && pendingOption === null && limitBanner}
                     <div
   role="radiogroup"
   aria-label="Options"
@@ -1849,19 +1810,11 @@ export default function QuestionViewerClient() {
           </span>
 
           <Button
-            variant={isLimitReached ? 'secondary' : 'default'}
-            onClick={() => {
-              if (isLimitReached) {
-                setShowPassModal(true)
-                return
-              }
-              goTo(1)
-            }}
-            disabled={atLast && !isLimitReached}
-            title={isLimitReached ? "Daily free limit reached (3/3 used). Get Rookie Pass to continue." : undefined}
+            onClick={() => goTo(1)}
+            disabled={atLast}
             className="h-10 rounded-control px-5 text-body-sm"
           >
-            Next {isLimitReached ? <Lock /> : <ArrowRight />}
+            Next <ArrowRight />
           </Button>
         </div>
       </footer>

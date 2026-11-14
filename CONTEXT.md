@@ -20,7 +20,7 @@ Last updated: 2026-11-13.
 
 **Users.** Class 11, Class 12 and droppers, mostly on phones and often studying late at night. They know OMR sheets, coaching culture (Kota) and Hinglish. Keep copy short and friendly, and use Hinglish lightly.
 
-**Money.** There is a free tier with daily limits; one free custom test a day is enforced in `app/api/tests/create/route.ts:42`. The paid plan is the **Rookie Pass** at **₹299/year** (`rookie_pass_migration.sql` seed, `plans` table). Payment is Razorpay checkout inside the app.
+**Money.** There is a free tier with daily limits; one free custom test a day is enforced in `app/api/tests/create/route.ts:42`. The paid plan is the **Rookie Pass** at **₹399/year** (`rookie_pass_migration.sql` seed, `plans` table). Payment is Razorpay checkout inside the app.
 
 **Stack.**
 - Next.js 16.1.1 (App Router, Turbopack), React 19, TypeScript, Tailwind v4.
@@ -131,7 +131,7 @@ These files changed or are new relative to `main` (`728ab20 grant access feature
 5. Students: one auto-scrolling testimonial rail. It eases to a stop on hover.
 6. Why Rookie: four tall pastel-gradient tiles. They show icon and title at rest; the detail slides in on hover, focus or tap (`Tile` component).
 7. Exams: five tall tiles (logo, subjects, conducting body), with the same reveal.
-8. Pricing: Free ₹0 next to Rookie Pass ₹299/year.
+8. Pricing: Free ₹0 next to Rookie Pass ₹399/year.
 9. FAQ: four card items with a GSAP height animation.
 10. Closing: "At the end, it's all hard work." plus the Hinglish line and the paper sheets.
 11. Footer: the pastel gradient band.
@@ -291,7 +291,7 @@ Ground rules for frontend work:
 4. **The festive sale banner** is a vibrant pink→orange→marigold gradient with a countdown and a one-click "Buy now".
 5. **The Rookie Pass card** uses a standout night-sky gradient (navy→blue with a marigold glow and faint stars), shows original and sale prices, the countdown, three perks and one-click Buy.
 6. **The leaderboard widget** has a Top 3 podium (medal rings, a crown on #1) and a Top 10 list (coin bars, up/down movement), with a "you" row in pastel blue.
-7. **The sale prices (`$9.99` → `$3.99`) are display-only.** Razorpay charges what the backend `plans` table says, currently ₹299. The currency is also unconfirmed: `$` was used because that's how the owner wrote the numbers.
+7. **The sale prices (`$9.99` → `$3.99`) are display-only.** Razorpay charges what the backend `plans` table says, ₹399. The currency is also unconfirmed: `$` was used because that's how the owner wrote the numbers.
 8. **Frontend only.** Don't change backend routes, the Razorpay webhook, login logic or the database.
 
 **Rules added later on 2026-11-13.**
@@ -350,7 +350,7 @@ The whole logged-in app has been re-skinned with the design system. Logic is unc
 - `next build` passes.
 - Env vars needed on Vercel: `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (the same as before).
 - The Supabase anon key and the Firebase config are still hard-coded, as they were before.
-- **Price:** the backend `plans` price must be updated to match the ₹399 shown, or checkout will charge ₹299.
+- **Price:** the backend `plans` price is updated to match the ₹399 shown, so checkout charges ₹399.
 
 ---
 

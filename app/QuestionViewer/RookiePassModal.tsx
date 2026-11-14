@@ -84,7 +84,7 @@ export default function RookiePassModal({
             You&apos;ve hit today&apos;s free limit
           </DialogTitle>
           <DialogDescription className="mt-1 text-body-sm text-muted-foreground">
-            <Define term="solutionsLeft">{limit} free solutions</Define> a day. Get Rookie Pass to keep solving.
+            <Define term="solutionsLeft">{limit} free solutions</Define> a day. Get Rookie Pass to unlock unlimited solutions.
           </DialogDescription>
         </div>
 

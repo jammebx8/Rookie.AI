@@ -4,11 +4,11 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1. plans ─────────────────────────────────────────────────────────────────
--- Static plan catalogue. Seed with one row for the ₹299/year pass.
+-- Static plan catalogue. Seed with one row for the ₹399/year pass.
 CREATE TABLE IF NOT EXISTS public.plans (
   id              text PRIMARY KEY,          -- e.g. 'rookie_pass_yearly'
   display_name    text NOT NULL,
-  price_paise     integer NOT NULL,          -- 29900 = ₹299
+  price_paise     integer NOT NULL,          -- 39900 = ₹399
   duration_days   integer NOT NULL,          -- 365
   currency        text NOT NULL DEFAULT 'INR',
   active          boolean NOT NULL DEFAULT true,
@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS public.plans (
 
 -- Seed the only plan
 INSERT INTO public.plans (id, display_name, price_paise, duration_days)
-VALUES ('rookie_pass_yearly', 'Rookie Pass — 1 Year', 29900, 365)
-ON CONFLICT (id) DO NOTHING;
+VALUES ('rookie_pass_yearly', 'Rookie Pass — Annual', 39900, 365)
+ON CONFLICT (id) DO UPDATE SET price_paise = EXCLUDED.price_paise;
 
 -- ── 2. orders ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.orders (

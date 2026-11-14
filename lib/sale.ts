@@ -1,7 +1,7 @@
 /**
  * Festive Rookie Pass offer — DISPLAY ONLY.
  * ⚠️ The amount actually charged is set by the backend (`plans` table, plan `rookie_pass_yearly`,
- * currently ₹299). Update the backend price before launch so checkout matches what we show here.
+ * currently ₹399). Update the backend price before launch so checkout matches what we show here.
  */
 export const sale = {
   name: 'Festive offer',
