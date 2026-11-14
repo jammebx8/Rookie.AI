@@ -13,7 +13,7 @@ export function CommunityRow({ onInvite }: { onInvite: () => void }) {
       <Row className="md:grid-cols-2">
         <Card className="flex flex-col">
           <CardHead icon={Users} label="Invite friends" title="Study with your friends" />
-          <p className="text-body-sm text-muted-foreground">Bring your batchmates to Rookie and practise together.</p>
+          <p className="text-body-sm text-muted-foreground">Bring your batchmates to Rookie and practice together.</p>
           <div className="mt-auto pt-6">
             <Button variant="secondary" className="h-10 rounded-control px-4" onClick={onInvite}>
               <Share2 /> Invite now
