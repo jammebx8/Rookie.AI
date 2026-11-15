@@ -3,7 +3,7 @@ import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Check, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { sale, saleMoney as money, saleOff as off, salePerMonth as perMonth, useUserPricing } from '@/lib/sale';
+import { saleMoney as money, saleOff as off, salePerMonth as perMonth, useUserPricing } from '@/lib/sale';
 import { bustPassCache, checkUserPaidDirectFromDB, hasRookiePass, triggerCheckout } from '@/lib/rookiePass';
 import { supabase } from '@/public/src/utils/supabase';
 import { Define } from './define';
@@ -38,10 +38,31 @@ export function OffTag({ className, pct }: { className?: string; pct?: number })
 
 /* ── Pass status (existing lib/rookiePass; listens to its update event) ── */
 export function useHasPass() {
-  const [has, setHas] = React.useState<boolean | null>(null);
+  const [has, setHas] = React.useState<boolean | null>(() => {
+    try {
+      if (typeof window === 'undefined') return null;
+      const rawUser = localStorage.getItem('@user');
+      const uid = rawUser ? JSON.parse(rawUser)?.id : null;
+      if (uid) {
+        const rawCache = sessionStorage.getItem(`rookie_pass_cache_${uid}`);
+        if (rawCache) {
+          const c = JSON.parse(rawCache);
+          if (c && c.user_id === uid && Date.now() - c.fetched_at < 5 * 60 * 1000) {
+            return c.has_pass;
+          }
+        }
+      }
+    } catch {}
+    return null;
+  });
+
   React.useEffect(() => {
     let alive = true;
-    const check = () => { hasRookiePass().then(v => { if (alive) setHas(v); }).catch(() => {}); };
+    const check = () => {
+      hasRookiePass().then(v => {
+        if (alive) setHas(prev => (prev === v ? prev : v));
+      }).catch(() => {});
+    };
     check();
     window.addEventListener('rookiePassUpdated', check);
     return () => { alive = false; window.removeEventListener('rookiePassUpdated', check); };
@@ -52,22 +73,48 @@ export function useHasPass() {
 /* ── Countdown with flip digits (numbers only) ── */
 function useCountdown(iso?: string | null) {
   const end = React.useMemo(() => (iso ? new Date(iso).getTime() : 0), [iso]);
-  const [left, setLeft] = React.useState<number | null>(null);
+  const [left, setLeft] = React.useState<number | null>(() => {
+    if (!iso) return 0;
+    const t = new Date(iso).getTime();
+    return Math.max(0, t - Date.now());
+  });
+
   React.useEffect(() => {
     if (!end) { setLeft(0); return; }
     const tick = () => setLeft(Math.max(0, end - Date.now()));
-    const first = setTimeout(tick, 0);
+    tick();
     const id = setInterval(tick, 1000);
-    return () => { clearTimeout(first); clearInterval(id); };
+    const onFocus = () => tick();
+    const onVis = () => { if (document.visibilityState === 'visible') tick(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [end]);
+
   const s = Math.floor((left ?? 0) / 1000);
-  return { ready: left !== null, over: left === 0 || !end, groups: [Math.floor(s / 86400), Math.floor((s % 86400) / 3600), Math.floor((s % 3600) / 60), s % 60] };
+  const isOver = end > 0 && left === 0;
+  return {
+    ready: left !== null,
+    over: isOver,
+    groups: [
+      Math.floor(s / 86400),
+      Math.floor((s % 86400) / 3600),
+      Math.floor((s % 3600) / 60),
+      s % 60,
+    ],
+  };
 }
 
 export function useSaleLive() {
   const pricing = useUserPricing();
   const { ready, over } = useCountdown(pricing.endsAt);
-  return pricing.isSaleLive && ready && !over;
+  if (!pricing.isSaleLive) return false;
+  if (!pricing.endsAt) return true;
+  return ready && !over;
 }
 
 function FlipDigit({ d, tile }: { d: string; tile: string }) {
