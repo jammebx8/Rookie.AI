@@ -30,10 +30,66 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}))
     const plan_id = body.plan_id ?? 'rookie_pass_yearly'
 
+    // ── Dynamic price resolution for rookie_pass_yearly ─────────────────────
+    let custom_price_paise: number | undefined
+
+    if (plan_id === 'rookie_pass_yearly') {
+      const now = new Date()
+
+      // 1. Check user app_metadata custom sale
+      const appMetaSale = (user.app_metadata as Record<string, any> | undefined)?.custom_sale
+      if (
+        appMetaSale &&
+        appMetaSale.is_active !== false &&
+        new Date(appMetaSale.expires_at) > now &&
+        Number(appMetaSale.custom_price_paise) > 0
+      ) {
+        custom_price_paise = Number(appMetaSale.custom_price_paise)
+      }
+
+      // 2. Check user_custom_sales table in Supabase
+      if (!custom_price_paise) {
+        try {
+          const { data: sales } = await supabaseAdmin
+            .from('user_custom_sales')
+            .select('custom_price_paise, expires_at, is_active')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .gt('expires_at', now.toISOString())
+            .order('created_at', { ascending: false })
+            .limit(1)
+
+          if (sales && sales.length > 0 && sales[0].custom_price_paise) {
+            custom_price_paise = Number(sales[0].custom_price_paise)
+          }
+        } catch {
+          // table might not exist yet, app_metadata already checked
+        }
+      }
+
+      // 3. Check 48h welcome sale for new signups (< 48 hours old)
+      if (!custom_price_paise) {
+        const signupMs = new Date(user.created_at).getTime()
+        const elapsedMs = now.getTime() - signupMs
+        if (elapsedMs >= 0 && elapsedMs < 48 * 3600 * 1000) {
+          // Within 2 days of signup -> 60% off (₹399 = 39900 paise)
+          custom_price_paise = 39900
+        } else {
+          // Past 48 hours -> standard ₹999 (99900 paise)
+          custom_price_paise = 99900
+        }
+      }
+    }
+
     const res = await fetch(`${BACKEND}/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan_id, user_id: user.id, email: user.email }),
+      body: JSON.stringify({
+        plan_id,
+        user_id: user.id,
+        email: user.email,
+        custom_price_paise,
+      }),
     })
 
     if (!res.ok) {

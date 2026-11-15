@@ -16,7 +16,7 @@ import { updateAbilityVector } from '../../lib/recommendation'
 import { sortByDifficulty, autoBookmarkWrong } from '../../lib/adaptivePractice'
 import { renderContent } from '../components/renderContent'
 import { track, startSolutionTimer } from '../../lib/analytics'
-import { sale, saleMoney } from '@/lib/sale'
+import { sale, saleMoney, useUserPricing } from '@/lib/sale'
 import { cn } from '@/lib/utils'
 import { useIsDark } from '@/components/rookie/theme'
 import { Define } from '@/components/rookie/define'
@@ -753,6 +753,7 @@ export default function QuestionViewerClient() {
   const [imageModal, setImageModal]             = useState<string | null>(null)
   const [buddyId, setBuddyId]                   = useState(DEFAULT_BUDDY_ID)
   const [solutionBuddyId, setSolutionBuddyId]   = useState(DEFAULT_BUDDY_ID)
+  const pricing                                 = useUserPricing()
   const [buddyModalOpen, setBuddyModalOpen]     = useState(false)
   const [showPassModal, setShowPassModal]       = useState(false)
   const [userId, setUserId]                     = useState<string | null>(null)
@@ -1775,7 +1776,7 @@ export default function QuestionViewerClient() {
                           Rookie Pass unlocks unlimited AI solutions, similar questions and every JEE Main &amp; Advanced PYQ.
                         </p>
                         <Button onClick={() => setShowPassModal(true)} className="mt-6 h-10 rounded-control px-5 text-body-sm">
-                          Get Rookie Pass · {saleMoney(sale.price)} / {sale.per}
+                          Get Rookie Pass · {saleMoney(pricing.price)} / {pricing.per}
                         </Button>
                         <p className="mt-3 text-meta text-muted-foreground">
                           Resets tomorrow · <Define term="solutionsLeft">{solLeft} free left today</Define>

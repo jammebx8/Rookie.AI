@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { ArrowRight, Check, Loader2, ShieldCheck } from 'lucide-react'
 import { triggerCheckout, bustPassCache, checkUserPaidDirectFromDB } from '../../lib/rookiePass'
 import { supabase } from '../../public/src/utils/supabase'
-import { sale, saleMoney, salePerMonth } from '@/lib/sale'
+import { sale, saleMoney, salePerMonth, useUserPricing } from '@/lib/sale'
 import { Define } from '@/components/rookie/define'
 import { FlipCountdown, OffTag, PASS_BG, STARS } from '@/components/rookie/sale'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,7 @@ export default function RookiePassModal({
   limit = 3,
 }: RookiePassModalProps) {
   const [loading, setLoading] = useState(false)
+  const pricing = useUserPricing()
 
   const handlePurchase = async () => {
     try {
@@ -97,28 +98,32 @@ export default function RookiePassModal({
                 <img src="/brand/rookie-owl.png" alt="" className="size-6 rounded-full" /> Rookie Pass
                 <Define term="yearly" className="rounded-tag bg-white/12 px-1.5 py-0.5 text-caption font-semibold text-white/85">Yearly</Define>
               </span>
-              <OffTag />
+              {pricing.isSaleLive && <OffTag pct={pricing.discountPct} />}
             </div>
             <div className="relative mt-6 flex items-baseline gap-2">
-              <span className="text-display font-bold leading-none tracking-[-0.05em]">{saleMoney(sale.price)}</span>
-              <span className="text-body font-medium text-white/50 line-through decoration-2">{saleMoney(sale.original)}</span>
-              <span className="text-label text-white/60">/ {sale.per}</span>
+              <span className="text-display font-bold leading-none tracking-[-0.05em]">{saleMoney(pricing.price)}</span>
+              {pricing.isSaleLive && (
+                <span className="text-body font-medium text-white/50 line-through decoration-2">{saleMoney(pricing.original)}</span>
+              )}
+              <span className="text-label text-white/60">/ {pricing.per}</span>
             </div>
-            <p className="relative mt-2 text-body-sm text-white/75">One payment for 12 months. Just ₹{salePerMonth} a month.</p>
+            <p className="relative mt-2 text-body-sm text-white/75">One payment for 12 months. Just ₹{pricing.perMonth} a month.</p>
             <ul className="relative mt-5 flex flex-col gap-2.5">
-              {sale.perks.map(p => (
+              {pricing.perks.map(p => (
                 <li key={p} className="flex items-center gap-2 text-body-sm text-white/90"><Check className="size-4 text-[#ffd84d]" strokeWidth={2.5} />{p}</li>
               ))}
             </ul>
-            <div className="relative mt-6 mb-3 flex flex-wrap items-center justify-between gap-2">
-              <Define term="timer" className="text-meta font-medium text-white/70">Price goes up in</Define>
-              <FlipCountdown tile="bg-white/12 text-white" />
-            </div>
+            {pricing.isSaleLive && (
+              <div className="relative mt-6 mb-3 flex flex-wrap items-center justify-between gap-2">
+                <Define term="timer" className="text-meta font-medium text-white/70">Price goes up in</Define>
+                <FlipCountdown endsAt={pricing.endsAt} tile="bg-white/12 text-white" />
+              </div>
+            )}
             <button type="button" onClick={handlePurchase} disabled={loading}
               className="relative inline-flex h-11 w-full items-center justify-center gap-2 rounded-control bg-white text-body font-semibold text-[#14295f] transition hover:bg-white/90 active:translate-y-px disabled:opacity-80">
               {loading
                 ? <><Loader2 className="size-4 animate-spin" /> Connecting…</>
-                : <>Get 1 year · {saleMoney(sale.price)} <ArrowRight className="size-4" /></>}
+                : <>Get 1 year · {saleMoney(pricing.price)} <ArrowRight className="size-4" /></>}
             </button>
           </div>
         </div>

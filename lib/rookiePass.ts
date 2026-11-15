@@ -491,19 +491,23 @@ export async function triggerCheckout(opts: CheckoutOptions): Promise<void> {
     }, 2500)
   }
 
+  const logoUrl = typeof window !== 'undefined' && window.location?.origin
+    ? `${window.location.origin}/brand/rookie-owl.png`
+    : '/brand/rookie-owl.png'
+
   const rzp = new window.Razorpay({
     key:         orderData.key_id,
     amount:      orderData.amount,
     currency:    orderData.currency,
     order_id:    orderData.order_id,
     name:        'Rookie.AI',
-    description: 'Rookie Pass — JEE Advanced & Mains Full Access (1 Year)',
-    image:       '/lg.png',
+    description: 'Rookie pass yearly',
+    image:       logoUrl,
     prefill: {
       email: email ?? '',
       name:  name  ?? '',
     },
-    theme: { color: '#6366F1' },
+    theme: { color: '#1F75FE' },
     config: {
       display: {
         // UPI first
