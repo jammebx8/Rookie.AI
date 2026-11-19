@@ -690,6 +690,8 @@ export default function QuestionViewerClient() {
   const isDark = useIsDark()
   const router = useRouter()
   const sp     = useSearchParams()
+  const mode   = sp.get('mode') || ''
+  const isDaily = mode === 'daily'
 
   // URL params — new unified schema
   const subject      = sp.get('subject')      || sp.get('subjectName') || ''
@@ -862,9 +864,39 @@ export default function QuestionViewerClient() {
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
   }, [addToast])
 
-  // ── Initial data fetch — windowed ─────────────────────────────────────────
+  // ── Initial data fetch for Daily Practice ──────────────────────────────────
   useEffect(() => {
-    if (!chapterTitle) return
+    if (!isDaily) return
+    let active = true
+    const loadDaily = async () => {
+      setLoading(true)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        const uid = user?.id ?? userId ?? null
+        const { getDailyPracticeQuestions } = await import('../../lib/dailyPractice')
+        const res = await getDailyPracticeQuestions(uid)
+        if (active) {
+          setQuestions(res.questions)
+          setTotalCount(res.questions.length)
+          setCurrentIndex(0)
+          setGlobalIndex(0)
+          setLoading(false)
+          track('daily_practice_started', {
+            feature: 'daily_practice',
+            metadata: { count: res.questions.length, isNewUser: res.isNewUser },
+          })
+        }
+      } catch (e) {
+        if (active) setLoading(false)
+      }
+    }
+    loadDaily()
+    return () => { active = false }
+  }, [isDaily, userId])
+
+  // ── Initial data fetch — windowed (Chapter mode) ───────────────────────────
+  useEffect(() => {
+    if (isDaily || !chapterTitle) return
     const load = async () => {
       setLoading(true)
       try {
@@ -927,11 +959,11 @@ export default function QuestionViewerClient() {
       }
     }
     load()
-  }, [chapterTitle, subject, yearFilter])
+  }, [chapterTitle, subject, yearFilter, isDaily])
 
   // ── Prefetch next window ───────────────────────────────────────────────────
   useEffect(() => {
-    if (loadingMore || loading) return
+    if (isDaily || loadingMore || loading) return
     const remainInWindow = questions.length - 1 - currentIndex
     const nextWindowNeeded = remainInWindow <= PREFETCH_AHEAD
     const moreAvailable = pageOffset + questions.length < totalCount
@@ -961,11 +993,11 @@ export default function QuestionViewerClient() {
       }
     }
     loadNext()
-  }, [currentIndex, questions.length, pageOffset, totalCount, loadingMore, loading, chapterTitle, subject, yearFilter])
+  }, [currentIndex, questions.length, pageOffset, totalCount, loadingMore, loading, chapterTitle, subject, yearFilter, isDaily])
 
   // ── Update URL with current question for SEO + session continuity ─────────
   useEffect(() => {
-    if (!questions.length) return
+    if (isDaily || !questions.length) return
     const q = questions[currentIndex]
     if (!q) return
     const params = new URLSearchParams({
@@ -986,7 +1018,7 @@ export default function QuestionViewerClient() {
   }, [currentIndex, questions, subject, chapterTitle, imageKey, globalIndex])
 
   // ── Session helpers ───────────────────────────────────────────────────────
-  const sessionKey = `${chapterTitle}::${subject}`
+  const sessionKey = isDaily ? `daily_practice_${new Date().toDateString()}` : `${chapterTitle}::${subject}`
 
   const saveSession = useCallback((partial: Record<string, any> = {}) => {
     try {
@@ -1137,20 +1169,27 @@ export default function QuestionViewerClient() {
 
       // ── Analytics tracking ──────────────────────────────────────────────
       track(correct ? 'question_correct' : 'question_incorrect', {
-        feature:     'question_viewer',
+        feature:     isDaily ? 'daily_practice' : 'question_viewer',
         question_id: q.question_id,
-        subject:     subject || undefined,
-        chapter:     chapterTitle || undefined,
+        subject:     q.subject || subject || undefined,
+        chapter:     q.chapter || chapterTitle || undefined,
         duration_ms: timeSpent * 1000,
       })
       track('question_answered', {
-        feature:     'question_viewer',
+        feature:     isDaily ? 'daily_practice' : 'question_viewer',
         question_id: q.question_id,
-        subject:     subject || undefined,
-        chapter:     chapterTitle || undefined,
+        subject:     q.subject || subject || undefined,
+        chapter:     q.chapter || chapterTitle || undefined,
         duration_ms: timeSpent * 1000,
-        metadata:    { correct },
+        metadata:    { correct, isDaily },
       })
+
+      if (isDaily && globalIndex >= questions.length - 1) {
+        track('daily_practice_completed', {
+          feature: 'daily_practice',
+          metadata: { totalQuestions: questions.length },
+        })
+      }
 
       answeredThisSession.current.add(q.question_id)
     } catch {}
@@ -1313,7 +1352,7 @@ export default function QuestionViewerClient() {
 
     // ── Track solution viewed ───────────────────────────────────────────────
     track('solution_viewed', {
-      feature:     'question_viewer',
+      feature:     isDaily ? 'daily_practice' : 'question_viewer',
       question_id: q.question_id,
       subject:     q.subject   ?? undefined,
       chapter:     q.chapter   ?? undefined,
@@ -1512,9 +1551,15 @@ export default function QuestionViewerClient() {
           </Button>
 
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-body font-semibold tracking-[-0.01em] text-foreground">{chapterTitle}</h1>
+            <h1 className="truncate text-body font-semibold tracking-[-0.01em] text-foreground">
+              {isDaily ? 'Daily Practice' : chapterTitle}
+            </h1>
             <p className="flex items-center gap-1.5 truncate text-meta font-medium text-muted-foreground tabular-nums">
-              {subject && <span className="hidden truncate sm:inline">{subject} ·</span>}
+              {isDaily ? (
+                <span className="truncate">Picked for your daily habit ·</span>
+              ) : subject ? (
+                <span className="hidden truncate sm:inline">{subject} ·</span>
+              ) : null}
               <Define term="progress" side="bottom">Q {globalIndex + 1} / {totalCount || questions.length}</Define>
               <span aria-hidden>·</span>
               <span className="inline-flex items-center gap-1"><Clock className="size-3.5" />{Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')}</span>
@@ -1562,6 +1607,10 @@ export default function QuestionViewerClient() {
             <Card className="hover:shadow-none sm:p-8">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Tag>{examName}</Tag>
+                {isDaily && <Tag tone="blue">Daily Practice</Tag>}
+                {isDaily && (Q as any).daily_type === 'confidence' && <Tag tone="right">Easy · Confidence</Tag>}
+                {isDaily && (Q as any).daily_type === 'revision' && <Tag tone="neutral">Concept Revision</Tag>}
+                {isDaily && (Q as any).daily_type === 'high_frequency' && <Tag tone="blue">High Yield</Tag>}
                 {Q.exam_shift && (
                   <Tag><Define text="The exam year and shift this question appeared in.">{parseShift(Q.exam_shift)}</Define></Tag>
                 )}
@@ -1733,6 +1782,23 @@ export default function QuestionViewerClient() {
                       </motion.div>
                     )}
                   </>
+                )}
+
+                {isDaily && atLast && selectedOption !== null && (
+                  <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+                    <Card className="flex flex-col items-center justify-center p-6 text-center ring-1 ring-[var(--rk-mint-300)] bg-[var(--rk-mint-100)] dark:bg-[rgba(134,219,174,.12)]">
+                      <h3 className="text-heading font-bold text-foreground">🎉 Daily Practice Completed!</h3>
+                      <p className="mt-1 text-body-sm text-muted-foreground">You crushed today&apos;s goal. Streak extended and coins added to your account!</p>
+                      <div className="mt-4 flex flex-wrap justify-center gap-3">
+                        <Button onClick={() => router.push('/home')} className="h-10 rounded-control px-5">
+                          Back to Home
+                        </Button>
+                        <Button variant="secondary" onClick={() => router.push('/explore')} className="h-10 rounded-control px-5">
+                          Explore More Questions
+                        </Button>
+                      </div>
+                    </Card>
+                  </motion.div>
                 )}
               </>
             )}

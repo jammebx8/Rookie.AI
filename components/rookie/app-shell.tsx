@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Bookmark, BookOpen, ClipboardCheck, Coins, Flame, House, LogOut, Moon, PanelLeftClose, PanelLeftOpen,
-  Search, Sun, Trophy, UserRound,
+  Sun, Trophy, UserRound,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset,
@@ -15,9 +15,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
-} from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useNightOwl } from './theme';
@@ -129,41 +126,6 @@ function StatPill({ icon: Icon, value, label, className, ...rest }: { icon: type
   );
 }
 
-const SEARCH_LINKS = [
-  { label: 'Practice PYQs by chapter', href: '/explore', icon: BookOpen },
-  { label: 'Start a custom test', href: '/tests', icon: ClipboardCheck },
-  { label: 'Open bookmarks', href: '/bookmark', icon: Bookmark },
-  { label: 'View leaderboard', href: '/leaderboard', icon: Trophy },
-  { label: 'Profile & settings', href: '/profile', icon: UserRound },
-];
-
-function SearchPalette({ open, setOpen }: { open: boolean; setOpen: (o: boolean) => void }) {
-  const router = useRouter();
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setOpen(!open); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, setOpen]);
-  return (
-    <CommandDialog open={open} onOpenChange={setOpen} title="Search" description="Jump anywhere in Rookie" className="rounded-card!">
-      {/* cmdk needs its <Command> root inside the dialog (without it, opening ⌘K crashes the page). */}
-      <Command>
-      <CommandInput placeholder="Where do you want to go?" />
-      <CommandList>
-        <CommandEmpty>Nothing found.</CommandEmpty>
-        <CommandGroup heading="Go to">
-          {SEARCH_LINKS.map(l => (
-            <CommandItem key={l.href} onSelect={() => { setOpen(false); router.push(l.href); }}><l.icon /> {l.label}</CommandItem>
-          ))}
-        </CommandGroup>
-      </CommandList>
-      </Command>
-    </CommandDialog>
-  );
-}
-
 function MobileNav({ path, badge }: { path: string; badge: number }) {
   return (
     <nav aria-label="Primary"
@@ -196,7 +158,6 @@ export function AppShell({ children, user, coins, streak, wrongBadge, onLogout, 
 }) {
   const path = usePathname() || '';
   const { dark, toggle } = useNightOwl();
-  const [searchOpen, setSearchOpen] = React.useState(false);
   const hasPass = useHasPass();
   const saleLive = useSaleLive();
   const showSale = hasPass === false && saleLive;
@@ -243,13 +204,7 @@ export function AppShell({ children, user, coins, streak, wrongBadge, onLogout, 
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/brand/rookie-owl.png" alt="" className="size-8 rounded-control" />
                 </Link>
-                <button onClick={() => setSearchOpen(true)}
-                  className="hidden h-10 w-full max-w-sm items-center gap-2 rounded-control bg-background px-3 text-sm text-muted-foreground ring-1 ring-border transition hover:ring-[var(--rk-sky-300)] sm:flex">
-                  <Search className="size-4" /> Search Rookie…
-                  <kbd className="ml-auto rounded-md bg-muted px-1.5 py-0.5 font-sans text-[11px] text-muted-foreground">⌘K</kbd>
-                </button>
                 <div className="ml-auto flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setSearchOpen(true)} aria-label="Search"><Search /></Button>
                   <Tip label="Streak: days in a row you’ve practised" side="bottom"><StatPill icon={Flame} value={String(streak)} label="day streak" /></Tip>
                   <Tip label="Coins: earned for correct answers" side="bottom"><StatPill icon={Coins} value={coins.toLocaleString('en-IN')} label="coins" /></Tip>
                   <Button variant="ghost" size="icon" onClick={toggle} aria-label={dark ? 'Switch to day mode' : 'Switch to night owl mode'} className="hidden sm:inline-flex">
@@ -264,7 +219,6 @@ export function AppShell({ children, user, coins, streak, wrongBadge, onLogout, 
         </SidebarInset>
 
         <MobileNav path={path} badge={wrongBadge} />
-        <SearchPalette open={searchOpen} setOpen={setSearchOpen} />
         <Toaster />
       </SidebarProvider>
     </TooltipProvider>

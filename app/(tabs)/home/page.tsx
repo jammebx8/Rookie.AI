@@ -13,6 +13,7 @@ import { getGreeting } from './_parts/constants';
 import { resumeHref, useDailyGoal, useRecentSession, useStreak } from './_parts/hooks';
 import { LongestMetric, MonthDaysMetric, StreakMetric, TodayMetric } from './_parts/metrics';
 import { ContinueSection, MotivationHeadline } from './_parts/continue';
+import { BuddyHomeMessage } from './_parts/buddyMessage';
 import { RecommendedQuestionCard } from './_parts/recommended';
 import { RookiePassBanner } from './_parts/pass';
 import { HomeSurveyModal, ProfileModal } from './_parts/modals';
@@ -139,12 +140,13 @@ export default function HomePage() {
           title={<>{getGreeting()}{firstName ? `, ${firstName}` : ', learner'}</>}
           sub={targetLine}
           action={
-            <Button size="lg" className="h-11 rounded-control px-5 text-body" onClick={continuePractice}>
-              Continue practice <ArrowRight />
+            <Button size="lg" className="h-11 rounded-control px-5 text-body" onClick={() => router.push('/QuestionViewer?mode=daily')}>
+              Daily practice <ArrowRight />
             </Button>
           }
         />
         <MotivationHeadline exam={exam} />
+        <BuddyHomeMessage solvedToday={solved} streak={streakData.current} userName={firstName} />
 
         {/* ── Metrics: streak · today · longest · this month ── */}
         <Row className="mt-8 md:grid-cols-4">

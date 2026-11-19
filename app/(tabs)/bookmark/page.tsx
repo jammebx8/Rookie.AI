@@ -4,10 +4,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bookmark, BookmarkX, Check, ChevronDown, ExternalLink, Loader2, Smile, X, ZoomIn } from 'lucide-react';
+import { Bookmark, BookmarkX, Check, ChevronDown, Loader2, Smile, X, ZoomIn } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 import { renderContent } from '@/app/components/renderContent';
 import { clearWrongBadge } from '@/lib/adaptivePractice';
+import { AI_BUDDIES } from '@/app/QuestionViewer/QuestionViewerClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, Chip, EmptyState, Meta, OmrOption, Page, PageHeader, Tag } from '@/components/rookie/ui';
@@ -150,6 +151,15 @@ function QuestionCard({
   const [imageModal, setImageModal] = useState<string | null>(null);
   const solutionRef = useRef<HTMLDivElement | null>(null);
 
+  const [buddyId, setBuddyId] = useState('4');
+  useEffect(() => {
+    try {
+      const b = localStorage.getItem('selectedBuddy');
+      if (b && AI_BUDDIES[b]) setBuddyId(b);
+    } catch {}
+  }, []);
+  const buddy = AI_BUDDIES[buddyId] ?? AI_BUDDIES['4'];
+
   const typedSolution = useTypingEffect(state.solution, !!state.solution && state.hasTyped);
 
   const patch = (partial: Partial<QuestionState>) =>
@@ -176,30 +186,35 @@ function QuestionCard({
     const correctAnswer = q.correct_option;
 
     const isCorrect = option === correctAnswer;
-    patch({ isCorrect, motivationLoading: true, solutionLoading: true });
+    patch({ isCorrect, motivationLoading: true, solutionLoading: true, solutionRequested: true });
 
-    // Motivation
+    // Motivation in buddy persona
     try {
       const msg = isCorrect
-        ? 'Generate a short, encouraging message for getting a question right'
-        : 'Generate a short, motivating message for getting a question wrong';
+        ? `You are ${buddy.name}. Give a short, energetic 1-sentence praise to a student who got this JEE question right in Hinglish.`
+        : `You are ${buddy.name}. Give a calm, caring 1-sentence encouragement to a student who got this JEE question wrong in Hinglish.`;
       const res = await axios.post(`${API_BASE}/motivation`, { message: msg });
       const text =
         res.data.choices?.[0]?.message?.content ??
-        (isCorrect ? 'Great job! Keep it up!' : "Don't worry, learn from this!");
+        (isCorrect ? 'Sahi jawab! Keep it up!' : 'Tension mat lo, is solution se seekho!');
       patch({ motivation: text, motivationLoading: false });
     } catch {
       patch({
-        motivation: isCorrect ? 'Excellent work!' : 'Keep practicing!',
+        motivation: isCorrect ? 'Sahi jawab! Badhiya!' : 'Tension mat lo, seekho aur aage badho!',
         motivationLoading: false,
       });
     }
 
-    // AI solution — use cached solution from sessionStorage or generate fresh
+    // AI solution — use cached solution from sessionStorage or generate fresh based on buddy
     try {
-      const cacheKey = `rookie_bookmark_sol_${q.question_id}`
-      let aiSolution: string = ''
-      try { aiSolution = sessionStorage.getItem(cacheKey) || '' } catch {}
+      const col = buddy.columnKey;
+      const cacheKey = `rookie_bookmark_sol_${q.question_id}_${buddyId}`;
+      let aiSolution: string = '';
+      try { aiSolution = sessionStorage.getItem(cacheKey) || ''; } catch {}
+      if (!aiSolution && q[col]?.trim()) {
+        aiSolution = q[col];
+        try { sessionStorage.setItem(cacheKey, aiSolution); } catch {}
+      }
       if (!aiSolution) {
         const res = await axios.post(`${API_BASE}/solution`, {
           action: 'generate_solution',
@@ -210,9 +225,12 @@ function QuestionCard({
           option_D: q.option_d,
           solution: q.solution,
           correct_option: q.correct_option,
+          buddy_id: buddyId,
+          buddy_name: buddy.name,
+          buddy_system_prompt: buddy.systemPrompt,
         });
         aiSolution = res.data.solution ?? q.solution;
-        try { sessionStorage.setItem(cacheKey, aiSolution) } catch {}
+        try { sessionStorage.setItem(cacheKey, aiSolution); } catch {}
       }
       patch({ solution: aiSolution, solutionLoading: false, hasTyped: false });
     } catch {
@@ -240,39 +258,47 @@ function QuestionCard({
     const isCorrect =
       !isNaN(u) && !isNaN(c) ? u === c : state.integerAnswer.trim() === (correctAnswer || '').trim();
 
-    patch({ isCorrect, motivationLoading: true, solutionLoading: true });
+    patch({ isCorrect, motivationLoading: true, solutionLoading: true, solutionRequested: true });
 
-    // Motivation
+    // Motivation in buddy persona
     try {
       const msg = isCorrect
-        ? 'Generate a short, encouraging message for getting a question right'
-        : 'Generate a short, motivating message for getting a question wrong';
+        ? `You are ${buddy.name}. Give a short, energetic 1-sentence praise to a student who got this JEE question right in Hinglish.`
+        : `You are ${buddy.name}. Give a calm, caring 1-sentence encouragement to a student who got this JEE question wrong in Hinglish.`;
       const res = await axios.post(`${API_BASE}/motivation`, { message: msg });
       const text =
         res.data.choices?.[0]?.message?.content ??
-        (isCorrect ? 'Great job! Keep it up!' : "Don't worry, learn from this!");
+        (isCorrect ? 'Sahi jawab! Keep it up!' : 'Tension mat lo, is solution se seekho!');
       patch({ motivation: text, motivationLoading: false });
     } catch {
       patch({
-        motivation: isCorrect ? 'Excellent work!' : 'Keep practicing!',
+        motivation: isCorrect ? 'Sahi jawab! Badhiya!' : 'Tension mat lo, seekho aur aage badho!',
         motivationLoading: false,
       });
     }
 
-    // AI solution — use cached solution from sessionStorage or generate fresh
+    // AI solution — use cached solution from sessionStorage or generate fresh based on buddy
     try {
-      const cacheKey = `rookie_bookmark_sol_${q.question_id}`
-      let aiSolution: string = ''
-      try { aiSolution = sessionStorage.getItem(cacheKey) || '' } catch {}
+      const col = buddy.columnKey;
+      const cacheKey = `rookie_bookmark_sol_${q.question_id}_${buddyId}`;
+      let aiSolution: string = '';
+      try { aiSolution = sessionStorage.getItem(cacheKey) || ''; } catch {}
+      if (!aiSolution && q[col]?.trim()) {
+        aiSolution = q[col];
+        try { sessionStorage.setItem(cacheKey, aiSolution); } catch {}
+      }
       if (!aiSolution) {
         const res = await axios.post(`${API_BASE}/solution`, {
           action: 'generate_solution',
           question_text: q.question_text,
           solution: q.solution,
           correct_option: q.correct_option,
+          buddy_id: buddyId,
+          buddy_name: buddy.name,
+          buddy_system_prompt: buddy.systemPrompt,
         });
         aiSolution = res.data.solution ?? q.solution;
-        try { sessionStorage.setItem(cacheKey, aiSolution) } catch {}
+        try { sessionStorage.setItem(cacheKey, aiSolution); } catch {}
       }
       patch({ solution: aiSolution, solutionLoading: false, hasTyped: false });
     } catch {
@@ -292,7 +318,10 @@ function QuestionCard({
       const res = await axios.post(`${API_BASE}/solution`, {
         action: 'better_understanding',
         question_text: q.question_text,
-        solution: q.solution,
+        solution: state.solution || q.solution,
+        buddy_id: buddyId,
+        buddy_name: buddy.name,
+        buddy_system_prompt: buddy.systemPrompt,
       });
       patch({
         aiFollowup: res.data.explanation ?? 'Could not generate explanation.',
@@ -386,13 +415,6 @@ function QuestionCard({
                   </div>
                 )}
 
-                {q.source_url && (
-                  <a href={q.source_url} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex w-fit items-center gap-1 text-meta font-medium text-primary hover:underline">
-                    View source <ExternalLink className="size-3" />
-                  </a>
-                )}
-
                 {/* ── Integer type ── */}
                 {isIntegerQ() ? (
                   <div className="flex flex-col gap-3">
@@ -432,8 +454,8 @@ function QuestionCard({
                     )}
                   </div>
                 ) : (
-                  /* ── MCQ (OMR) ── */
-                  <div className="flex flex-col gap-2" role="radiogroup">
+                  /* ── MCQ (OMR) — horizontal grid on desktop, vertical on mobile ── */
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup">
                     {(['a', 'b', 'c', 'd'] as const).map((opt) => {
                       const tv = q[`option_${opt}`] as string;
                       const iv = q[`option_${opt}_img`] as string | null;
@@ -472,14 +494,22 @@ function QuestionCard({
                     ) : state.motivation ? (
                       <motion.div key="motivation-card" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                         className="flex items-start gap-2.5 rounded-control bg-secondary px-4 py-3 text-secondary-foreground">
-                        <Smile className="mt-0.5 size-4 shrink-0" />
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={buddy.image} alt={buddy.name} className="mt-0.5 size-5 shrink-0 rounded-full object-cover" />
                         <p className="text-body-sm font-medium leading-relaxed">{state.motivation}</p>
                       </motion.div>
                     ) : null}
 
                     {state.solutionRequested && (
                       <div key="solution-card" className="rounded-control bg-muted p-4 sm:p-5">
-                        <p className="mb-3 text-title font-semibold tracking-[-0.015em] text-foreground">Solution</p>
+                        <div className="mb-3 flex items-center gap-2.5">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={buddy.image} alt={buddy.name} className="size-8 rounded-full object-cover" />
+                          <div>
+                            <p className="text-body-sm font-semibold text-foreground">Solution</p>
+                            <p className="text-caption text-muted-foreground">Explained by {buddy.name}</p>
+                          </div>
+                        </div>
 
                         {state.solutionLoading ? (
                           <div className="flex items-center gap-3 py-4">

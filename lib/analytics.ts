@@ -34,12 +34,15 @@ export type EventName =
   | 'test_started'
   | 'test_completed'
   | 'test_abandoned'
+  | 'daily_practice_started'
+  | 'daily_practice_completed'
   // catch-all for future events
   | (string & Record<never, never>)
 
 export type Feature =
   | 'practice'
   | 'question_viewer'
+  | 'daily_practice'
   | 'custom_test'
   | 'recommendation'
   | 'similar'
