@@ -83,13 +83,6 @@ function fmtDur(seconds: number | null) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`
 }
 
-/** Short label for a shift: "2024 · 9 Apr · Evening" style. */
-function shiftParts(name: string) {
-  const year = name.match(/20\d\d/)?.[0] ?? ''
-  const rest = name.replace(/JEE (Main|Advanced)\s*/, '').replace(year, '').replace('(Online)', '').replace(/\s+/g, ' ').trim()
-  return { year, rest }
-}
-
 // ─── Pass upsell dialog ───────────────────────────────────────────────────────
 function PassDialog({ open, onOpenChange, reason, onSuccess }: {
   open: boolean; onOpenChange: (o: boolean) => void; reason: string; onSuccess: () => void
@@ -284,7 +277,6 @@ function PYQMockSection({ attempts, onStarted }: { attempts: TestAttemptRow[]; o
         {visible.map(shift => {
           const isLoadingThis = starting === shift.exam_shift
           const unlocked = isUnlocked(shift)
-          const { year, rest } = shiftParts(shift.exam_shift)
           return (
             <ListRow
               key={shift.exam_shift}
@@ -299,9 +291,8 @@ function PYQMockSection({ attempts, onStarted }: { attempts: TestAttemptRow[]; o
                 starting && !isLoadingThis && 'opacity-50',
               )}
             >
-              <span className="w-10 shrink-0 text-body-sm font-semibold tabular-nums text-foreground">{year}</span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-body-sm font-medium text-foreground">{rest}</p>
+                <p className="truncate text-body-sm font-medium text-foreground">{shift.exam_shift}</p>
                 <p className="text-caption text-muted-foreground">{shift.total} Qs · 3 hrs</p>
               </div>
               {isLoadingThis ? (

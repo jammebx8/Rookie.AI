@@ -110,8 +110,9 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
         }
 
         const pickedQuestionIds = new Set<string>()
+        let easyCount = 0
 
-        // ── 5 Easy questions from previous CORRECT chapters ──
+        // ── 2 Easy questions from previous CORRECT chapters (confidence booster) ──
         if (correctChapters.length > 0) {
           const uniqueChapters = Array.from(new Set(correctChapters.map(c => `${c.subject}::${c.chapter}`)))
             .map(str => {
@@ -120,7 +121,7 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
             })
 
           for (const ch of uniqueChapters) {
-            if (questions.length >= 5) break
+            if (easyCount >= 2 || questions.length >= 5) break
             const { data: cand } = await supabase
               .from('jee_mains')
               .select(SELECT_FIELDS)
@@ -135,15 +136,17 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
               )
               const sorted = sortByDifficulty(unattempted)
               for (const q of sorted) {
-                if (questions.length >= 5) break
+                if (easyCount >= 2 || questions.length >= 5) break
                 questions.push({ ...q, daily_type: 'confidence' })
                 pickedQuestionIds.add(q.question_id)
+                easyCount++
               }
             }
           }
         }
 
         // ── 3 Questions from previous INCORRECT chapters (revision) ──
+        let revisionCount = 0
         if (incorrectChapters.length > 0) {
           const uniqueIncChapters = Array.from(new Set(incorrectChapters.map(c => `${c.subject}::${c.chapter}`)))
             .map(str => {
@@ -151,9 +154,8 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
               return { subject, chapter }
             })
 
-          let revisionCount = 0
           for (const ch of uniqueIncChapters) {
-            if (revisionCount >= 3) break
+            if (revisionCount >= 3 || questions.length >= 5) break
             const { data: cand } = await supabase
               .from('jee_mains')
               .select(SELECT_FIELDS)
@@ -168,7 +170,7 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
               )
               const sorted = sortByDifficulty(unattempted)
               for (const q of sorted) {
-                if (revisionCount >= 3) break
+                if (revisionCount >= 3 || questions.length >= 5) break
                 questions.push({ ...q, daily_type: 'revision' })
                 pickedQuestionIds.add(q.question_id)
                 revisionCount++
@@ -209,9 +211,10 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
     console.error('Error fetching daily practice questions:', err)
   }
 
-  const result: DailyPracticeSet = { questions, isNewUser }
+  const finalQuestions = questions.slice(0, 5)
+  const result: DailyPracticeSet = { questions: finalQuestions, isNewUser }
   try {
-    if (questions.length > 0) {
+    if (finalQuestions.length > 0) {
       sessionStorage.setItem(cacheKey, JSON.stringify(result))
     }
   } catch {}

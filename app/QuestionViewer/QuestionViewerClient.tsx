@@ -1606,7 +1606,6 @@ export default function QuestionViewerClient() {
             {/* ── Question card ─────────────────────────────────────────── */}
             <Card className="hover:shadow-none sm:p-8">
               <div className="mb-5 flex flex-wrap items-center gap-2">
-                <Tag>{examName}</Tag>
                 {isDaily && <Tag tone="blue">Daily Practice</Tag>}
                 {isDaily && (Q as any).daily_type === 'confidence' && <Tag tone="right">Easy · Confidence</Tag>}
                 {isDaily && (Q as any).daily_type === 'revision' && <Tag tone="neutral">Concept Revision</Tag>}
