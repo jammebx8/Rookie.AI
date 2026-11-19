@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { ArrowRight, Check, Loader2, ShieldCheck } from 'lucide-react'
 import { triggerCheckout, bustPassCache, checkUserPaidDirectFromDB } from '../../lib/rookiePass'
 import { supabase } from '../../public/src/utils/supabase'
-import { sale, saleMoney, salePerMonth, useUserPricing } from '@/lib/sale'
+import { saleMoney, useUserPricing } from '@/lib/sale'
 import { Define } from '@/components/rookie/define'
 import { FlipCountdown, OffTag, PASS_BG, STARS } from '@/components/rookie/sale'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,8 @@ interface RookiePassModalProps {
   onSuccess: () => void
   addToast: (msg: string, type?: ToastType, dur?: number) => void
   limit?: number
+  title?: string
+  description?: string
 }
 
 export default function RookiePassModal({
@@ -27,6 +29,8 @@ export default function RookiePassModal({
   onSuccess,
   addToast,
   limit = 3,
+  title,
+  description,
 }: RookiePassModalProps) {
   const [loading, setLoading] = useState(false)
   const pricing = useUserPricing()
@@ -82,10 +86,10 @@ export default function RookiePassModal({
       <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto rounded-card bg-card p-0 sm:max-w-[440px]">
         <div className="px-6 pt-6 pb-4 pr-12">
           <DialogTitle className="text-title font-semibold tracking-[-0.015em] text-foreground">
-            You&apos;ve hit today&apos;s free limit
+            {title ?? 'Level up with Rookie Pass'}
           </DialogTitle>
           <DialogDescription className="mt-1 text-body-sm text-muted-foreground">
-            <Define term="solutionsLeft">{limit} free solutions</Define> a day. Get Rookie Pass to unlock unlimited solutions.
+            {description ?? 'Unlock unlimited full PYQ mock shifts, custom test wizard, and complete exam series.'}
           </DialogDescription>
         </div>
 
