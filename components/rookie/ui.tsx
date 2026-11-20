@@ -47,7 +47,18 @@ export function Meta({ children, className }: { children: React.ReactNode; class
 
 export const Chip = DbChip;
 
-const TONE = { neutral: 'neutral', blue: 'info', right: 'success', wrong: 'danger' } as const;
+const TONE = {
+  neutral: 'neutral',
+  blue: 'info',
+  right: 'success',
+  wrong: 'danger',
+  warning: 'warning',
+  pass: 'pass',
+  sale: 'sale',
+  info: 'info',
+  success: 'success',
+  danger: 'danger',
+} as const;
 export function Tag({ className, children, tone = 'neutral' }: { className?: string; children: React.ReactNode; tone?: keyof typeof TONE }) {
   return <DbTag tone={TONE[tone]} className={className}>{children}</DbTag>;
 }

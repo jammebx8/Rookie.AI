@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, Check, ChevronLeft, Clock, Coins,
-  Layers, Loader2, RotateCcw, Smile, ZoomIn,
+  Layers, Loader2, Lock, RotateCcw, Smile, Sparkles, ZoomIn,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../public/src/utils/supabase'
@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import RookiePassModal from './RookiePassModal'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
+const FREE_DAILY_ATTEMPTS_LIMIT = 5
 const API_BASE       = 'https://rookie-backend.vercel.app'
 const BOOKMARKS_KEY  = 'bookmarkedQuestions'
 const SESSION_KEY    = 'questionSessionResponses_v1'
@@ -35,6 +36,20 @@ const PAGE_SIZE      = 20   // questions fetched per window
 const PREFETCH_AHEAD = 5    // start fetching next window when this many remain
 const DB_TABLE_MAIN  = 'jee_mains'
 const DB_TABLE_ADV   = 'jee_adv'
+
+function getTodayAttemptsKey(): string {
+  return `questionsToday_${new Date().toDateString()}`
+}
+
+function getStoredTodayAttempts(): number {
+  if (typeof window === 'undefined') return 0
+  try {
+    const raw = localStorage.getItem(getTodayAttemptsKey())
+    return raw ? parseInt(raw, 10) || 0 : 0
+  } catch {
+    return 0
+  }
+}
 
 // ─── AI Buddy Definitions ────────────────────────────────────────────────────
 export const AI_BUDDIES: Record<string, {
@@ -263,11 +278,13 @@ const optLetter = (v: string | null | undefined) =>
 
 // ─── Similar Question Card (self-contained interactive mini question) ─────────
 function SimilarQuestionCard({
-  q, chapterTitle, subjectName, imageKey, isDark, addToast, dbTable,
+  q, chapterTitle, subjectName, imageKey, isDark, addToast, dbTable, isRestricted = false, onOpenPassModal,
 }: {
   q: Question; chapterTitle: string; subjectName: string; imageKey: string
   isDark: boolean; addToast: (msg: string, type: ToastType, ms?: number) => void
   dbTable: string
+  isRestricted?: boolean
+  onOpenPassModal?: () => void
 }) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [pendingOption, setPendingOption]   = useState<string | null>(null) // clicked, not yet resolved
@@ -346,11 +363,24 @@ function SimilarQuestionCard({
     // correct_option is always present in the DB — use it directly
     const answerPromise: Promise<string | null> = Promise.resolve(localQ.correct_option ?? q.correct_option ?? null)
 
-    setSolutionRequested(true); setSolutionLoading(true)
-    const solutionPromise = generateSolution()
-
     const normalize = (v: string | null) =>
       v?.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase() ?? ''
+
+    if (isRestricted) {
+      const ans = await answerPromise
+      const correct = normalize(opt) === normalize(ans)
+      setIsCorrect(correct)
+      setSelectedOption(opt)
+      setPendingOption(null)
+      postAnswerMeta(correct)
+      setSolutionRequested(true)
+      setSolutionLoading(false)
+      onOpenPassModal?.()
+      return
+    }
+
+    setSolutionRequested(true); setSolutionLoading(true)
+    const solutionPromise = generateSolution()
 
     const ans = await answerPromise
     const correct = normalize(opt) === normalize(ans)
@@ -387,6 +417,20 @@ function SimilarQuestionCard({
 
     // correct_option is always present in the DB — use it directly
     const answerPromise: Promise<string | null> = Promise.resolve(localQ.correct_option ?? q.correct_option ?? null)
+
+    if (isRestricted) {
+      const ans = await answerPromise
+      const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
+      const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
+      setIsCorrect(correct)
+      setSelectedOption('INTEGER')
+      setPendingOption(null)
+      postAnswerMeta(correct)
+      setSolutionRequested(true)
+      setSolutionLoading(false)
+      onOpenPassModal?.()
+      return
+    }
 
     setSolutionRequested(true); setSolutionLoading(true)
     const solutionPromise = generateSolution()
@@ -499,41 +543,55 @@ function SimilarQuestionCard({
       {/* Solution */}
       {solutionRequested && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={buddy.image} alt={buddy.name} className="size-8 rounded-full object-cover" />
-            <div>
-              <p className="text-body-sm font-semibold text-foreground">Solution</p>
-              <p className="text-caption text-muted-foreground">by {buddy.name}</p>
+          {isRestricted ? (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-control bg-muted p-4 ring-1 ring-border">
+              <div className="flex items-center gap-2 text-body-sm text-foreground">
+                <Lock className="size-4 text-muted-foreground" />
+                <span>AI Solution locked (daily 5-question limit reached)</span>
+              </div>
+              <Button onClick={onOpenPassModal} className="h-8 rounded-control px-3 text-caption font-semibold">
+                Unlock with Pass <ArrowRight className="size-3.5" />
+              </Button>
             </div>
-          </div>
-          {solutionLoading ? (
-            <SolutionLines widths={[100, 85, 92, 70, 80]} />
           ) : (
             <>
-              <SolutionWithEquationHints
-                solution={solution}
-                isDark={isDark}
-                apiBase={API_BASE}
-                buddyId={buddyId}
-                buddyName={buddy.name}
-                buddySystemPrompt={buddy.systemPrompt}
-                questionText={q.question_text ?? ''}
-                feature="similar"
-                questionId={q.question_id}
-                subject={subjectName}
-                chapter={chapterTitle}
-                className="whitespace-pre-wrap rounded-control bg-muted p-4 text-body-sm leading-relaxed text-foreground"
-              />
-              {q.solution_image_url && <Figure src={q.solution_image_url} alt="Solution" onZoom={setImageModal} />}
-              {!aiFollowup && !aiFollowupLoading && (
-                <Button variant="secondary" onClick={handleFollowup} className="h-8 rounded-control px-3">
-                  <Smile /> Simpler explanation
-                </Button>
-              )}
-              {aiFollowupLoading && <div className="flex items-center gap-2"><Spinner /><span className="text-meta text-muted-foreground">Generating…</span></div>}
-              {aiFollowup && (
-                <div className="whitespace-pre-wrap rounded-control bg-secondary p-4 text-body-sm leading-relaxed text-secondary-foreground">{aiFollowup}</div>
+              <div className="flex items-center gap-2.5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={buddy.image} alt={buddy.name} className="size-8 rounded-full object-cover" />
+                <div>
+                  <p className="text-body-sm font-semibold text-foreground">Solution</p>
+                  <p className="text-caption text-muted-foreground">by {buddy.name}</p>
+                </div>
+              </div>
+              {solutionLoading ? (
+                <SolutionLines widths={[100, 85, 92, 70, 80]} />
+              ) : (
+                <>
+                  <SolutionWithEquationHints
+                    solution={solution}
+                    isDark={isDark}
+                    apiBase={API_BASE}
+                    buddyId={buddyId}
+                    buddyName={buddy.name}
+                    buddySystemPrompt={buddy.systemPrompt}
+                    questionText={q.question_text ?? ''}
+                    feature="similar"
+                    questionId={q.question_id}
+                    subject={subjectName}
+                    chapter={chapterTitle}
+                    className="whitespace-pre-wrap rounded-control bg-muted p-4 text-body-sm leading-relaxed text-foreground"
+                  />
+                  {q.solution_image_url && <Figure src={q.solution_image_url} alt="Solution" onZoom={setImageModal} />}
+                  {!aiFollowup && !aiFollowupLoading && (
+                    <Button variant="secondary" onClick={handleFollowup} className="h-8 rounded-control px-3">
+                      <Smile /> Simpler explanation
+                    </Button>
+                  )}
+                  {aiFollowupLoading && <div className="flex items-center gap-2"><Spinner /><span className="text-meta text-muted-foreground">Generating…</span></div>}
+                  {aiFollowup && (
+                    <div className="whitespace-pre-wrap rounded-control bg-secondary p-4 text-body-sm leading-relaxed text-secondary-foreground">{aiFollowup}</div>
+                  )}
+                </>
               )}
             </>
           )}
@@ -547,10 +605,15 @@ function SimilarQuestionCard({
 }
 
 // ─── Similar Questions Panel ──────────────────────────────────────────────────
-function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageKey, isDark, addToast, dbTable }: {
+function SimilarQuestionsPanel({
+  mainQuestion, chapterTitle, subjectName, imageKey, isDark, addToast, dbTable,
+  isRestricted = false, onOpenPassModal,
+}: {
   mainQuestion: Question; chapterTitle: string; subjectName: string; imageKey: string
   isDark: boolean; addToast: (msg: string, type: ToastType, ms?: number) => void
   dbTable: string
+  isRestricted?: boolean
+  onOpenPassModal?: () => void
 }) {
   const [loading, setLoading]         = useState(false)
   const [questions, setQuestions]     = useState<Question[]>([])
@@ -558,10 +621,12 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
   const [fetched, setFetched]         = useState(false)
   const [error, setError]             = useState(false)
 
-  // Auto-fetch on mount
+  // Auto-fetch on mount only when not restricted
   useEffect(() => {
-    fetchSimilar()
-  }, [mainQuestion.question_id])
+    if (!isRestricted) {
+      fetchSimilar()
+    }
+  }, [mainQuestion.question_id, isRestricted])
 
   const fetchSimilar = async () => {
     if (fetched) return
@@ -637,6 +702,48 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
     }
   }
 
+  if (isRestricted) {
+    return (
+      <section className="mt-section">
+        {/* Header */}
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Layers className="size-[18px] text-muted-foreground" />
+            <h2 className="text-heading font-semibold tracking-[-0.02em] text-foreground">
+              Similar questions
+            </h2>
+            <Tag tone="wrong">Limit reached</Tag>
+          </div>
+          <Tag tone="neutral">5/5 free questions used</Tag>
+        </div>
+
+        <Card className="hover:shadow-none p-card">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-control bg-secondary text-primary ring-1 ring-border">
+                <Lock className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-title font-semibold text-foreground">
+                  Similar Questions Locked
+                </h3>
+                <p className="mt-1 text-body-sm text-muted-foreground max-w-lg">
+                  Practice questions with similar concepts from this chapter to solidify your preparation. Upgrade to Rookie Pass for unlimited similar questions.
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={onOpenPassModal}
+              className="h-10 shrink-0 w-full sm:w-auto rounded-control px-4 font-semibold text-body-sm shadow-sm"
+            >
+              Unlock with Pass <ArrowRight className="size-4" />
+            </Button>
+          </div>
+        </Card>
+      </section>
+    )
+  }
+
   const visible = showAll ? questions : questions.slice(0, 3)
 
   return (
@@ -680,7 +787,7 @@ function SimilarQuestionsPanel({ mainQuestion, chapterTitle, subjectName, imageK
               <SimilarQuestionCard
                 q={q} chapterTitle={chapterTitle} subjectName={subjectName}
                 imageKey={imageKey} isDark={isDark} addToast={addToast}
-                dbTable={dbTable}
+                dbTable={dbTable} isRestricted={isRestricted} onOpenPassModal={onOpenPassModal}
               />
             </motion.div>
           ))}
@@ -772,12 +879,52 @@ export default function QuestionViewerClient() {
   const [dailySetIndex, setDailySetIndex]       = useState(1)
   const [loadingNextSet, setLoadingNextSet]     = useState(false)
 
-  // ── Rookie Pass entitlement & Ad modal trigger ─────────────────────────────
-  // AI solutions & Similar questions are 100% free for all users (free & paid).
-  // Free users are occasionally shown the Rookie Pass modal like an ad after
-  // every 4 questions solved in a row.
+  // ── Rookie Pass entitlement & Free daily attempts restriction ───────────────
+  // Free users are restricted on AI solutions & Similar questions after 5 question attempts/day.
   const [hasPass, setHasPass] = useState<boolean | null>(null) // null = checking directly from DB
-  const [consecutiveSolved, setConsecutiveSolved] = useState<number>(0)
+  const [attemptsToday, setAttemptsToday] = useState<number>(getStoredTodayAttempts)
+  const [isCurrentRestricted, setIsCurrentRestricted] = useState(false)
+  const [passModalTitle, setPassModalTitle] = useState<string | undefined>(undefined)
+  const [passModalDescription, setPassModalDescription] = useState<string | undefined>(undefined)
+
+  const handleOpenPassModalForLimit = useCallback(() => {
+    setPassModalTitle('Daily free limit reached (5/5)')
+    setPassModalDescription("You've completed your 5 free questions for today. Upgrade to Rookie Pass to unlock unlimited step-by-step AI solutions and similar questions.")
+    setShowPassModal(true)
+  }, [])
+
+  const handleOpenPassModalAfterFive = useCallback(() => {
+    setPassModalTitle("You've completed today's 5 free questions!")
+    setPassModalDescription("Great job! Upgrade to Rookie Pass to get unlimited step-by-step AI solutions, similar questions, and complete JEE exam series.")
+    setShowPassModal(true)
+  }, [])
+
+  // Sync today's question attempts count with Supabase attempts table if logged in
+  useEffect(() => {
+    if (!userId) return
+    let active = true
+    const syncAttempts = async () => {
+      try {
+        const todayKey = getTodayAttemptsKey()
+        const localVal = parseInt(localStorage.getItem(todayKey) || '0', 10) || 0
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const { count: dbCount } = await supabase
+          .from('attempts')
+          .select('*', { count: 'exact', head: true })
+          .eq('student_id', userId)
+          .gte('created_at', todayStart.toISOString())
+
+        if (active && typeof dbCount === 'number') {
+          const highest = Math.max(localVal, dbCount)
+          setAttemptsToday(highest)
+          localStorage.setItem(todayKey, String(highest))
+        }
+      } catch {}
+    }
+    syncAttempts()
+    return () => { active = false }
+  }, [userId])
 
   // Check Rookie Pass directly from DB on mount + listen for updates + start auto-sync
   useEffect(() => {
@@ -1082,11 +1229,12 @@ export default function QuestionViewerClient() {
       obj[sessionKey][String(globalIndex)] = {
         ...(obj[sessionKey][String(globalIndex)] || {}),
         selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup, solutionBuddyId,
+        isRestricted: isCurrentRestricted,
         ...partial,
       }
       localStorage.setItem(SESSION_KEY, JSON.stringify(obj))
     } catch {}
-  }, [sessionKey, globalIndex, selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup, solutionBuddyId])
+  }, [sessionKey, globalIndex, selectedOption, isCorrect, motivation, solutionRequested, solution, aiFollowup, solutionBuddyId, isCurrentRestricted])
 
   const loadSession = useCallback((gIdx: number) => {
     try {
@@ -1126,26 +1274,35 @@ export default function QuestionViewerClient() {
       if (prev.integerAnswer !== undefined) setIntegerAnswer(prev.integerAnswer)
       setAIFollowup(prev.aiFollowup || null)
 
-      const savedBuddyId = prev.solutionBuddyId || buddyId
-      const cachedSol = prev.solution || (q ? loadAISolFromCache(q.question_id, savedBuddyId) : null)
+      const isRestrictedSession = !!prev.isRestricted && hasPass !== true
+      setIsCurrentRestricted(isRestrictedSession)
 
-      if (cachedSol) {
-        setSolution(cachedSol); setSolutionLoading(false)
-      } else if (prev.solutionRequested && q) {
-        setSolution(''); setSolutionLoading(true)
-        generateAISolution(q, buddyId, AI_BUDDIES[buddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID], q.correct_option || '').then(aiSol => {
-          setSolution(aiSol); setSolutionLoading(false)
-          saveSession({ solution: aiSol, solutionRequested: true, solutionBuddyId: savedBuddyId })
-        })
-      } else {
+      if (isRestrictedSession) {
         setSolution('')
+        setSolutionLoading(false)
+      } else {
+        const savedBuddyId = prev.solutionBuddyId || buddyId
+        const cachedSol = prev.solution || (q ? loadAISolFromCache(q.question_id, savedBuddyId) : null)
+
+        if (cachedSol) {
+          setSolution(cachedSol); setSolutionLoading(false)
+        } else if (prev.solutionRequested && q) {
+          setSolution(''); setSolutionLoading(true)
+          generateAISolution(q, buddyId, AI_BUDDIES[buddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID], q.correct_option || '').then(aiSol => {
+            setSolution(aiSol); setSolutionLoading(false)
+            saveSession({ solution: aiSol, solutionRequested: true, solutionBuddyId: savedBuddyId, isRestricted: false })
+          })
+        } else {
+          setSolution('')
+        }
       }
     } else {
       setSelectedOption(null); setIsCorrect(null); setMotivation('')
       setSolution(''); setAIFollowup(null); setSolutionRequested(false)
       setIntegerAnswer(''); setAIFollowup(null); setSolutionRequested(false)
+      setIsCurrentRestricted(false)
     }
-  }, [currentIndex, questions, chapterTitle, globalIndex])
+  }, [currentIndex, questions, chapterTitle, globalIndex, hasPass])
 
   // ── Bookmark sync ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1329,16 +1486,16 @@ export default function QuestionViewerClient() {
 
     const prev = loadSession(globalIndex)
     if (!prev?.selectedOption) {
-      const todayKey = `questionsToday_${new Date().toDateString()}`
-      localStorage.setItem(todayKey, String((parseInt(localStorage.getItem(todayKey) || '0') + 1)))
-      localStorage.setItem('questionsWeek', String((parseInt(localStorage.getItem('questionsWeek') || '0') + 1)))
-      localStorage.setItem('questionsMonth', String((parseInt(localStorage.getItem('questionsMonth') || '0') + 1)))
       saveUserActivity(q, correct, timeSpent)
     }
   }
 
   // ── Regenerate solution ───────────────────────────────────────────────────
   const handleRegenerateSolution = async () => {
+    if (isCurrentRestricted) {
+      handleOpenPassModalForLimit()
+      return
+    }
     const q = questions[currentIndex]; if (!q) return
     // correct_option is always in DB — no need to fall back to AI determination
     try { sessionStorage.removeItem(getAISolCacheKey(q.question_id, solutionBuddyId)) } catch {}
@@ -1386,22 +1543,63 @@ export default function QuestionViewerClient() {
     const answerPromise: Promise<string | null> = Promise.resolve(q.correct_option ?? null)
 
     setSolutionBuddyId(activeBuddyId)
-    // Free AI solution & Similar questions: always free for all users.
-    // Free users see the Rookie Pass modal like an ad after every 4 questions solved in a row.
-    if (!solutionRequested) {
-      const isNewSolve = !answeredThisSession.current.has(q.question_id)
-      if (isNewSolve) {
-        answeredThisSession.current.add(q.question_id)
-        setConsecutiveSolved(prev => {
-          const next = prev + 1
-          if (hasPass !== true && next > 0 && next % 4 === 0) {
-            setTimeout(() => setShowPassModal(true), 1200)
-          }
-          return next
-        })
-      }
+
+    const isNewSolve = !answeredThisSession.current.has(q.question_id) && !loadSession(globalIndex)?.selectedOption
+    const currentAttempts = attemptsToday
+    let updatedAttempts = currentAttempts
+    if (isNewSolve) {
+      answeredThisSession.current.add(q.question_id)
+      updatedAttempts = currentAttempts + 1
+      setAttemptsToday(updatedAttempts)
+      const todayKey = getTodayAttemptsKey()
+      localStorage.setItem(todayKey, String(updatedAttempts))
+      localStorage.setItem('questionsWeek', String((parseInt(localStorage.getItem('questionsWeek') || '0', 10) + 1)))
+      localStorage.setItem('questionsMonth', String((parseInt(localStorage.getItem('questionsMonth') || '0', 10) + 1)))
     }
-    setSolutionRequested(true); setSolutionLoading(true)
+
+    const isUserPaid = hasPass === true
+    // Restriction applies to free users after 5 attempts/day (i.e. attempt 6 and onwards)
+    const isRestrictedAttempt = !isUserPaid && currentAttempts >= FREE_DAILY_ATTEMPTS_LIMIT
+
+    const normalize = (v: string | null): string => {
+      if (!v) return ''
+      return v.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
+    }
+
+    if (isRestrictedAttempt) {
+      setIsCurrentRestricted(true)
+      setSolutionRequested(true)
+      setSolutionLoading(false)
+      setSolution('')
+
+      handleOpenPassModalForLimit()
+      addToast('Daily limit reached (5/5). Upgrade to Rookie Pass for unlimited solutions!', 'warning', 3500)
+
+      answerPromise.then(ans => {
+        const correct = normalize(opt) === normalize(ans)
+        setIsCorrect(correct)
+        setSelectedOption(opt)
+        setResolvedCorrectOption(ans)
+        setPendingOption(null)
+        handlePostAnswerMeta(correct, timeSpent, q)
+
+        saveSession({
+          selectedOption: opt,
+          isCorrect: correct,
+          solution: '',
+          solutionRequested: true,
+          solutionBuddyId: activeBuddyId,
+          isRestricted: true,
+        })
+        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150)
+      })
+      return
+    }
+
+    // Unrestricted attempt
+    setIsCurrentRestricted(false)
+    setSolutionRequested(true)
+    setSolutionLoading(true)
     const solutionPromise = generateAISolution(q, activeBuddyId, activeBuddy, q.correct_option || '')
 
     // ── Track solution viewed ───────────────────────────────────────────────
@@ -1411,12 +1609,6 @@ export default function QuestionViewerClient() {
       subject:     q.subject   ?? undefined,
       chapter:     q.chapter   ?? undefined,
     })
-
-    // Normalise both sides to a single lowercase letter for comparison
-    const normalize = (v: string | null): string => {
-      if (!v) return ''
-      return v.replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
-    }
 
     answerPromise.then(ans => {
       const correct = normalize(opt) === normalize(ans)
@@ -1428,12 +1620,23 @@ export default function QuestionViewerClient() {
 
       solutionPromise.then(aiSol => {
         const reconciled = reconcileAnswerLine(aiSol, ans)
-        setSolution(reconciled); setSolutionLoading(false)
+        setSolution(reconciled)
+        setSolutionLoading(false)
         saveSession({
-          selectedOption: opt, isCorrect: correct, solution: reconciled,
-          solutionRequested: true, solutionBuddyId: activeBuddyId,
+          selectedOption: opt,
+          isCorrect: correct,
+          solution: reconciled,
+          solutionRequested: true,
+          solutionBuddyId: activeBuddyId,
+          isRestricted: false,
         })
         setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150)
+
+        // If this was the user's 5th question attempt, prompt with Rookie Pass modal
+        if (!isUserPaid && isNewSolve && updatedAttempts === FREE_DAILY_ATTEMPTS_LIMIT) {
+          addToast("🎉 You've completed your 5 free questions for today!", 'coin', 4000)
+          setTimeout(() => handleOpenPassModalAfterFive(), 1500)
+        }
       })
     })
   }
@@ -1460,44 +1663,94 @@ export default function QuestionViewerClient() {
     const answerPromise: Promise<string | null> = Promise.resolve(q.correct_option ?? null)
 
     setSolutionBuddyId(activeBuddyId)
-    // Free AI solution & Similar questions: always free for all users.
-    // Free users see the Rookie Pass modal like an ad after every 4 questions solved in a row.
-    if (!solutionRequested) {
-      const isNewSolve = !answeredThisSession.current.has(q.question_id)
-      if (isNewSolve) {
-        answeredThisSession.current.add(q.question_id)
-        setConsecutiveSolved(prev => {
-          const next = prev + 1
-          if (hasPass !== true && next > 0 && next % 4 === 0) {
-            setTimeout(() => setShowPassModal(true), 1200)
-          }
-          return next
-        })
-      }
+
+    const isNewSolve = !answeredThisSession.current.has(q.question_id) && !loadSession(globalIndex)?.selectedOption
+    const currentAttempts = attemptsToday
+    let updatedAttempts = currentAttempts
+    if (isNewSolve) {
+      answeredThisSession.current.add(q.question_id)
+      updatedAttempts = currentAttempts + 1
+      setAttemptsToday(updatedAttempts)
+      const todayKey = getTodayAttemptsKey()
+      localStorage.setItem(todayKey, String(updatedAttempts))
+      localStorage.setItem('questionsWeek', String((parseInt(localStorage.getItem('questionsWeek') || '0', 10) + 1)))
+      localStorage.setItem('questionsMonth', String((parseInt(localStorage.getItem('questionsMonth') || '0', 10) + 1)))
     }
-    setSolutionRequested(true); setSolutionLoading(true)
+
+    const isUserPaid = hasPass === true
+    const isRestrictedAttempt = !isUserPaid && currentAttempts >= FREE_DAILY_ATTEMPTS_LIMIT
+
+    if (isRestrictedAttempt) {
+      setIsCurrentRestricted(true)
+      setSolutionRequested(true)
+      setSolutionLoading(false)
+      setSolution('')
+
+      handleOpenPassModalForLimit()
+      addToast('Daily limit reached (5/5). Upgrade to Rookie Pass for unlimited solutions!', 'warning', 3500)
+
+      answerPromise.then(ans => {
+        const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
+        const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
+        setIsCorrect(correct)
+        setSelectedOption('INTEGER')
+        setResolvedCorrectOption(ans || q.correct_option || null)
+        handlePostAnswerMeta(correct, timeSpent, q)
+
+        saveSession({
+          selectedOption: 'INTEGER',
+          isCorrect: correct,
+          solution: '',
+          solutionRequested: true,
+          solutionBuddyId: activeBuddyId,
+          isRestricted: true,
+        })
+      })
+      return
+    }
+
+    // Unrestricted attempt
+    setIsCurrentRestricted(false)
+    setSolutionRequested(true)
+    setSolutionLoading(true)
     const solutionPromise = generateAISolution(q, activeBuddyId, activeBuddy, q.correct_option || '')
 
     answerPromise.then(ans => {
       const u = parseFloat(integerAnswer.trim()), c = parseFloat(ans || '')
       const correct = !isNaN(u) && !isNaN(c) ? u === c : integerAnswer.trim() === (ans || '').trim()
-      setIsCorrect(correct); setSelectedOption('INTEGER')
+      setIsCorrect(correct)
+      setSelectedOption('INTEGER')
       setResolvedCorrectOption(ans || q.correct_option || null)
       handlePostAnswerMeta(correct, timeSpent, q)
 
       solutionPromise.then(aiSol => {
         const reconciled = reconcileAnswerLine(aiSol, ans)
-        setSolution(reconciled); setSolutionLoading(false)
+        setSolution(reconciled)
+        setSolutionLoading(false)
         saveSession({
-          selectedOption: 'INTEGER', isCorrect: correct, solution: reconciled,
-          solutionRequested: true, solutionBuddyId: activeBuddyId,
+          selectedOption: 'INTEGER',
+          isCorrect: correct,
+          solution: reconciled,
+          solutionRequested: true,
+          solutionBuddyId: activeBuddyId,
+          isRestricted: false,
         })
+
+        // If this was the user's 5th question attempt, prompt with Rookie Pass modal
+        if (!isUserPaid && isNewSolve && updatedAttempts === FREE_DAILY_ATTEMPTS_LIMIT) {
+          addToast("🎉 You've completed your 5 free questions for today!", 'coin', 4000)
+          setTimeout(() => handleOpenPassModalAfterFive(), 1500)
+        }
       })
     })
   }
 
   // ── AI Followup (Simpler Explanation) ─────────────────────────────────────
   const handleAIFollowup = async () => {
+    if (isCurrentRestricted) {
+      handleOpenPassModalForLimit()
+      return
+    }
     const q = questions[currentIndex]; if (!q) return
     setAIFollowupLoading(true); setAIFollowup(null)
     try {
@@ -1529,6 +1782,7 @@ export default function QuestionViewerClient() {
     setResolvedCorrectOption(null)
     setSolution(''); setSolutionRequested(false); setAIFollowup(null)
     setIntegerAnswer('')
+    setIsCurrentRestricted(false)
   }
 
   // ── Loading screen ────────────────────────────────────────────────────────
@@ -1584,15 +1838,28 @@ export default function QuestionViewerClient() {
         onClose={() => setShowPassModal(false)}
         isDark={isDark}
         addToast={addToast}
-        title="Level up with Rookie Pass"
-        description="Unlock full PYQ mock shifts, custom test wizard, and complete exam series."
+        title={passModalTitle ?? "Level up with Rookie Pass"}
+        description={passModalDescription ?? "Unlock full PYQ mock shifts, custom test wizard, and complete exam series."}
         onSuccess={async () => {
+          let ok = true
           if (userId) {
             const { checkUserPaidDirectFromDB } = await import('../../lib/rookiePass')
-            const ok = await checkUserPaidDirectFromDB(userId)
-            setHasPass(ok)
-          } else {
-            setHasPass(true)
+            ok = await checkUserPaidDirectFromDB(userId)
+          }
+          setHasPass(ok)
+          setIsCurrentRestricted(false)
+          // Unfreeze current question's AI solution if answered and previously locked
+          const q = questions[currentIndex]
+          if (q && selectedOption !== null && !solution) {
+            setSolutionRequested(true)
+            setSolutionLoading(true)
+            const activeBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
+            generateAISolution(q, solutionBuddyId, activeBuddy, resolvedCorrectOption || q.correct_option || '').then(aiSol => {
+              const reconciled = reconcileAnswerLine(aiSol, resolvedCorrectOption)
+              setSolution(reconciled)
+              setSolutionLoading(false)
+              saveSession({ solution: reconciled, solutionRequested: true, solutionBuddyId, isRestricted: false })
+            })
           }
         }}
       />
@@ -1672,6 +1939,19 @@ export default function QuestionViewerClient() {
                 )}
                 {isIntegerQ(Q) && (
                   <Tag><Define text="No options here. Type the numerical answer.">Integer</Define></Tag>
+                )}
+                {hasPass === true ? (
+                  <Tag tone="pass">
+                    <Sparkles className="size-3 text-[#ffd84d]" /> Rookie Pass
+                  </Tag>
+                ) : (
+                  <Tag tone={attemptsToday >= FREE_DAILY_ATTEMPTS_LIMIT ? 'warning' : 'neutral'}>
+                    <Define text="Free tier includes 5 question attempts with AI solutions per day. Unlimited with Rookie Pass.">
+                      {attemptsToday >= FREE_DAILY_ATTEMPTS_LIMIT
+                        ? 'Daily free limit (5/5)'
+                        : `${attemptsToday}/${FREE_DAILY_ATTEMPTS_LIMIT} free today`}
+                    </Define>
+                  </Tag>
                 )}
               </div>
 
@@ -1762,73 +2042,137 @@ export default function QuestionViewerClient() {
                   </motion.div>
                 ) : null}
 
-                {/* Solution card + Similar Questions — 100% free for all users */}
+                {/* Solution card + Similar Questions */}
                 {solutionRequested && (
                   <>
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                      <Card ref={scrollRef} key="solution-card" className="mt-4 hover:shadow-none sm:p-8">
-                        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={solutionBuddy.image} alt={solutionBuddy.name} className="size-10 rounded-full object-cover" />
-                            <div>
-                              <h3 className="text-title font-semibold tracking-[-0.015em] text-foreground">Solution</h3>
-                              <p className="text-meta text-muted-foreground"><Define term="mentor">Explained by {solutionBuddy.name}</Define></p>
+                    {isCurrentRestricted ? (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                        <Card ref={scrollRef} key="solution-locked-card" className="mt-4 overflow-hidden hover:shadow-none sm:p-8">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={solutionBuddy.image} alt={solutionBuddy.name} className="size-10 rounded-full object-cover ring-1 ring-border" />
+                                <span className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-background ring-1 ring-border shadow-xs">
+                                  <Lock className="size-3 text-muted-foreground" />
+                                </span>
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="text-title font-semibold tracking-[-0.015em] text-foreground">AI Solution Locked</h3>
+                                  <Tag tone="wrong">Limit reached</Tag>
+                                </div>
+                                <p className="text-meta text-muted-foreground">Mentor: {solutionBuddy.name}</p>
+                              </div>
+                            </div>
+                            <Tag tone="neutral">5/5 free questions used</Tag>
+                          </div>
+
+                          {/* Teaser placeholder structure */}
+                          <div className="relative mt-5 overflow-hidden rounded-control bg-muted p-6 ring-1 ring-border">
+                            <div className="pointer-events-none select-none blur-[6px] opacity-25 space-y-3" aria-hidden>
+                              <div className="h-4 w-3/4 rounded bg-foreground" />
+                              <div className="h-4 w-full rounded bg-foreground" />
+                              <div className="h-4 w-5/6 rounded bg-foreground" />
+                              <div className="h-4 w-2/3 rounded bg-foreground" />
+                              <div className="h-16 w-full rounded bg-foreground/50" />
+                            </div>
+
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/85 p-6 text-center backdrop-blur-xs">
+                              <div className="flex size-11 items-center justify-center rounded-full bg-secondary text-primary ring-1 ring-border">
+                                <Lock className="size-5" />
+                              </div>
+                              <h4 className="mt-3 text-title font-semibold text-foreground">
+                                Free daily limit reached (5/5)
+                              </h4>
+                              <p className="mt-1.5 max-w-md text-body-sm text-muted-foreground">
+                                Free users can view up to 5 AI solutions per day. Get Rookie Pass for unlimited instant step-by-step explanations, equation hints, and personalized mentor help.
+                              </p>
+                              <div className="mt-4">
+                                <Button
+                                  onClick={handleOpenPassModalForLimit}
+                                  className="h-10 rounded-control px-5 font-semibold text-body-sm shadow-sm"
+                                >
+                                  Unlock with Rookie Pass <ArrowRight className="size-4" />
+                                </Button>
+                              </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {!solutionLoading && (
-                              <Button variant="ghost" onClick={handleRegenerateSolution} className="h-8 rounded-control px-2.5 text-muted-foreground">
-                                <RotateCcw /> Redo
-                              </Button>
-                            )}
-                          </div>
-                        </div>
 
-                        {solutionLoading ? (
-                          <SolutionLines widths={[100, 88, 94, 72, 83, 90, 65]} />
-                        ) : (
-                          <>
-                            <SolutionWithEquationHints
-                              solution={solution}
-                              isDark={isDark}
-                              apiBase={API_BASE}
-                              buddyId={solutionBuddyId}
-                              buddyName={solutionBuddy.name}
-                              buddySystemPrompt={solutionBuddy.systemPrompt}
-                              questionText={Q?.question_text ?? ''}
-                              feature={isDaily ? 'daily_practice' : 'question_viewer'}
-                              questionId={Q?.question_id}
-                              subject={subject}
-                              chapter={chapterTitle}
-                            />
-                            {Q?.solution_image_url && (
-                              <Figure src={Q.solution_image_url} alt="Solution illustration" onZoom={setImageModal} className="mt-3" />
-                            )}
-                          </>
-                        )}
-
-                        {/* AI Followup */}
-                        {!solutionLoading && solution && (
-                          <div className="mt-4">
-                            {!aiFollowup && !aiFollowupLoading && (
-                              <Button variant="secondary" onClick={handleAIFollowup} className="h-9 rounded-control px-3.5">
-                                <Smile /> Simpler explanation
-                              </Button>
-                            )}
-                            {aiFollowupLoading && (
-                              <div className="flex items-center gap-2"><Spinner /><span className="text-label text-muted-foreground">Generating…</span></div>
-                            )}
-                            {aiFollowup && (
-                              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                                className="whitespace-pre-wrap rounded-control bg-secondary p-4 text-body leading-relaxed text-secondary-foreground sm:p-5">
-                                {aiFollowup}
-                              </motion.div>
-                            )}
+                          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-meta text-muted-foreground">
+                            <span className="flex items-center gap-1.5">
+                              <Sparkles className="size-3.5 text-primary" /> Unlimited AI explanations for every JEE question
+                            </span>
+                            <span>Daily limit resets at 12:00 AM</span>
                           </div>
-                        )}
-                      </Card>
-                    </motion.div>
+                        </Card>
+                      </motion.div>
+                    ) : (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                        <Card ref={scrollRef} key="solution-card" className="mt-4 hover:shadow-none sm:p-8">
+                          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={solutionBuddy.image} alt={solutionBuddy.name} className="size-10 rounded-full object-cover" />
+                              <div>
+                                <h3 className="text-title font-semibold tracking-[-0.015em] text-foreground">Solution</h3>
+                                <p className="text-meta text-muted-foreground"><Define term="mentor">Explained by {solutionBuddy.name}</Define></p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!solutionLoading && (
+                                <Button variant="ghost" onClick={handleRegenerateSolution} className="h-8 rounded-control px-2.5 text-muted-foreground">
+                                  <RotateCcw /> Redo
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          {solutionLoading ? (
+                            <SolutionLines widths={[100, 88, 94, 72, 83, 90, 65]} />
+                          ) : (
+                            <>
+                              <SolutionWithEquationHints
+                                solution={solution}
+                                isDark={isDark}
+                                apiBase={API_BASE}
+                                buddyId={solutionBuddyId}
+                                buddyName={solutionBuddy.name}
+                                buddySystemPrompt={solutionBuddy.systemPrompt}
+                                questionText={Q?.question_text ?? ''}
+                                feature={isDaily ? 'daily_practice' : 'question_viewer'}
+                                questionId={Q?.question_id}
+                                subject={subject}
+                                chapter={chapterTitle}
+                              />
+                              {Q?.solution_image_url && (
+                                <Figure src={Q.solution_image_url} alt="Solution illustration" onZoom={setImageModal} className="mt-3" />
+                              )}
+                            </>
+                          )}
+
+                          {/* AI Followup */}
+                          {!solutionLoading && solution && (
+                            <div className="mt-4">
+                              {!aiFollowup && !aiFollowupLoading && (
+                                <Button variant="secondary" onClick={handleAIFollowup} className="h-9 rounded-control px-3.5">
+                                  <Smile /> Simpler explanation
+                                </Button>
+                              )}
+                              {aiFollowupLoading && (
+                                <div className="flex items-center gap-2"><Spinner /><span className="text-label text-muted-foreground">Generating…</span></div>
+                              )}
+                              {aiFollowup && (
+                                <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                                  className="whitespace-pre-wrap rounded-control bg-secondary p-4 text-body leading-relaxed text-secondary-foreground sm:p-5">
+                                  {aiFollowup}
+                                </motion.div>
+                              )}
+                            </div>
+                          )}
+                        </Card>
+                      </motion.div>
+                    )}
 
                     {/* ── Similar Questions ── */}
                     {Q && (
@@ -1841,6 +2185,8 @@ export default function QuestionViewerClient() {
                           isDark={isDark}
                           addToast={addToast}
                           dbTable={DB_TABLE}
+                          isRestricted={isCurrentRestricted || (hasPass !== true && attemptsToday >= FREE_DAILY_ATTEMPTS_LIMIT)}
+                          onOpenPassModal={handleOpenPassModalForLimit}
                         />
                       </motion.div>
                     )}
