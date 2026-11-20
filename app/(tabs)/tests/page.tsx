@@ -7,10 +7,9 @@ import {
   CalendarRange, ChevronDown, ChevronRight, ClipboardList, Clock, FileText, Gauge, ListChecks, Loader2, Lock, Play, Plus, Sparkles, Target, Trophy,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Card, CardHead, Chip, EmptyState, ListRow, Meta, Metric, Page, PageHeader, Row, Section, Skeleton, Tag } from '@/components/rookie/ui'
 import { Define } from '@/components/rookie/define'
-import { PassPitch, useCloseOnCheckout } from '@/components/rookie/sale'
+import { useBuyPass } from '@/components/rookie/sale'
 import { sale, saleMoney } from '@/lib/sale'
 import { cn } from '@/lib/utils'
 import { supabase } from '../../../public/src/utils/supabase'
@@ -81,25 +80,6 @@ function fmtDur(seconds: number | null) {
   if (!seconds) return '—'
   const m = Math.floor(seconds / 60)
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`
-}
-
-// ─── Pass upsell dialog ───────────────────────────────────────────────────────
-function PassDialog({ open, onOpenChange, reason, onSuccess }: {
-  open: boolean; onOpenChange: (o: boolean) => void; reason: string; onSuccess: () => void
-}) {
-  // Razorpay can't take focus inside a modal dialog — close this when checkout opens.
-  useCloseOnCheckout(useCallback(() => onOpenChange(false), [onOpenChange]))
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 rounded-card p-6 sm:max-w-[440px]">
-        <DialogTitle className="text-heading font-semibold tracking-[-0.02em]">Unlock with Rookie Pass</DialogTitle>
-        <DialogDescription className="sr-only">{reason}</DialogDescription>
-        <div className="mt-3">
-          <PassPitch reason={reason} onSuccess={onSuccess} />
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
 }
 
 // ─── Overall stats ─────────────────────────────────────────────────────────────
@@ -188,7 +168,7 @@ function PYQMockSection({ attempts, onStarted }: { attempts: TestAttemptRow[]; o
   const [filterExam,  setFilterExam]  = useState<ExamFilter>('JEE Main')
   const [starting,    setStarting]    = useState<string | null>(null)
   const [hasPass,     setHasPass]     = useState<boolean | null>(null)
-  const [payOpen,     setPayOpen]     = useState(false)
+  const { buy: buyPass, loading: buyPassLoading } = useBuyPass(() => { bustPassCache(); setHasPass(true) })
 
   // Check Rookie Pass on mount + listen for updates
   useEffect(() => {
@@ -229,9 +209,8 @@ function PYQMockSection({ attempts, onStarted }: { attempts: TestAttemptRow[]; o
       }
     }
 
-    // If locked, show the Rookie Pass upsell (checkout runs from PassPitch → triggerCheckout)
     if (!unlocked) {
-      setPayOpen(true)
+      buyPass()
       return
     }
 
@@ -321,12 +300,6 @@ function PYQMockSection({ attempts, onStarted }: { attempts: TestAttemptRow[]; o
         </Button>
       )}
 
-      <PassDialog
-        open={payOpen}
-        onOpenChange={setPayOpen}
-        reason="This shift is part of Rookie Pass. Your free mock is the 9 April 2024 evening shift."
-        onSuccess={() => { bustPassCache(); setHasPass(true); setPayOpen(false) }}
-      />
     </Card>
   )
 }
@@ -340,7 +313,7 @@ const CUSTOM_STEPS = [
 
 function HeroCard({ onNew, attempts }: { onNew: () => void; attempts: TestAttemptRow[] }) {
   const [hasPass,    setHasPass]    = useState<boolean | null>(null)
-  const [payOpen,    setPayOpen]    = useState(false)
+  const { buy: buyPass, loading: buyPassLoading } = useBuyPass(() => { bustPassCache(); setHasPass(true) })
   const customToday = countCustomTestsToday(attempts)
   const FREE_LIMIT  = 1
 
@@ -418,8 +391,8 @@ function HeroCard({ onNew, attempts }: { onNew: () => void; attempts: TestAttemp
             <Button disabled className="h-11 rounded-control px-5 text-body">
               <Plus /> Create test
             </Button>
-            <Button variant="secondary" onClick={() => setPayOpen(true)} className="h-11 rounded-control px-4">
-              <Sparkles /> Go unlimited
+            <Button variant="secondary" onClick={buyPass} disabled={buyPassLoading} className="h-11 rounded-control px-4">
+              {buyPassLoading ? <><Loader2 className="size-4 animate-spin" /> Opening…</> : <><Sparkles /> Go unlimited</>}
             </Button>
             <Meta className="basis-full pt-1">You&apos;ve used today&apos;s free test. Come back tomorrow, or get Rookie Pass.</Meta>
           </>
@@ -429,13 +402,6 @@ function HeroCard({ onNew, attempts }: { onNew: () => void; attempts: TestAttemp
           </Button>
         )}
       </div>
-
-      <PassDialog
-        open={payOpen}
-        onOpenChange={setPayOpen}
-        reason="Free plan: 1 custom test a day. Rookie Pass makes them unlimited."
-        onSuccess={() => { bustPassCache(); setHasPass(true); setPayOpen(false) }}
-      />
     </Card>
   )
 }

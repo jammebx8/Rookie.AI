@@ -830,7 +830,7 @@ function SimilarQuestionsPanel({
               </div>
             </div>
             <Button
-             onClick={buy}
+              onClick={onOpenPassModal}
               className="h-10 shrink-0 w-full sm:w-auto rounded-control px-4 font-semibold text-body-sm shadow-sm"
             >
               Unlock with Pass <ArrowRight className="size-4" />
@@ -971,7 +971,6 @@ export default function QuestionViewerClient() {
   const [buddyId, setBuddyId]                   = useState(DEFAULT_BUDDY_ID)
   const [solutionBuddyId, setSolutionBuddyId]   = useState(DEFAULT_BUDDY_ID)
   const [buddyModalOpen, setBuddyModalOpen]     = useState(false)
-  const [showPassModal, setShowPassModal]       = useState(false)
   const [userId, setUserId]                     = useState<string | null>(null)
   const [dailySetIndex, setDailySetIndex]       = useState(1)
   const [loadingNextSet, setLoadingNextSet]     = useState(false)
@@ -981,20 +980,37 @@ export default function QuestionViewerClient() {
   const [hasPass, setHasPass] = useState<boolean | null>(null) // null = checking directly from DB
   const [attemptsToday, setAttemptsToday] = useState<number>(getStoredTodayAttempts)
   const [isCurrentRestricted, setIsCurrentRestricted] = useState(false)
-  const [passModalTitle, setPassModalTitle] = useState<string | undefined>(undefined)
-  const [passModalDescription, setPassModalDescription] = useState<string | undefined>(undefined)
 
-  const handleOpenPassModalForLimit = useCallback(() => {
-    setPassModalTitle('Daily free limit reached (5/5)')
-    setPassModalDescription("You've completed your 5 free questions for today. Upgrade to Rookie Pass to unlock unlimited step-by-step AI solutions and similar questions.")
-    setShowPassModal(true)
-  }, [])
+  // On successful purchase: re-check pass status and unfreeze the current locked solution
+  const handlePassSuccess = useCallback(async () => {
+    let ok = true
+    if (userId) {
+      const { checkUserPaidDirectFromDB } = await import('../../lib/rookiePass')
+      ok = await checkUserPaidDirectFromDB(userId)
+    }
+    setHasPass(ok)
+    setIsCurrentRestricted(false)
+    const q = questions[currentIndex]
+    if (q && selectedOption !== null && !solution) {
+      setSolutionRequested(true)
+      setSolutionLoading(true)
+      const activeBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
+      generateAISolution(q, solutionBuddyId, activeBuddy, resolvedCorrectOption || q.correct_option || '').then(aiSol => {
+        const reconciled = reconcileAnswerLine(aiSol, resolvedCorrectOption)
+        setSolution(reconciled)
+        setSolutionLoading(false)
+        saveSession({ solution: reconciled, solutionRequested: true, solutionBuddyId, isRestricted: false })
+      })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, questions, currentIndex, selectedOption, solution, solutionBuddyId, resolvedCorrectOption])
 
-  const handleOpenPassModalAfterFive = useCallback(() => {
-    setPassModalTitle("You've completed today's 5 free questions!")
-    setPassModalDescription("Great job! Upgrade to Rookie Pass to get unlimited step-by-step AI solutions, similar questions, and complete JEE exam series.")
-    setShowPassModal(true)
-  }, [])
+  const { buy: openCheckout } = useBuyPass(handlePassSuccess)
+
+  // Keep these as thin wrappers so all existing call-sites (auto-popup after 5 Qs,
+  // redo button, followup button) go straight to checkout without an intermediate modal.
+  const handleOpenPassModalForLimit    = useCallback(() => openCheckout(), [openCheckout])
+  const handleOpenPassModalAfterFive   = useCallback(() => openCheckout(), [openCheckout])
 
   // Sync today's question attempts count with Supabase attempts table if logged in
   useEffect(() => {
@@ -1926,38 +1942,6 @@ export default function QuestionViewerClient() {
           setBuddyId(id)
           try { localStorage.setItem('selectedBuddy', id) } catch {}
           addToast(`Buddy changed to ${AI_BUDDIES[id]?.name}`, 'info', 2000)
-        }}
-      />
-
-      {/* Rookie Pass Modal */}
-      <RookiePassModal
-        isOpen={showPassModal}
-        onClose={() => setShowPassModal(false)}
-        isDark={isDark}
-        addToast={addToast}
-        title={passModalTitle ?? "Level up with Rookie Pass"}
-        description={passModalDescription ?? "Unlock full PYQ mock shifts, custom test wizard, and complete exam series."}
-        onSuccess={async () => {
-          let ok = true
-          if (userId) {
-            const { checkUserPaidDirectFromDB } = await import('../../lib/rookiePass')
-            ok = await checkUserPaidDirectFromDB(userId)
-          }
-          setHasPass(ok)
-          setIsCurrentRestricted(false)
-          // Unfreeze current question's AI solution if answered and previously locked
-          const q = questions[currentIndex]
-          if (q && selectedOption !== null && !solution) {
-            setSolutionRequested(true)
-            setSolutionLoading(true)
-            const activeBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
-            generateAISolution(q, solutionBuddyId, activeBuddy, resolvedCorrectOption || q.correct_option || '').then(aiSol => {
-              const reconciled = reconcileAnswerLine(aiSol, resolvedCorrectOption)
-              setSolution(reconciled)
-              setSolutionLoading(false)
-              saveSession({ solution: reconciled, solutionRequested: true, solutionBuddyId, isRestricted: false })
-            })
-          }
         }}
       />
 

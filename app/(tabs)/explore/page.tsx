@@ -7,9 +7,8 @@ import { ArrowRight, Atom, FlaskConical, Lock, Sigma, type LucideIcon } from 'lu
 import { hasRookiePass, bustPassCache } from '@/lib/rookiePass';
 import { Page, PageHeader, Row, Chip, Tag, Meta, Skeleton, cardCls } from '@/components/rookie/ui';
 import { Define } from '@/components/rookie/define';
-import { PassPitch, useCloseOnCheckout } from '@/components/rookie/sale';
+import { PassPitch, useCloseOnCheckout, useBuyPass } from '@/components/rookie/sale';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 type Subject = {
@@ -68,14 +67,16 @@ function SubjectSkeleton() {
 export default function ExplorePage() {
   const [selectedExam, setSelectedExam] = useState<string>(EXAMS[0].name);
   const [showSkeleton, setShowSkeleton] = useState(false);
-  const [hasPass,      setHasPass]      = useState<boolean | null>(null); // null = checking
-  const [showPaywall,  setShowPaywall]  = useState(false);
-  // Razorpay can't take focus inside a modal dialog — close the paywall when checkout opens.
-  useCloseOnCheckout(useCallback(() => setShowPaywall(false), []));
-  // Exam highlighted in the switch (moves at once; the cards follow after the skeleton)
+  const [hasPass,      setHasPass]      = useState<boolean | null>(null);
   const [pendingExam,  setPendingExam]  = useState<string>(EXAMS[0].name);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router   = useRouter();
+
+  const handlePassSuccess = useCallback(() => {
+    bustPassCache();
+    setHasPass(true);
+  }, []);
+  const { buy: buyPass, loading: buyLoading } = useBuyPass(handlePassSuccess);
 
   // Check pass from DB on mount + listen for updates
   useEffect(() => {
@@ -114,7 +115,7 @@ export default function ExplorePage() {
       const pass = await hasRookiePass(undefined, true);
       setHasPass(pass);
       if (!pass) {
-        setShowPaywall(true);
+        buyPass();
         return;
       }
     }
@@ -130,11 +131,6 @@ export default function ExplorePage() {
   }, [selectedExam, router]);
 
   // Checkout runs through the shared useBuyPass flow (triggerCheckout) inside PassPitch.
-  const handlePassSuccess = useCallback(() => {
-    bustPassCache();
-    setHasPass(true);
-    setShowPaywall(false);
-  }, []);
 
   const subjects   = SUBJECTS[selectedExam] ?? [];
   const isAdvanced = selectedExam === 'JEE Advanced';
@@ -177,8 +173,8 @@ export default function ExplorePage() {
               <Meta>Every Advanced PYQ, all years and chapters. Paid yearly.</Meta>
             </div>
           </div>
-          <Button variant="secondary" className="h-9 rounded-control px-4" onClick={() => setShowPaywall(true)}>
-            Unlock with Rookie Pass
+          <Button variant="secondary" className="h-9 rounded-control px-4" onClick={buyPass} disabled={buyLoading}>
+            {buyLoading ? 'Opening checkout…' : 'Unlock with Rookie Pass'}
           </Button>
         </motion.div>
       )}
@@ -242,7 +238,7 @@ export default function ExplorePage() {
                       <Button
                         variant="secondary"
                         className="h-9 w-full rounded-control"
-                        onClick={(e) => { e.stopPropagation(); setShowPaywall(true); }}
+                        onClick={(e) => { e.stopPropagation(); buyPass(); }}
                       >
                         <Lock className="size-4" /> Unlock with Rookie Pass
                       </Button>
@@ -259,20 +255,6 @@ export default function ExplorePage() {
         )}
       </div>
 
-      {/* ── Paywall ── */}
-      <Dialog open={showPaywall} onOpenChange={(open) => { if (!open) setShowPaywall(false); }}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] gap-5 overflow-y-auto rounded-card bg-card p-6 sm:max-w-[420px]">
-          <div>
-            <DialogTitle className="text-title font-semibold tracking-[-0.015em] text-foreground">
-              Unlock JEE Advanced
-            </DialogTitle>
-            <DialogDescription className="mt-1.5 text-body-sm">
-              Every Advanced PYQ across all years, subjects and chapters, plus AI solutions and custom tests.
-            </DialogDescription>
-          </div>
-          <PassPitch onSuccess={handlePassSuccess} />
-        </DialogContent>
-      </Dialog>
     </Page>
   );
 }
