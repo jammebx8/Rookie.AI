@@ -2,21 +2,21 @@
 /**
  * EquationHintTooltip
  * ───────────────────
- * Wraps a single rendered KaTeX equation so hovering shows a 2-line
- * step-explanation popup. Uses the same Tooltip primitive as streak/coins/marks.
+ * Wraps a single KaTeX equation so hovering shows a 2-line step-explanation
+ * popup with full LaTeX rendering inside the tooltip.
  *
- * The popup renders plain text — no KaTeX inside the tooltip.
- * KaTeX inside a tooltip (inline-flex, 300 px wide) causes the column-layout
- * explosion visible in the screenshot: each .katex span becomes a flex child,
- * display-math equations overflow, and baseline alignment breaks.
- *
- * Instead we strip $…$ / $$…$$ delimiters from the AI response and show the
- * raw LaTeX source inline. E.g. "$v_0 = R\omega$" → "v_0 = Rω" reads fine at
- * tooltip size and has zero layout side-effects. For the rare symbol that
- * renders poorly we apply a small Unicode substitution table.
+ * Layout fix
+ * ──────────
+ * The base TooltipContent uses `inline-flex items-center` which turns every
+ * KaTeX node into a flex column. We override it to `block` text flow via
+ * className. We also suppress .katex-display's `display:block; margin:1em 0`
+ * (produced by <BlockMath>) and normalise .katex font-size so math matches
+ * the tooltip text size — all scoped to a wrapper div so nothing else is
+ * affected.
  */
 import * as React from 'react';
 import { Loader2 } from 'lucide-react';
+import { InlineMath } from 'react-katex';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -34,62 +34,55 @@ interface EquationHintTooltipProps {
   display?: boolean;
 }
 
-// ── Unicode substitution table ────────────────────────────────────────────────
-// Applied to LaTeX source strings that appear inside the tooltip so they read
-// naturally without KaTeX. Only the most common symbols are covered; anything
-// not in the table stays as-is (still readable as LaTeX source).
-const LATEX_TO_UNICODE: [RegExp, string][] = [
-  [/\\alpha/g,   'α'],  [/\\beta/g,    'β'],  [/\\gamma/g,   'γ'],
-  [/\\delta/g,   'δ'],  [/\\epsilon/g, 'ε'],  [/\\theta/g,   'θ'],
-  [/\\lambda/g,  'λ'],  [/\\mu/g,      'μ'],  [/\\pi/g,      'π'],
-  [/\\sigma/g,   'σ'],  [/\\omega/g,   'ω'],  [/\\Omega/g,   'Ω'],
-  [/\\phi/g,     'φ'],  [/\\psi/g,     'ψ'],  [/\\rho/g,     'ρ'],
-  [/\\tau/g,     'τ'],  [/\\eta/g,     'η'],  [/\\nu/g,      'ν'],
-  [/\\xi/g,      'ξ'],  [/\\zeta/g,    'ζ'],
-  [/\\infty/g,   '∞'],  [/\\approx/g,  '≈'],  [/\\neq/g,     '≠'],
-  [/\\leq/g,     '≤'],  [/\\geq/g,     '≥'],  [/\\pm/g,      '±'],
-  [/\\times/g,   '×'],  [/\\div/g,     '÷'],  [/\\cdot/g,    '·'],
-  [/\\sqrt\{([^}]+)\}/g, '√($1)'],
-  [/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)'],
-  [/\\left[\(\[]/g, '('], [/\\right[\)\]]/g, ')'],
-  [/\^2/g, '²'],  [/\^3/g, '³'],
-  [/\^{([^}]*)}/g, '^$1'],
-  [/_{([^}]*)}/g,  '_$1'],
-  [/\\,|\\;|\\!/g, ' '],
-  [/\{|\}/g, ''],
-  [/\\\\/g, ' '],
-  [/\\text\{([^}]+)\}/g, '$1'],
-  [/\\mathrm\{([^}]+)\}/g, '$1'],
-  [/\\mathbf\{([^}]+)\}/g, '$1'],
-];
-
 /**
- * Convert a LaTeX source string to a readable plain-text approximation
- * suitable for a tooltip. Strips $ delimiters, applies the unicode table,
- * and collapses excess whitespace.
- */
-function latexToPlain(src: string): string {
-  // 1. Strip $$…$$ and $…$ delimiters (keep the inner content)
-  let out = src
-    .replace(/\$\$([^$]+)\$\$/g, ' $1 ')
-    .replace(/\$([^$\n]+)\$/g, ' $1 ');
-
-  // 2. Apply unicode substitutions
-  for (const [re, replacement] of LATEX_TO_UNICODE) {
-    out = out.replace(re, replacement);
-  }
-
-  // 3. Collapse repeated spaces
-  return out.replace(/\s{2,}/g, ' ').trim();
-}
-
-/**
- * Render the AI explanation as plain readable text.
- * LaTeX fragments inside the response are converted to unicode approximations —
- * never rendered with KaTeX, which breaks inside a flex tooltip container.
+ * Render the AI explanation text with full KaTeX support.
+ *
+ * Split on $$…$$ then $…$ delimiters. All math — even $$…$$ — is
+ * rendered as InlineMath so it stays in the text flow and never triggers
+ * .katex-display's block + 1em margins.
+ *
+ * The wrapper div uses style overrides that are intentionally scoped here:
+ *   • `display: block`  — overrides the tooltip's `inline-flex items-center`
+ *                         so text wraps normally instead of columning
+ *   • `.katex { font-size: inherit }` — keeps math the same size as the
+ *                         surrounding tooltip text (tooltip is already xs)
+ *   • `.katex-display { display: inline; margin: 0 }` — prevents any
+ *                         stray $$…$$ from going block even if BlockMath slips in
  */
 function HintText({ text }: { text: string }) {
-  return <>{latexToPlain(text)}</>;
+  // Split on $$…$$ first, then $…$ on what remains
+  const parts: React.ReactNode[] = [];
+  let key = 0;
+
+  // Single-pass tokeniser: $$...$$ → InlineMath, $...$ → InlineMath
+  // (both forced inline so layout never breaks)
+  const TOKEN = /(\$\$[\s\S]+?\$\$|\$[^\n$]+?\$)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = TOKEN.exec(text)) !== null) {
+    if (m.index > last) {
+      parts.push(
+        <React.Fragment key={key++}>{text.slice(last, m.index)}</React.Fragment>
+      );
+    }
+    const raw = m[1];
+    const isDisplay = raw.startsWith('$$');
+    const inner = isDisplay ? raw.slice(2, -2).trim() : raw.slice(1, -1).trim();
+    // Always render as InlineMath — display math in a narrow tooltip is broken
+    parts.push(<InlineMath key={key++} math={inner} />);
+    last = m.index + raw.length;
+  }
+
+  if (last < text.length) {
+    parts.push(<React.Fragment key={key++}>{text.slice(last)}</React.Fragment>);
+  }
+
+  return (
+    <span style={{ display: 'block' }}>
+      {parts}
+    </span>
+  );
 }
 
 export function EquationHintTooltip({
@@ -109,41 +102,49 @@ export function EquationHintTooltip({
     }
   };
 
-  const triggerClass = cn(
-    'outline-none transition',
-    'decoration-dotted decoration-1 underline-offset-[3px]',
-    'hover:underline focus-visible:underline',
-    'cursor-help',
-    display ? 'inline-block' : 'inline',
-  );
-
   return (
     <Tooltip>
       <TooltipTrigger
         render={<span tabIndex={0} />}
-        className={triggerClass}
+        className={cn(
+          'outline-none transition cursor-help',
+          'decoration-dotted decoration-1 underline-offset-[3px]',
+          'hover:underline focus-visible:underline',
+          display ? 'inline-block' : 'inline',
+        )}
         onMouseEnter={handleHover}
         onFocus={handleHover}
       >
         {children}
       </TooltipTrigger>
+
+      {/*
+        Override the base popup layout:
+        - `!block`           — replace `inline-flex items-center` with block so
+                               text wraps and KaTeX nodes sit in normal flow
+        - `!items-start`     — in case the flex isn't fully overridden
+        - `max-w-[320px]`    — wide enough for a full sentence
+        - `leading-relaxed`  — comfortable line-height for multi-line text
+        The katex CSS overrides live in globals.css as .hint-popup .katex rules
+        rather than inline Tailwind so they can target child class names.
+      */}
       <TooltipContent
         side="top"
         sideOffset={6}
-        className="max-w-[320px] text-xs leading-relaxed whitespace-normal"
+        className="hint-popup !block !items-start max-w-[320px] leading-relaxed whitespace-normal text-xs"
       >
         {hint.status === 'idle' && (
-          <span className="opacity-60 text-xs">Hover to explain this step…</span>
+          <span className="opacity-60">Hover to explain this step…</span>
         )}
         {hint.status === 'loading' && (
-          <span className="flex items-center gap-1.5 text-xs">
+          <span className="flex items-center gap-1.5">
             <Loader2 className="size-3 animate-spin shrink-0" />
             Explaining…
           </span>
         )}
         {hint.status === 'done' && <HintText text={hint.text} />}
         {hint.status === 'error' && (
-          <span className="opacity-70 text-xs">Couldn't load — hover again to retry.</span>
+          <span className="opacity-70">Couldn't load — hover again to retry.</span>
         )}
       </TooltipContent>
     </Tooltip>

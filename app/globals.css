@@ -109,3 +109,39 @@
     @apply font-sans;
   }
 }
+
+/* ── Equation hint tooltip — KaTeX inside the popup ───────────────────────────
+ * .hint-popup is applied to TooltipContent when it wraps step-explanation text.
+ *
+ * Problems being fixed:
+ *   1. TooltipContent is `inline-flex items-center` — KaTeX nodes become flex
+ *      columns. We switch to `block` via Tailwind !block but also set
+ *      display:block here as a fallback for the popup element itself.
+ *   2. .katex font-size is 1.21em — inside a text-xs tooltip this makes math
+ *      larger than the surrounding text. Inherit keeps sizes consistent.
+ *   3. .katex-display is `display:block; margin:1em 0; text-align:center` —
+ *      even when we pass InlineMath, any $$…$$ remnant triggers this. Force
+ *      inline + zero margin so it stays in flow.
+ *   4. .katex-html baseline — KaTeX's inner span uses position:relative with
+ *      computed height; this can push surrounding text down. Setting
+ *      vertical-align:middle on .katex anchors it to the text baseline.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.hint-popup {
+  display: block !important;
+}
+
+.hint-popup .katex {
+  font-size: inherit !important;
+  line-height: inherit !important;
+  vertical-align: middle;
+}
+
+.hint-popup .katex-display {
+  display: inline !important;
+  margin: 0 !important;
+  text-align: left !important;
+}
+
+.hint-popup .katex-html {
+  display: inline !important;
+}
