@@ -830,7 +830,7 @@ function SimilarQuestionsPanel({
               </div>
             </div>
             <Button
-              onClick={onOpenPassModal}
+             onClick={buy}
               className="h-10 shrink-0 w-full sm:w-auto rounded-control px-4 font-semibold text-body-sm shadow-sm"
             >
               Unlock with Pass <ArrowRight className="size-4" />
