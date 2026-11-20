@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import RookiePassModal from './RookiePassModal'
+import { useBuyPass } from '@/components/rookie/sale'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const FREE_DAILY_ATTEMPTS_LIMIT = 5
@@ -275,6 +276,110 @@ function BuddySelectorModal({ open, currentBuddyId, onSelect, onClose }: {
 /** Normalise an answer to a single lowercase option letter. */
 const optLetter = (v: string | null | undefined) =>
   (v ?? '').replace(/option_?/gi, '').replace(/[^a-dA-D]/g, '').slice(0, 1).toLowerCase()
+
+// ─── Locked solution components ───────────────────────────────────────────────
+
+/**
+ * Compact locked row inside SimilarQuestionCard.
+ * Uses useBuyPass — pressing the button opens Razorpay directly.
+ */
+function LockedSolutionRow({ onOpenPassModal }: { onOpenPassModal?: () => void }) {
+  const { buy, loading } = useBuyPass(onOpenPassModal)
+  return (
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-control bg-muted p-4 ring-1 ring-border">
+      <div className="flex items-center gap-2 text-body-sm text-foreground">
+        <Lock className="size-4 shrink-0 text-muted-foreground" />
+        <span>AI Solution locked — daily 5-question limit reached</span>
+      </div>
+      <Button onClick={buy} disabled={loading} className="h-8 shrink-0 rounded-control px-3 text-caption font-semibold">
+        {loading ? <><Loader2 className="size-3.5 animate-spin" /> Opening…</> : <>Unlock with Rookie Pass <ArrowRight className="size-3.5" /></>}
+      </Button>
+    </div>
+  )
+}
+
+/**
+ * Full locked solution card in the main viewer.
+ * Taller teaser so the lock icon isn't squished.
+ * "Unlock with Rookie Pass" opens Razorpay directly — no intermediate modal.
+ */
+const LockedSolutionCard = React.forwardRef<HTMLDivElement, {
+  buddyImage: string
+  buddyName: string
+  onSuccess: () => void
+}>(function LockedSolutionCard({ buddyImage, buddyName, onSuccess }, ref) {
+  const { buy, loading } = useBuyPass(onSuccess)
+
+  return (
+    <Card ref={ref} key="solution-locked-card" className="mt-4 overflow-hidden hover:shadow-none sm:p-8">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="relative shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={buddyImage} alt={buddyName} className="size-10 rounded-full object-cover ring-1 ring-border" />
+            <span className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-background ring-1 ring-border shadow-xs">
+              <Lock className="size-3 text-muted-foreground" />
+            </span>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-title font-semibold tracking-[-0.015em] text-foreground">AI Solution Locked</h3>
+              <Tag tone="wrong">Limit reached</Tag>
+            </div>
+            <p className="text-meta text-muted-foreground">Mentor: {buddyName}</p>
+          </div>
+        </div>
+        <Tag tone="neutral">5/5 free questions used</Tag>
+      </div>
+
+      {/* Teaser — taller so the overlay lock icon has room */}
+      <div className="relative mt-5 overflow-hidden rounded-control bg-muted ring-1 ring-border">
+        {/* Blurred fake content — min height ensures the lock isn't squished */}
+        <div className="pointer-events-none select-none blur-[6px] opacity-20 space-y-3 p-6 pb-8" aria-hidden>
+          <div className="h-4 w-3/4 rounded bg-foreground" />
+          <div className="h-4 w-full rounded bg-foreground" />
+          <div className="h-4 w-5/6 rounded bg-foreground" />
+          <div className="h-4 w-2/3 rounded bg-foreground" />
+          <div className="h-4 w-full rounded bg-foreground" />
+          <div className="h-4 w-4/5 rounded bg-foreground" />
+          <div className="h-20 w-full rounded bg-foreground/40 mt-2" />
+        </div>
+
+        {/* Overlay */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-0 bg-background/85 p-6 text-center backdrop-blur-xs">
+          <div className="flex size-14 items-center justify-center rounded-full bg-secondary ring-2 ring-border shadow-sm">
+            <Lock className="size-6 text-primary" />
+          </div>
+          <h4 className="mt-4 text-title font-semibold text-foreground">
+            Free daily limit reached (5/5)
+          </h4>
+          <p className="mt-1.5 max-w-sm text-body-sm text-muted-foreground">
+            Get Rookie Pass for unlimited AI explanations — hover any equation to understand that exact step, explained by your buddy.
+          </p>
+          <div className="mt-5">
+            <Button
+              onClick={buy}
+              disabled={loading}
+              className="h-11 rounded-control px-6 font-semibold text-body-sm shadow-sm"
+            >
+              {loading
+                ? <><Loader2 className="size-4 animate-spin" /> Opening checkout…</>
+                : <>Unlock with Rookie Pass <ArrowRight className="size-4" /></>}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-meta text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <Sparkles className="size-3.5 text-primary" /> Unlimited AI explanations for every JEE question
+        </span>
+        <span>Daily limit resets at 12:00 AM</span>
+      </div>
+    </Card>
+  )
+})
 
 // ─── Similar Question Card (self-contained interactive mini question) ─────────
 function SimilarQuestionCard({
@@ -544,15 +649,7 @@ function SimilarQuestionCard({
       {solutionRequested && (
         <div className="space-y-3">
           {isRestricted ? (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-control bg-muted p-4 ring-1 ring-border">
-              <div className="flex items-center gap-2 text-body-sm text-foreground">
-                <Lock className="size-4 text-muted-foreground" />
-                <span>AI Solution locked (daily 5-question limit reached)</span>
-              </div>
-              <Button onClick={onOpenPassModal} className="h-8 rounded-control px-3 text-caption font-semibold">
-                Unlock with Pass <ArrowRight className="size-3.5" />
-              </Button>
-            </div>
+            <LockedSolutionRow onOpenPassModal={onOpenPassModal} />
           ) : (
             <>
               <div className="flex items-center gap-2.5">
@@ -1938,21 +2035,9 @@ export default function QuestionViewerClient() {
                   <Tag><Define term="marks">+4 / −1</Define></Tag>
                 )}
                 {isIntegerQ(Q) && (
-                  <Tag><Define text="No options here. Type the numerical answer.">Integer</Define></Tag>
+                  <Tag><Define text="No options here. Type the numerical answer.">Integer type</Define></Tag>
                 )}
-                {hasPass === true ? (
-                  <Tag tone="pass">
-                    <Sparkles className="size-3 text-[#ffd84d]" /> Rookie Pass
-                  </Tag>
-                ) : (
-                  <Tag tone={attemptsToday >= FREE_DAILY_ATTEMPTS_LIMIT ? 'warning' : 'neutral'}>
-                    <Define text="Free tier includes 5 question attempts with AI solutions per day. Unlimited with Rookie Pass.">
-                      {attemptsToday >= FREE_DAILY_ATTEMPTS_LIMIT
-                        ? 'Daily free limit (5/5)'
-                        : `${attemptsToday}/${FREE_DAILY_ATTEMPTS_LIMIT} free today`}
-                    </Define>
-                  </Tag>
-                )}
+               
               </div>
 
               <div className="question-body__text text-body-lg font-medium leading-relaxed text-foreground">{renderLatex(Q.question_text, isDark)}</div>
@@ -2047,65 +2132,32 @@ export default function QuestionViewerClient() {
                   <>
                     {isCurrentRestricted ? (
                       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                        <Card ref={scrollRef} key="solution-locked-card" className="mt-4 overflow-hidden hover:shadow-none sm:p-8">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="relative">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={solutionBuddy.image} alt={solutionBuddy.name} className="size-10 rounded-full object-cover ring-1 ring-border" />
-                                <span className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-background ring-1 ring-border shadow-xs">
-                                  <Lock className="size-3 text-muted-foreground" />
-                                </span>
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h3 className="text-title font-semibold tracking-[-0.015em] text-foreground">AI Solution Locked</h3>
-                                  <Tag tone="wrong">Limit reached</Tag>
-                                </div>
-                                <p className="text-meta text-muted-foreground">Mentor: {solutionBuddy.name}</p>
-                              </div>
-                            </div>
-                            <Tag tone="neutral">5/5 free questions used</Tag>
-                          </div>
-
-                          {/* Teaser placeholder structure */}
-                          <div className="relative mt-5 overflow-hidden rounded-control bg-muted p-6 ring-1 ring-border">
-                            <div className="pointer-events-none select-none blur-[6px] opacity-25 space-y-3" aria-hidden>
-                              <div className="h-4 w-3/4 rounded bg-foreground" />
-                              <div className="h-4 w-full rounded bg-foreground" />
-                              <div className="h-4 w-5/6 rounded bg-foreground" />
-                              <div className="h-4 w-2/3 rounded bg-foreground" />
-                              <div className="h-16 w-full rounded bg-foreground/50" />
-                            </div>
-
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/85 p-6 text-center backdrop-blur-xs">
-                              <div className="flex size-11 items-center justify-center rounded-full bg-secondary text-primary ring-1 ring-border">
-                                <Lock className="size-5" />
-                              </div>
-                              <h4 className="mt-3 text-title font-semibold text-foreground">
-                                Free daily limit reached (5/5)
-                              </h4>
-                              <p className="mt-1.5 max-w-md text-body-sm text-muted-foreground">
-                                Free users can view up to 5 AI solutions per day. Get Rookie Pass for unlimited instant step-by-step explanations, equation hints, and personalized mentor help.
-                              </p>
-                              <div className="mt-4">
-                                <Button
-                                  onClick={handleOpenPassModalForLimit}
-                                  className="h-10 rounded-control px-5 font-semibold text-body-sm shadow-sm"
-                                >
-                                  Unlock with Rookie Pass <ArrowRight className="size-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-meta text-muted-foreground">
-                            <span className="flex items-center gap-1.5">
-                              <Sparkles className="size-3.5 text-primary" /> Unlimited AI explanations for every JEE question
-                            </span>
-                            <span>Daily limit resets at 12:00 AM</span>
-                          </div>
-                        </Card>
+                        <LockedSolutionCard
+                          ref={scrollRef}
+                          buddyImage={solutionBuddy.image}
+                          buddyName={solutionBuddy.name}
+                          onSuccess={async () => {
+                            let ok = true
+                            if (userId) {
+                              const { checkUserPaidDirectFromDB } = await import('../../lib/rookiePass')
+                              ok = await checkUserPaidDirectFromDB(userId)
+                            }
+                            setHasPass(ok)
+                            setIsCurrentRestricted(false)
+                            const q = questions[currentIndex]
+                            if (q && selectedOption !== null && !solution) {
+                              setSolutionRequested(true)
+                              setSolutionLoading(true)
+                              const activeBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
+                              generateAISolution(q, solutionBuddyId, activeBuddy, resolvedCorrectOption || q.correct_option || '').then(aiSol => {
+                                const reconciled = reconcileAnswerLine(aiSol, resolvedCorrectOption)
+                                setSolution(reconciled)
+                                setSolutionLoading(false)
+                                saveSession({ solution: reconciled, solutionRequested: true, solutionBuddyId, isRestricted: false })
+                              })
+                            }
+                          }}
+                        />
                       </motion.div>
                     ) : (
                       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>

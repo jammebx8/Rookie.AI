@@ -54,6 +54,7 @@ export default function RookiePassModal({
         userId: session.user.id,
         email: session.user.email,
         name: user?.name ?? null,
+        phone: user?.phone ?? null,
         onSuccess: async () => {
           bustPassCache(session.user.id)
           // Direct check from database to ensure status is confirmed in Postgres

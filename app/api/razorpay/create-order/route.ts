@@ -27,6 +27,23 @@ export async function POST(req: NextRequest) {
     const user = await getUserFromToken(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    // ── Check if phone number exists for the user in Supabase users table ───
+    let userPhone: string | null = null
+    try {
+      const { data: dbUser } = await supabaseAdmin
+        .from('users')
+        .select('phone')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (dbUser?.phone && typeof dbUser.phone === 'string' && dbUser.phone.trim().length > 0) {
+        userPhone = dbUser.phone.trim()
+      } else if (user.phone && typeof user.phone === 'string' && user.phone.trim().length > 0) {
+        userPhone = user.phone.trim()
+      }
+    } catch (e) {
+      console.warn('[create-order] error checking user phone in users table:', e)
+    }
+
     const body = await req.json().catch(() => ({}))
     const plan_id = body.plan_id ?? 'rookie_pass_yearly'
 
@@ -37,7 +54,9 @@ export async function POST(req: NextRequest) {
       const now = new Date()
 
       // 1. Check user app_metadata custom sale
-      const appMetaSale = (user.app_metadata as Record<string, any> | undefined)?.custom_sale
+      const appMetaSale = (user.app_metadata as Record<string, unknown> | undefined)?.custom_sale as
+        | { is_active?: boolean; expires_at: string; custom_price_paise: number }
+        | undefined
       if (
         appMetaSale &&
         appMetaSale.is_active !== false &&
@@ -99,7 +118,10 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json()
-    return NextResponse.json(data)
+    return NextResponse.json({
+      ...data,
+      phone: userPhone || undefined,
+    })
   } catch (err) {
     console.error('[create-order] unexpected:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

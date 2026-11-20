@@ -171,7 +171,15 @@ export function useBuyPass(onSuccess?: () => void) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setLoading(false); notify.error('Please sign in to purchase.'); return; }
       let name: string | null = null;
-      try { const raw = localStorage.getItem('@user'); name = raw ? JSON.parse(raw)?.name ?? null : null; } catch {}
+      let phone: string | null = null;
+      try {
+        const raw = localStorage.getItem('@user');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          name = parsed?.name ?? null;
+          phone = parsed?.phone ?? null;
+        }
+      } catch {}
       // Razorpay renders its own overlay; any open (focus-trapping) dialog must close first.
       window.dispatchEvent(new Event(CHECKOUT_START));
       await triggerCheckout({
@@ -179,6 +187,7 @@ export function useBuyPass(onSuccess?: () => void) {
         userId: session.user.id,
         email: session.user.email,
         name,
+        phone,
         onSuccess: async () => {
           bustPassCache(session.user.id);
           await checkUserPaidDirectFromDB(session.user.id);

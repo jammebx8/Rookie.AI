@@ -34,6 +34,7 @@ interface CheckoutOptions {
   userId:   string
   email?:   string | null
   name?:    string | null
+  phone?:   string | null
   /** Called when the user closes the modal without paying */
   onDismiss?: () => void
   /** Called when payment is confirmed in DB */
@@ -412,20 +413,62 @@ if (typeof window !== 'undefined') {
   } catch { /* no-op */ }
 }
 
+// ── Phone Helpers for Razorpay ───────────────────────────────────────────────
+export function formatPhoneForRazorpay(phone?: string | null): string | null {
+  if (!phone) return null
+  const trimmed = phone.trim()
+  if (!trimmed) return null
+
+  // Remove spaces, hyphens, parentheses
+  let cleaned = trimmed.replace(/[\s\-()]/g, '')
+
+  // If 11 digits starting with 0 (e.g. 09876543210 in India), remove leading 0
+  if (/^0[6-9]\d{9}$/.test(cleaned)) {
+    cleaned = cleaned.slice(1)
+  }
+
+  // Ensure it has at least 10 digits
+  const digitsOnly = cleaned.replace(/\D/g, '')
+  if (digitsOnly.length < 10) {
+    return null
+  }
+
+  return cleaned
+}
+
+export async function fetchUserPhoneFromDB(userId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('phone')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (!error && data?.phone && typeof data.phone === 'string' && data.phone.trim().length > 0) {
+      return data.phone.trim()
+    }
+  } catch (err) {
+    console.warn('[rookiePass] Could not fetch phone from Supabase users table:', err)
+  }
+  return null
+}
+
 // ── Checkout ───────────────────────────────────────────────────────────────────
 /**
  * Full checkout flow:
  *  1. POST /api/razorpay/create-order  → order_id, key_id, amount
- *  2. Open Razorpay modal
- *  3. Poll GET /api/razorpay/status/{order_id} every 2.5 s
- *  4. On paid → bust cache, notify, call onSuccess
+ *  2. Resolve user's phone from Supabase users table / cache to prefill Razorpay contact
+ *  3. Open Razorpay modal with prefilled and locked contact details
+ *  4. Poll GET /api/razorpay/status/{order_id} every 2.5 s
+ *  5. On paid → bust cache, notify, call onSuccess
  */
 export async function triggerCheckout(opts: CheckoutOptions): Promise<void> {
-  const { token, userId, email, name, onDismiss, onSuccess, onError } = opts
+  const { token, userId, email, name, phone, onDismiss, onSuccess, onError } = opts
 
-  // 1. Create order server-side
-  let orderData: { order_id: string; key_id: string; amount: number; currency: string }
-  try {
+  // 1. Create order server-side & resolve user phone from Supabase users table in parallel
+  let orderData: { order_id: string; key_id: string; amount: number; currency: string; phone?: string }
+
+  const createOrderPromise = (async () => {
     const res = await fetch('/api/razorpay/create-order', {
       method: 'POST',
       headers: {
@@ -435,7 +478,59 @@ export async function triggerCheckout(opts: CheckoutOptions): Promise<void> {
       body: JSON.stringify({ plan_id: PLAN_ID }),
     })
     if (!res.ok) throw new Error(await res.text())
-    orderData = await res.json()
+    return (await res.json()) as { order_id: string; key_id: string; amount: number; currency: string; phone?: string }
+  })()
+
+  const phonePromise = (async (): Promise<string | null> => {
+    // If phone explicitly passed, use it
+    if (phone && phone.trim().length > 0) {
+      return phone.trim()
+    }
+
+    // Try reading cached @user in localStorage
+    let cachedPhone: string | null = null
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('@user')
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (parsed?.phone && typeof parsed.phone === 'string' && parsed.phone.trim().length > 0) {
+            cachedPhone = parsed.phone.trim()
+          }
+        }
+      }
+    } catch { /* no-op */ }
+
+    // Fetch directly from users table in Supabase
+    const targetUserId = userId || (await resolveUserId(userId))
+    if (targetUserId) {
+      const dbPhone = await fetchUserPhoneFromDB(targetUserId)
+      if (dbPhone) {
+        // Sync to local cache so other components stay updated
+        try {
+          if (typeof window !== 'undefined') {
+            const raw = localStorage.getItem('@user')
+            if (raw) {
+              const parsed = JSON.parse(raw)
+              localStorage.setItem('@user', JSON.stringify({ ...parsed, phone: dbPhone }))
+            }
+          }
+        } catch { /* no-op */ }
+        return dbPhone
+      }
+    }
+
+    return cachedPhone
+  })()
+
+  let resolvedPhone: string | null = null
+  try {
+    const [createdOrder, fetchedPhone] = await Promise.all([
+      createOrderPromise,
+      phonePromise,
+    ])
+    orderData = createdOrder
+    resolvedPhone = fetchedPhone || orderData.phone || null
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     onError?.(`Could not initiate payment. Please try again. (${msg})`)
@@ -495,7 +590,18 @@ export async function triggerCheckout(opts: CheckoutOptions): Promise<void> {
     ? `${window.location.origin}/brand/rookie-owl.png`
     : '/brand/rookie-owl.png'
 
-  const rzp = new window.Razorpay({
+  const cleanContact = formatPhoneForRazorpay(resolvedPhone)
+
+  const prefill: Record<string, string> = {
+    email: email ?? '',
+    name:  name  ?? '',
+  }
+  if (cleanContact) {
+    prefill.contact = cleanContact
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rzpOptions: any = {
     key:         orderData.key_id,
     amount:      orderData.amount,
     currency:    orderData.currency,
@@ -503,10 +609,7 @@ export async function triggerCheckout(opts: CheckoutOptions): Promise<void> {
     name:        'Rookie.AI',
     description: 'Rookie pass yearly',
     image:       logoUrl,
-    prefill: {
-      email: email ?? '',
-      name:  name  ?? '',
-    },
+    prefill,
     theme: { color: '#1F75FE' },
     config: {
       display: {
@@ -531,7 +634,15 @@ export async function triggerCheckout(opts: CheckoutOptions): Promise<void> {
         onDismiss?.()
       },
     },
-  })
+  }
+
+  if (cleanContact) {
+    rzpOptions.readonly = {
+      contact: true,
+    }
+  }
+
+  const rzp = new window.Razorpay(rzpOptions)
 
   rzp.open()
   // Also start polling as a safety net in case handler fires before modal closes
