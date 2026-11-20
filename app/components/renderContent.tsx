@@ -17,6 +17,8 @@
 
 import React from 'react'
 import { InlineMath, BlockMath } from 'react-katex'
+import type { HintState } from './EquationHintTooltip'
+import { EquationHintTooltip } from './EquationHintTooltip'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -447,6 +449,128 @@ export function renderContent(
         return (
           <span key={si} className="leading-relaxed">
             {renderInlineSegment(cleaned, `txt-${si}`)}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
+// ── Hint-aware rendering ──────────────────────────────────────────────────────
+/**
+ * Like `renderInlineSegment` but wraps every KaTeX node in an
+ * `EquationHintTooltip`. The caller supplies:
+ *
+ *   getHint(latex)  → current HintState for that equation
+ *   onRequest(latex) → fire the AI call for that equation
+ */
+function renderInlineSegmentWithHints(
+  text: string,
+  baseKey: string,
+  getHint: (latex: string) => HintState,
+  onRequest: (latex: string) => void,
+): React.ReactNode {
+  if (!text) return null
+
+  const parts = text.split(/(\$\$[\s\S]+?\$\$|\$[^\n]+?\$)/)
+
+  return parts.map((part, i) => {
+    const key = `${baseKey}-${i}`
+
+    if (part.length > 4 && part.startsWith('$$') && part.endsWith('$$')) {
+      const latex = part.slice(2, -2)
+      return (
+        <EquationHintTooltip key={key} latex={latex} hint={getHint(latex)} onRequest={onRequest} display>
+          <BlockMath math={latex} />
+        </EquationHintTooltip>
+      )
+    }
+    if (part.length > 2 && part.startsWith('$') && part.endsWith('$')) {
+      const latex = part.slice(1, -1)
+      return (
+        <EquationHintTooltip key={key} latex={latex} hint={getHint(latex)} onRequest={onRequest} display={false}>
+          <InlineMath math={latex} />
+        </EquationHintTooltip>
+      )
+    }
+
+    // Plain text (bold + newlines) — same as renderInlineSegment
+    const boldParts = part.split(/(\*\*[^*]+\*\*)/)
+    const nodes: React.ReactNode[] = []
+    boldParts.forEach((bp, bi) => {
+      if (bp.startsWith('**') && bp.endsWith('**') && bp.length > 4) {
+        nodes.push(<strong key={`${key}-b${bi}`}>{bp.slice(2, -2)}</strong>)
+        return
+      }
+      bp.split('\n').forEach((line, li) => {
+        if (li > 0) nodes.push(<br key={`${key}-b${bi}-br${li}`} />)
+        if (line) nodes.push(<React.Fragment key={`${key}-b${bi}-l${li}`}>{line}</React.Fragment>)
+      })
+    })
+    return <React.Fragment key={key}>{nodes}</React.Fragment>
+  })
+}
+
+/**
+ * renderContentWithHints
+ * ──────────────────────
+ * Drop-in replacement for `renderContent` that wraps every KaTeX equation
+ * in a hover tooltip that shows a 2-line AI step-explanation.
+ *
+ * @param text        Raw solution text (same as renderContent).
+ * @param isDark      Theme flag.
+ * @param getHint     Returns the current HintState for a given LaTeX string.
+ * @param onRequest   Called the first time a user hovers over an equation.
+ */
+export function renderContentWithHints(
+  text: string | null | undefined,
+  isDark = true,
+  getHint: (latex: string) => HintState,
+  onRequest: (latex: string) => void,
+): React.ReactNode {
+  if (!text) return null
+
+  const prepared = normaliseDelimiters(fixDimensionFormulas(repairBrokenTables(text)))
+
+  const segments: Array<{ type: 'text' | 'table'; content: string }> = []
+  let buffer: string[] = []
+  let inTable = false
+
+  const flushBuffer = () => {
+    if (!buffer.length) return
+    const joined = buffer.join('\n')
+    if (inTable) {
+      segments.push({ type: 'table', content: joined })
+    } else if (joined.trim()) {
+      segments.push({ type: 'text', content: joined })
+    }
+    buffer = []
+  }
+
+  for (const line of prepared.split('\n')) {
+    const t = isTableLine(line)
+    if (t !== inTable) { flushBuffer(); inTable = t }
+    buffer.push(line)
+  }
+  flushBuffer()
+
+  return (
+    <>
+      {segments.map((seg, si) => {
+        if (seg.type === 'table') {
+          const parsed = parseMarkdownTable(seg.content)
+          if (parsed) return <MarkdownTable key={si} {...parsed} isDark={isDark} />
+          return (
+            <span key={si} className="font-mono text-xs">
+              {renderInlineSegment(seg.content, `fb-${si}`)}
+            </span>
+          )
+        }
+
+        const cleaned = normaliseStatements(removeDuplicateSymbols(seg.content))
+        return (
+          <span key={si} className="leading-relaxed">
+            {renderInlineSegmentWithHints(cleaned, `txt-${si}`, getHint, onRequest)}
           </span>
         )
       })}

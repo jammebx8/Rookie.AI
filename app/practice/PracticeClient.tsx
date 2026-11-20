@@ -12,6 +12,7 @@ import {
 import { supabase } from '../../public/src/utils/supabase'
 import 'katex/dist/katex.min.css'
 import { renderContent } from '../components/renderContent'
+import { SolutionWithEquationHints } from '../components/SolutionWithEquationHints'
 import { updateStreak, readStreakFromLocal } from '../../public/src/utils/streakUtils'
 import { AI_BUDDIES, type Question } from '../QuestionViewer/QuestionViewerClient'
 import { getWeakTopics, abilityLabel, updateAbilityVector, type WeakChapter } from '../../lib/recommendation'
@@ -1009,9 +1010,16 @@ export default function PracticeClient() {
                         <>
                           <div className="space-y-2">
                             {solutionSteps(solutionText).map((step, i) => (
-                              <div key={i} className="rounded-control bg-muted px-4 py-3 text-body leading-relaxed whitespace-pre-wrap text-foreground">
-                                {renderLatex(step, isDark)}
-                              </div>
+                              <SolutionWithEquationHints
+                                key={i}
+                                solution={step}
+                                isDark={isDark}
+                                apiBase={API_BASE}
+                                buddyName={AI_BUDDIES[shownBuddyId]?.name ?? solutionBuddy.name}
+                                buddySystemPrompt={AI_BUDDIES[shownBuddyId]?.systemPrompt ?? solutionBuddy.systemPrompt}
+                                questionText={(displayQ ?? Q)?.question_text ?? ''}
+                                className="rounded-control bg-muted px-4 py-3 text-body leading-relaxed whitespace-pre-wrap text-foreground"
+                              />
                             ))}
                           </div>
                           {(displayQ ?? Q)!.solution_image_url && (

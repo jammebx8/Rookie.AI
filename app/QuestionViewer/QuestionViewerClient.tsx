@@ -15,6 +15,7 @@ import { updateStreak } from '../../public/src/utils/streakUtils'
 import { updateAbilityVector } from '../../lib/recommendation'
 import { sortByDifficulty, autoBookmarkWrong } from '../../lib/adaptivePractice'
 import { renderContent } from '../components/renderContent'
+import { SolutionWithEquationHints } from '../components/SolutionWithEquationHints'
 import { track } from '../../lib/analytics'
 import { cn } from '@/lib/utils'
 import { useIsDark } from '@/components/rookie/theme'
@@ -1777,9 +1778,14 @@ export default function QuestionViewerClient() {
                           <SolutionLines widths={[100, 88, 94, 72, 83, 90, 65]} />
                         ) : (
                           <>
-                            <div className="whitespace-pre-wrap rounded-control bg-muted p-4 text-body leading-relaxed text-foreground sm:p-5">
-                              {renderLatex(solution, isDark)}
-                            </div>
+                            <SolutionWithEquationHints
+                              solution={solution}
+                              isDark={isDark}
+                              apiBase={API_BASE}
+                              buddyName={solutionBuddy.name}
+                              buddySystemPrompt={solutionBuddy.systemPrompt}
+                              questionText={Q?.question_text ?? ''}
+                            />
                             {Q?.solution_image_url && (
                               <Figure src={Q.solution_image_url} alt="Solution illustration" onZoom={setImageModal} className="mt-3" />
                             )}
