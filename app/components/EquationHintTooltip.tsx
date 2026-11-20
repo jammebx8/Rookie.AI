@@ -2,20 +2,22 @@
 /**
  * EquationHintTooltip
  * ───────────────────
- * Wraps a single rendered KaTeX equation (inline or block) so that hovering
- * it shows a 2-line "how did this step happen?" popup, using the same
- * dropper Tooltip primitive that powers streak / coins / marks hints.
+ * Wraps a single rendered KaTeX equation so hovering shows a 2-line
+ * step-explanation popup. Uses the same Tooltip primitive as streak/coins/marks.
  *
- * The first time the user hovers, it fires a lazy AI request (passed in via
- * onRequest). The result is cached in the parent so re-hovering is instant.
+ * The popup renders plain text — no KaTeX inside the tooltip.
+ * KaTeX inside a tooltip (inline-flex, 300 px wide) causes the column-layout
+ * explosion visible in the screenshot: each .katex span becomes a flex child,
+ * display-math equations overflow, and baseline alignment breaks.
  *
- * Visual pattern:  dotted underline · cursor-help · bg-foreground popup with arrow
- * — identical to the Define / Hint components in the design system.
+ * Instead we strip $…$ / $$…$$ delimiters from the AI response and show the
+ * raw LaTeX source inline. E.g. "$v_0 = R\omega$" → "v_0 = Rω" reads fine at
+ * tooltip size and has zero layout side-effects. For the rare symbol that
+ * renders poorly we apply a small Unicode substitution table.
  */
 import * as React from 'react';
 import { Loader2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { InlineMath } from 'react-katex';
 import { cn } from '@/lib/utils';
 
 export type HintState =
@@ -25,39 +27,69 @@ export type HintState =
   | { status: 'error' };
 
 interface EquationHintTooltipProps {
-  /** The rendered KaTeX node (InlineMath or BlockMath output). */
   children: React.ReactNode;
-  /** Raw LaTeX string, e.g. "T_1 = mg \cos 30^\circ". Used as the cache key. */
   latex: string;
-  /** Current state for this equation. */
   hint: HintState;
-  /** Called the first time the user hovers — parent fires the AI request. */
   onRequest: (latex: string) => void;
-  /** Whether this is a block (display) or inline equation. */
   display?: boolean;
 }
 
+// ── Unicode substitution table ────────────────────────────────────────────────
+// Applied to LaTeX source strings that appear inside the tooltip so they read
+// naturally without KaTeX. Only the most common symbols are covered; anything
+// not in the table stays as-is (still readable as LaTeX source).
+const LATEX_TO_UNICODE: [RegExp, string][] = [
+  [/\\alpha/g,   'α'],  [/\\beta/g,    'β'],  [/\\gamma/g,   'γ'],
+  [/\\delta/g,   'δ'],  [/\\epsilon/g, 'ε'],  [/\\theta/g,   'θ'],
+  [/\\lambda/g,  'λ'],  [/\\mu/g,      'μ'],  [/\\pi/g,      'π'],
+  [/\\sigma/g,   'σ'],  [/\\omega/g,   'ω'],  [/\\Omega/g,   'Ω'],
+  [/\\phi/g,     'φ'],  [/\\psi/g,     'ψ'],  [/\\rho/g,     'ρ'],
+  [/\\tau/g,     'τ'],  [/\\eta/g,     'η'],  [/\\nu/g,      'ν'],
+  [/\\xi/g,      'ξ'],  [/\\zeta/g,    'ζ'],
+  [/\\infty/g,   '∞'],  [/\\approx/g,  '≈'],  [/\\neq/g,     '≠'],
+  [/\\leq/g,     '≤'],  [/\\geq/g,     '≥'],  [/\\pm/g,      '±'],
+  [/\\times/g,   '×'],  [/\\div/g,     '÷'],  [/\\cdot/g,    '·'],
+  [/\\sqrt\{([^}]+)\}/g, '√($1)'],
+  [/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)'],
+  [/\\left[\(\[]/g, '('], [/\\right[\)\]]/g, ')'],
+  [/\^2/g, '²'],  [/\^3/g, '³'],
+  [/\^{([^}]*)}/g, '^$1'],
+  [/_{([^}]*)}/g,  '_$1'],
+  [/\\,|\\;|\\!/g, ' '],
+  [/\{|\}/g, ''],
+  [/\\\\/g, ' '],
+  [/\\text\{([^}]+)\}/g, '$1'],
+  [/\\mathrm\{([^}]+)\}/g, '$1'],
+  [/\\mathbf\{([^}]+)\}/g, '$1'],
+];
+
 /**
- * Render the AI explanation text, which may itself contain LaTeX fragments
- * like $T_1 = mg\cos30°$. Split on $...$ delimiters and render each piece.
+ * Convert a LaTeX source string to a readable plain-text approximation
+ * suitable for a tooltip. Strips $ delimiters, applies the unicode table,
+ * and collapses excess whitespace.
+ */
+function latexToPlain(src: string): string {
+  // 1. Strip $$…$$ and $…$ delimiters (keep the inner content)
+  let out = src
+    .replace(/\$\$([^$]+)\$\$/g, ' $1 ')
+    .replace(/\$([^$\n]+)\$/g, ' $1 ');
+
+  // 2. Apply unicode substitutions
+  for (const [re, replacement] of LATEX_TO_UNICODE) {
+    out = out.replace(re, replacement);
+  }
+
+  // 3. Collapse repeated spaces
+  return out.replace(/\s{2,}/g, ' ').trim();
+}
+
+/**
+ * Render the AI explanation as plain readable text.
+ * LaTeX fragments inside the response are converted to unicode approximations —
+ * never rendered with KaTeX, which breaks inside a flex tooltip container.
  */
 function HintText({ text }: { text: string }) {
-  const parts = text.split(/(\$[^\n$]+?\$)/g);
-  return (
-    <>
-      {parts.map((part, i) => {
-        if (part.startsWith('$') && part.endsWith('$') && part.length > 2) {
-          const latex = part.slice(1, -1);
-          return (
-            <span key={i} className="inline-block align-middle">
-              <InlineMath math={latex} />
-            </span>
-          );
-        }
-        return <React.Fragment key={i}>{part}</React.Fragment>;
-      })}
-    </>
-  );
+  return <>{latexToPlain(text)}</>;
 }
 
 export function EquationHintTooltip({
@@ -70,7 +102,6 @@ export function EquationHintTooltip({
   const requested = React.useRef(false);
 
   const handleHover = () => {
-    // Allow retry after error
     if (hint.status === 'error') requested.current = false;
     if (!requested.current && (hint.status === 'idle' || hint.status === 'error')) {
       requested.current = true;
@@ -99,22 +130,20 @@ export function EquationHintTooltip({
       <TooltipContent
         side="top"
         sideOffset={6}
-        className="max-w-[300px] text-meta leading-snug whitespace-normal"
+        className="max-w-[320px] text-xs leading-relaxed whitespace-normal"
       >
         {hint.status === 'idle' && (
-          <span className="opacity-60">Hover to explain this step…</span>
+          <span className="opacity-60 text-xs">Hover to explain this step…</span>
         )}
         {hint.status === 'loading' && (
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5 text-xs">
             <Loader2 className="size-3 animate-spin shrink-0" />
-            <span>Explaining…</span>
+            Explaining…
           </span>
         )}
-        {hint.status === 'done' && (
-          <HintText text={hint.text} />
-        )}
+        {hint.status === 'done' && <HintText text={hint.text} />}
         {hint.status === 'error' && (
-          <span className="opacity-70">Couldn't load — hover again to retry.</span>
+          <span className="opacity-70 text-xs">Couldn't load — hover again to retry.</span>
         )}
       </TooltipContent>
     </Tooltip>
