@@ -1015,6 +1015,7 @@ export default function PracticeClient() {
                                 solution={step}
                                 isDark={isDark}
                                 apiBase={API_BASE}
+                                buddyId={shownBuddyId}
                                 buddyName={AI_BUDDIES[shownBuddyId]?.name ?? solutionBuddy.name}
                                 buddySystemPrompt={AI_BUDDIES[shownBuddyId]?.systemPrompt ?? solutionBuddy.systemPrompt}
                                 questionText={(displayQ ?? Q)?.question_text ?? ''}

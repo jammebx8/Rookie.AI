@@ -1782,6 +1782,7 @@ export default function QuestionViewerClient() {
                               solution={solution}
                               isDark={isDark}
                               apiBase={API_BASE}
+                              buddyId={solutionBuddyId}
                               buddyName={solutionBuddy.name}
                               buddySystemPrompt={solutionBuddy.systemPrompt}
                               questionText={Q?.question_text ?? ''}

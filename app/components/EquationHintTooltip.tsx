@@ -46,7 +46,9 @@ export function EquationHintTooltip({
   const requested = React.useRef(false);
 
   const handleHover = () => {
-    if (!requested.current && hint.status === 'idle') {
+    // Allow retry after error
+    if (hint.status === 'error') requested.current = false;
+    if (!requested.current && (hint.status === 'idle' || hint.status === 'error')) {
       requested.current = true;
       onRequest(latex);
     }
@@ -93,7 +95,7 @@ export function EquationHintTooltip({
           <span>{hint.text}</span>
         )}
         {hint.status === 'error' && (
-          <span className="opacity-70">Could not explain. Try again.</span>
+          <span className="opacity-70">Couldn't load — hover again to retry.</span>
         )}
       </TooltipContent>
     </Tooltip>

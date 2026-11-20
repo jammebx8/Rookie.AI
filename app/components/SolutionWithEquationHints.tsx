@@ -30,6 +30,7 @@ interface SolutionWithEquationHintsProps {
   solution: string;
   isDark?: boolean;
   apiBase: string;
+  buddyId: string;
   buddyName: string;
   buddySystemPrompt: string;
   questionText: string;
@@ -40,6 +41,7 @@ export function SolutionWithEquationHints({
   solution,
   isDark = true,
   apiBase,
+  buddyId,
   buddyName,
   buddySystemPrompt,
   questionText,
@@ -64,18 +66,24 @@ export function SolutionWithEquationHints({
       setHints(prev => ({ ...prev, [latex]: { status: 'loading' } }));
 
       try {
+        // Frame the question_text so the buddy explains only this specific step.
+        // We reuse the existing `better_understanding` action — no new backend route needed.
+        const stepQuestion = `In the solution to this question: "${questionText}"
+The solution contains this step: ${latex}
+Explain ONLY how this one step was derived, in exactly 2 short lines. No other steps.`;
+
         const res = await axios.post(`${apiBase}/solution`, {
-          action: 'step_hint',
-          equation: latex,
+          action: 'better_understanding',
+          question_text: stepQuestion,
           solution,
-          question_text: questionText,
+          buddy_id: buddyId,
           buddy_name: buddyName,
           buddy_system_prompt: buddySystemPrompt,
         });
 
         const text: string =
-          res.data?.hint ??
-          res.data?.explanation ??
+          res.data?.explanation ||
+          res.data?.hint ||
           'No explanation available.';
 
         setHints(prev => ({
@@ -88,7 +96,7 @@ export function SolutionWithEquationHints({
         inFlight.current.delete(latex);
       }
     },
-    [apiBase, buddyName, buddySystemPrompt, questionText, solution],
+    [apiBase, buddyId, buddyName, buddySystemPrompt, questionText, solution],
   );
 
   return (
