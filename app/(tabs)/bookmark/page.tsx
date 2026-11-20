@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bookmark, BookmarkX, Check, ChevronDown, Loader2, Smile, X, ZoomIn } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 import { renderContent } from '@/app/components/renderContent';
+import { SolutionWithEquationHints } from '@/app/components/SolutionWithEquationHints';
 import { clearWrongBadge } from '@/lib/adaptivePractice';
 import { AI_BUDDIES } from '@/app/QuestionViewer/QuestionViewerClient';
 import { Button } from '@/components/ui/button';
@@ -517,9 +518,20 @@ function QuestionCard({
                             <span className="text-body-sm text-muted-foreground">Generating solution…</span>
                           </div>
                         ) : (
-                          <div className="whitespace-pre-wrap text-body-sm leading-relaxed text-foreground/90">
-                            {renderLatex(state.hasTyped ? state.solution : typedSolution)}
-                          </div>
+                          <SolutionWithEquationHints
+                            solution={state.hasTyped ? state.solution : typedSolution}
+                            isDark={isDark}
+                            apiBase={API_BASE}
+                            buddyId={buddyId}
+                            buddyName={buddy.name}
+                            buddySystemPrompt={buddy.systemPrompt}
+                            questionText={q.question_text}
+                            feature="bookmark"
+                            questionId={q.question_id}
+                            subject={q.subjectName}
+                            chapter={q.chapterTitle}
+                            className="whitespace-pre-wrap text-body-sm leading-relaxed text-foreground/90"
+                          />
                         )}
 
                         {/* AI Followup */}

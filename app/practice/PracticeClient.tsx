@@ -1019,6 +1019,8 @@ export default function PracticeClient() {
                                 buddyName={AI_BUDDIES[shownBuddyId]?.name ?? solutionBuddy.name}
                                 buddySystemPrompt={AI_BUDDIES[shownBuddyId]?.systemPrompt ?? solutionBuddy.systemPrompt}
                                 questionText={(displayQ ?? Q)?.question_text ?? ''}
+                                feature="practice"
+                                questionId={(displayQ ?? Q)?.question_id}
                                 className="rounded-control bg-muted px-4 py-3 text-body leading-relaxed whitespace-pre-wrap text-foreground"
                               />
                             ))}

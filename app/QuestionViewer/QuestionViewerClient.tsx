@@ -511,9 +511,20 @@ function SimilarQuestionCard({
             <SolutionLines widths={[100, 85, 92, 70, 80]} />
           ) : (
             <>
-              <div className="whitespace-pre-wrap rounded-control bg-muted p-4 text-body-sm leading-relaxed text-foreground">
-                {renderLatex(solution, isDark)}
-              </div>
+              <SolutionWithEquationHints
+                solution={solution}
+                isDark={isDark}
+                apiBase={API_BASE}
+                buddyId={buddyId}
+                buddyName={buddy.name}
+                buddySystemPrompt={buddy.systemPrompt}
+                questionText={q.question_text ?? ''}
+                feature="similar"
+                questionId={q.question_id}
+                subject={subjectName}
+                chapter={chapterTitle}
+                className="whitespace-pre-wrap rounded-control bg-muted p-4 text-body-sm leading-relaxed text-foreground"
+              />
               {q.solution_image_url && <Figure src={q.solution_image_url} alt="Solution" onZoom={setImageModal} />}
               {!aiFollowup && !aiFollowupLoading && (
                 <Button variant="secondary" onClick={handleFollowup} className="h-8 rounded-control px-3">
@@ -1786,6 +1797,10 @@ export default function QuestionViewerClient() {
                               buddyName={solutionBuddy.name}
                               buddySystemPrompt={solutionBuddy.systemPrompt}
                               questionText={Q?.question_text ?? ''}
+                              feature={isDaily ? 'daily_practice' : 'question_viewer'}
+                              questionId={Q?.question_id}
+                              subject={subject}
+                              chapter={chapterTitle}
                             />
                             {Q?.solution_image_url && (
                               <Figure src={Q.solution_image_url} alt="Solution illustration" onZoom={setImageModal} className="mt-3" />

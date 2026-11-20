@@ -25,6 +25,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import axios from 'axios';
 import { renderContentWithHints } from './renderContent';
 import type { HintState } from './EquationHintTooltip';
+import { track } from '@/lib/analytics';
 
 interface SolutionWithEquationHintsProps {
   solution: string;
@@ -34,6 +35,11 @@ interface SolutionWithEquationHintsProps {
   buddyName: string;
   buddySystemPrompt: string;
   questionText: string;
+  /** analytics context — passed through to track() so the dashboard can segment by feature */
+  feature?: string;
+  questionId?: string;
+  subject?: string;
+  chapter?: string;
   className?: string;
 }
 
@@ -45,12 +51,13 @@ export function SolutionWithEquationHints({
   buddyName,
   buddySystemPrompt,
   questionText,
+  feature,
+  questionId,
+  subject,
+  chapter,
   className,
 }: SolutionWithEquationHintsProps) {
-  // Map from latex string → HintState. Object identity changes trigger re-render.
   const [hints, setHints] = useState<Record<string, HintState>>({});
-
-  // Prevent double-firing if the user moves mouse quickly
   const inFlight = useRef<Set<string>>(new Set());
 
   const getHint = useCallback(
@@ -66,8 +73,6 @@ export function SolutionWithEquationHints({
       setHints(prev => ({ ...prev, [latex]: { status: 'loading' } }));
 
       try {
-        // Frame the question_text so the buddy explains only this specific step.
-        // We reuse the existing `better_understanding` action — no new backend route needed.
         const stepQuestion = `In the solution to this question: "${questionText}"
 The solution contains this step: ${latex}
 Explain ONLY how this one step was derived, in exactly 2 short lines. No other steps.`;
@@ -90,13 +95,22 @@ Explain ONLY how this one step was derived, in exactly 2 short lines. No other s
           ...prev,
           [latex]: { status: 'done', text },
         }));
+
+        // Track usage — one event per equation per session
+        track('equation_hint_used', {
+          feature:     feature ?? 'question_viewer',
+          question_id: questionId,
+          subject,
+          chapter,
+          metadata:    { latex_len: latex.length },
+        });
       } catch {
         setHints(prev => ({ ...prev, [latex]: { status: 'error' } }));
       } finally {
         inFlight.current.delete(latex);
       }
     },
-    [apiBase, buddyId, buddyName, buddySystemPrompt, questionText, solution],
+    [apiBase, buddyId, buddyName, buddySystemPrompt, questionText, solution, feature, questionId, subject, chapter],
   );
 
   return (

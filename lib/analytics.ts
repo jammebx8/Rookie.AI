@@ -36,6 +36,7 @@ export type EventName =
   | 'test_abandoned'
   | 'daily_practice_started'
   | 'daily_practice_completed'
+  | 'equation_hint_used'
   // catch-all for future events
   | (string & Record<never, never>)
 

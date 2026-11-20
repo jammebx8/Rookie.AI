@@ -15,6 +15,7 @@
 import * as React from 'react';
 import { Loader2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { InlineMath } from 'react-katex';
 import { cn } from '@/lib/utils';
 
 export type HintState =
@@ -36,6 +37,29 @@ interface EquationHintTooltipProps {
   display?: boolean;
 }
 
+/**
+ * Render the AI explanation text, which may itself contain LaTeX fragments
+ * like $T_1 = mg\cos30°$. Split on $...$ delimiters and render each piece.
+ */
+function HintText({ text }: { text: string }) {
+  const parts = text.split(/(\$[^\n$]+?\$)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('$') && part.endsWith('$') && part.length > 2) {
+          const latex = part.slice(1, -1);
+          return (
+            <span key={i} className="inline-block align-middle">
+              <InlineMath math={latex} />
+            </span>
+          );
+        }
+        return <React.Fragment key={i}>{part}</React.Fragment>;
+      })}
+    </>
+  );
+}
+
 export function EquationHintTooltip({
   children,
   latex,
@@ -55,14 +79,10 @@ export function EquationHintTooltip({
   };
 
   const triggerClass = cn(
-    // Match the dropper Hint / Define trigger style exactly
     'outline-none transition',
     'decoration-dotted decoration-1 underline-offset-[3px]',
     'hover:underline focus-visible:underline',
-    // Equation-specific: show pointer with question mark
     'cursor-help',
-    // For block math: make the wrapper sit inline-block so it doesn't
-    // stretch to full width and the trigger box hugs the equation.
     display ? 'inline-block' : 'inline',
   );
 
@@ -79,7 +99,6 @@ export function EquationHintTooltip({
       <TooltipContent
         side="top"
         sideOffset={6}
-        // Wider than the default hint (240px) since step explanations can be a sentence
         className="max-w-[300px] text-meta leading-snug whitespace-normal"
       >
         {hint.status === 'idle' && (
@@ -92,7 +111,7 @@ export function EquationHintTooltip({
           </span>
         )}
         {hint.status === 'done' && (
-          <span>{hint.text}</span>
+          <HintText text={hint.text} />
         )}
         {hint.status === 'error' && (
           <span className="opacity-70">Couldn't load — hover again to retry.</span>

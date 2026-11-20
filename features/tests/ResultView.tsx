@@ -10,6 +10,8 @@ import { Define } from '@/components/rookie/define'
 import { useIsDark } from '@/components/rookie/theme'
 import { cn } from '@/lib/utils'
 import { renderContent } from '../../app/components/renderContent'
+import { SolutionWithEquationHints } from '../../app/components/SolutionWithEquationHints'
+import { AI_BUDDIES } from '../../app/QuestionViewer/QuestionViewerClient'
 import type { SubmitTestResponse, TestQuestionReview, AnswerMap } from './types'
 
 interface Props {
@@ -100,6 +102,13 @@ function ReviewItem({ q, entry, index, isDark }: {
 }) {
   const [open, setOpen] = useState(false)
 
+  // Read selected buddy from localStorage (same pattern as PracticeClient)
+  const buddyId = (() => {
+    try { const s = typeof window !== 'undefined' ? localStorage.getItem('selectedBuddy') : null; return (s && AI_BUDDIES[s]) ? s : '4' } catch { return '4' }
+  })()
+  const buddy = AI_BUDDIES[buddyId] ?? AI_BUDDIES['4']
+  const API_BASE = 'https://rookie-backend.vercel.app'
+
   const userOpt = normOption(entry?.selected_option)
   const corrOpt = normOption(q.correct_option)
   const verdict = getVerdict(q, entry)
@@ -189,9 +198,19 @@ function ReviewItem({ q, entry, index, isDark }: {
               {q.solution && (
                 <div className="rounded-control bg-card p-4">
                   <p className="mb-2 text-label font-semibold text-foreground">Solution</p>
-                  <div className="text-body-sm leading-relaxed text-muted-foreground">
-                    {renderContent(q.solution, isDark)}
-                  </div>
+                  <SolutionWithEquationHints
+                    solution={q.solution}
+                    isDark={isDark}
+                    apiBase={API_BASE}
+                    buddyId={buddyId}
+                    buddyName={buddy.name}
+                    buddySystemPrompt={buddy.systemPrompt}
+                    questionText={q.question_text ?? ''}
+                    feature="custom_test"
+                    questionId={q.question_id}
+                    chapter={q.chapter ?? undefined}
+                    className="text-body-sm leading-relaxed text-muted-foreground"
+                  />
                 </div>
               )}
             </div>
