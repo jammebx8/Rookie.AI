@@ -757,6 +757,8 @@ export default function QuestionViewerClient() {
   const [buddyModalOpen, setBuddyModalOpen]     = useState(false)
   const [showPassModal, setShowPassModal]       = useState(false)
   const [userId, setUserId]                     = useState<string | null>(null)
+  const [dailySetIndex, setDailySetIndex]       = useState(1)
+  const [loadingNextSet, setLoadingNextSet]     = useState(false)
 
   // ── Rookie Pass entitlement & Ad modal trigger ─────────────────────────────
   // AI solutions & Similar questions are 100% free for all users (free & paid).
@@ -893,6 +895,46 @@ export default function QuestionViewerClient() {
     loadDaily()
     return () => { active = false }
   }, [isDaily, userId])
+
+  const loadNextDailySet = async () => {
+    setLoadingNextSet(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const uid = user?.id ?? userId ?? null
+      const { getDailyPracticeQuestions } = await import('../../lib/dailyPractice')
+      const currentIds = questions.map((q) => q.question_id)
+      const nextSetIndex = dailySetIndex + 1
+      const res = await getDailyPracticeQuestions(uid, { setIndex: nextSetIndex, excludeIds: currentIds })
+
+      if (res.questions && res.questions.length > 0) {
+        const nextQuestions = [...questions, ...res.questions]
+        const nextIndex = questions.length
+        setQuestions(nextQuestions)
+        setTotalCount(nextQuestions.length)
+        setDailySetIndex(nextSetIndex)
+        setCurrentIndex(nextIndex)
+        setGlobalIndex(nextIndex)
+        setSelectedOption(null)
+        setPendingOption(null)
+        setIsCorrect(null)
+        setMotivation('')
+        setSolution('')
+        setSolutionRequested(false)
+        setIntegerAnswer('')
+        addToast(`⚡ Set ${nextSetIndex} unlocked! 5 revision questions ready.`, 'success', 3000)
+        track('daily_practice_extended', {
+          feature: 'daily_practice',
+          metadata: { setIndex: nextSetIndex, count: res.questions.length },
+        })
+      } else {
+        addToast('No more revision questions available today! Great work.', 'info', 3000)
+      }
+    } catch {
+      addToast('Could not load next revision set', 'error')
+    } finally {
+      setLoadingNextSet(false)
+    }
+  }
 
   // ── Initial data fetch — windowed (Chapter mode) ───────────────────────────
   useEffect(() => {
@@ -1786,14 +1828,34 @@ export default function QuestionViewerClient() {
                 {isDaily && atLast && selectedOption !== null && (
                   <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
                     <Card className="flex flex-col items-center justify-center p-6 text-center ring-1 ring-[var(--rk-mint-300)] bg-[var(--rk-mint-100)] dark:bg-[rgba(134,219,174,.12)]">
-                      <h3 className="text-heading font-bold text-foreground">🎉 Daily Practice Completed!</h3>
-                      <p className="mt-1 text-body-sm text-muted-foreground">You crushed today&apos;s goal. Streak extended and coins added to your account!</p>
-                      <div className="mt-4 flex flex-wrap justify-center gap-3">
-                        <Button onClick={() => router.push('/home')} className="h-10 rounded-control px-5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">🎉</span>
+                        <h3 className="text-heading font-bold text-foreground">
+                          {dailySetIndex === 1 ? 'Daily 5 Completed!' : `Revision Set ${dailySetIndex} Completed!`}
+                        </h3>
+                      </div>
+                      <p className="mt-2 max-w-md text-body-sm text-muted-foreground">
+                        {dailySetIndex === 1
+                          ? "You crushed today's target! Streak extended and coins added. Ready for a quick 5-question revision round to solidify your rank?"
+                          : `Great consistency! You've solved ${questions.length} questions in this session. Every question puts you ahead in JEE Mains!`}
+                      </p>
+                      <div className="mt-5 flex flex-wrap justify-center gap-3">
+                        <Button
+                          onClick={loadNextDailySet}
+                          disabled={loadingNextSet}
+                          className="h-10 rounded-control px-5 font-semibold shadow-sm"
+                        >
+                          {loadingNextSet ? (
+                            <><Spinner /> Loading next 5…</>
+                          ) : (
+                            <>⚡ Solve Next 5 Questions (Quick Revision)</>
+                          )}
+                        </Button>
+                        <Button variant="secondary" onClick={() => router.push('/home')} className="h-10 rounded-control px-5">
                           Back to Home
                         </Button>
-                        <Button variant="secondary" onClick={() => router.push('/explore')} className="h-10 rounded-control px-5">
-                          Explore More Questions
+                        <Button variant="ghost" onClick={() => router.push('/explore')} className="h-10 rounded-control px-4">
+                          Explore Chapters
                         </Button>
                       </div>
                     </Card>

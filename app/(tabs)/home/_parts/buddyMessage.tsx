@@ -8,7 +8,11 @@ import { Card } from '@/components/rookie/ui';
 import { Button } from '@/components/ui/button';
 import { AI_BUDDIES } from '@/app/QuestionViewer/QuestionViewerClient';
 
-const BUDDY_MESSAGES: Record<string, { notStarted: ((name: string) => string)[]; inProgress: ((name: string, count: number) => string)[] }> = {
+const BUDDY_MESSAGES: Record<string, {
+  notStarted: ((name: string) => string)[];
+  inProgress: ((name: string, count: number) => string)[];
+  completed: ((name: string, count: number) => string)[];
+}> = {
   '1': { // Jeetu Bhaiya
     notStarted: [
       (name) => `${name ? `${name} beta, ` : ''}tension lene ki zarurat nahi hai. Har aspirant ko lagta hai ki wo baakiyo se peeche hai. Sach ye hai ki roz ke bas 5 questions bhi tumhe 99 percentile ki race me aage le aayenge. Chalo, 5 questions nipta lo!`,
@@ -22,6 +26,11 @@ const BUDDY_MESSAGES: Record<string, { notStarted: ((name: string) => string)[];
       (_, count) => `Shabash! ${count} questions ho gaye. Galtiyon se darna mat, wahi tumhe IIT pahunchayengi. Har solution ko dhyan se samajhte chalna.`,
       (_, count) => `Momentum pakad liya hai! ${count} questions done. Bas aisi hi regular consistency chahiye, rank apne aap banti hai.`,
       (name, count) => `${name ? `${name}, ` : ''}${count} sawaal solve ho gaye! Speed badh rahi hai aur confidence bhi. Aise hi focused rehna!`,
+    ],
+    completed: [
+      (name, count) => `${name ? `${name} bhai, ` : ''}aaj ke 5 questions ka target pura! Par sun, jo topper bante hain na, wo minimum target pe rukte nahi hain. Quick 5 questions ka revision set aur laga lo, IIT ki seat aur pakki ho jayegi! Bas yahi catch tha!`,
+      (_, count) => `Shabash! ${count} questions complete ho gaye. Ab dimag poori tarah warmup ho chuka hai. Agle 5 sawaal aur niptate hain, maza aayega!`,
+      (name) => `${name ? `${name}, ` : ''}consistency toh dikha di, ab thoda extra edge lene ka time hai. Agle 5 quick revision questions solve karein? Let's go!`,
     ],
   },
   '2': { // Riya
@@ -38,6 +47,11 @@ const BUDDY_MESSAGES: Record<string, { notStarted: ((name: string) => string)[];
       (_, count) => `Woohoo! ${count} questions sorted! Speed aur accuracy dono solid chal rahi hai, keep this streak alive!`,
       (_, count) => `Look at you go! ${count} down. Ab toh lagta hai exam day par bhi aaram se crack kar loge!`,
     ],
+    completed: [
+      (name) => `Woohoo${name ? ` ${name}` : ''}! Aaj ke 5 questions phod diye! Par flow itna tagda hai toh abhi kyu rukna? Agle 5 sawaal revision me uda dete hain, chal! 🚀`,
+      (_, count) => `You're totally unstoppable today! ${count} questions locked in. 5 aur quick questions kar lo, extra coins bhi milenge aur percentile bhi boost hogi!`,
+      (name) => `Hey${name ? ` ${name}` : ''}! You're in beast mode today. Sirf 5 minutes aur do, next 5 revision questions bhi finish karte hain!`,
+    ],
   },
   '3': { // Rei
     notStarted: [
@@ -52,6 +66,11 @@ const BUDDY_MESSAGES: Record<string, { notStarted: ((name: string) => string)[];
       (_, count) => `Excellent focus. ${count} questions completed with clarity. Review any subtle mistakes to solidify the concept.`,
       (_, count) => `Your pace is disciplined today. ${count} questions down. Quality and depth of thought will reward you in the actual paper.`,
       (_, count) => `Progress is steady. Every question you analyze strengthens your neural pathways for problem-solving.`,
+    ],
+    completed: [
+      (_, count) => `Daily target achieved: ${count} questions completed. Your mind is now focused and attuned. A second round of 5 revision questions will deepen this mastery.`,
+      (name) => `Well done${name ? ` ${name}` : ''}. The daily foundation is set. Reinforcing it now with another 5 questions will convert recent errors into permanent recall.`,
+      () => `Discipline is doing what is required, excellence is taking the extra step. Let us solve 5 more revision questions while the concepts are fresh.`,
     ],
   },
   '4': { // Ritu (default)
@@ -68,6 +87,11 @@ const BUDDY_MESSAGES: Record<string, { notStarted: ((name: string) => string)[];
       (_, count) => `Look at you go! ${count} questions checked off. See, I told you that you could do it! Consistency level 100! 🎉`,
       (_, count) => `Bestie you're crushing it! ${count} questions sorted. Har sawaal ke sath dream college aur paas aa raha hai! ✨`,
     ],
+    completed: [
+      (name) => `Yaaay bestie${name ? ` ${name}` : ''}! 🥳 5 questions done already! I'm so proud of you! But wait, flow toh itna amazing hai, agle 5 quick revision questions bhi saath me solve kar lete hain? We will crush it! ✨💖`,
+      (_, count) => `You are literally shining today! ${count} questions done! Dil khush kar diya bestie. 5 questions aur solve karte hain aur rank list me top pe aate hain! 🎉`,
+      (name) => `Bestie${name ? ` ${name}` : ''}! Tumhara confidence level abhi sky-high hai. Just 5 more quick questions for revision, please? Maza aayega! 🌸`,
+    ],
   },
   '5': { // Shreya
     notStarted: [
@@ -83,6 +107,11 @@ const BUDDY_MESSAGES: Record<string, { notStarted: ((name: string) => string)[];
       (_, count) => `Solid pace today: ${count} questions completed. Maintain this accuracy across all three subjects.`,
       (_, count) => `Objective achieved: ${count} questions done. Keep your mind calm and your rough work clean. On to the next milestone.`,
     ],
+    completed: [
+      (name, count) => `Base target completed: ${count} questions in the bag. Serious rankers don't stop at the bare minimum. Lock in for a 5-question revision sprint right now.`,
+      (_, count) => `Good stamina. ${count} questions cleared. Maintain this speed and tackle the next 5 revision questions while momentum is on your side.`,
+      () => `Benchmark achieved. Now comes the competitive differentiator: solve 5 more revision questions to cement weak spots.`,
+    ],
   },
   '6': { // Neha
     notStarted: [
@@ -97,6 +126,11 @@ const BUDDY_MESSAGES: Record<string, { notStarted: ((name: string) => string)[];
       (_, count) => `Bahut sundar! ${count} questions solve ho gaye. Har sawaal ke sath darr kam aur vishwas badhta hai. Shabash!`,
       (_, count) => `Dekha? Shuru karne ki der thi! ${count} questions complete. Aise hi muskura ke padhte raho!`,
       (name, count) => `Super proud! Itni achhi koshish kar rahe ho${name ? ` ${name}` : ''}. Aaj ka din successful ban chuka hai!`,
+    ],
+    completed: [
+      (name) => `Dekha${name ? ` ${name}` : ''}? Kitni aasani se 5 questions solve ho gaye! Darr chala gaya na? Isi positive feeling ke sath 5 aur revision sawaal kar lete hain, main bilkul saath hoon!`,
+      (_, count) => `Kitna sukoon milta hai jab roz ka target pura hota hai. ${count} questions done! Thoda sa revision round aur karte hain? Bilkul stress-free!`,
+      () => `Aapki mehnat rang la rahi hai. 5 questions complete ho chuke hain. Ek chhota sa 5-question revision set aur laga lijiye, preparation aur strong ho jayegi!`,
     ],
   },
 };
@@ -118,9 +152,12 @@ export function BuddyHomeMessage({ solvedToday, streak, userName }: { solvedToda
   const name = userName ? userName.split(' ')[0] : '';
 
   const getMessage = () => {
-    const isStarted = solvedToday > 0;
     const pool = BUDDY_MESSAGES[buddyId] ?? BUDDY_MESSAGES['4'];
-    if (isStarted) {
+    if (solvedToday >= 5) {
+      const list = pool.completed || pool.inProgress;
+      const fn = list[messageIdx % list.length];
+      return fn(name, solvedToday);
+    } else if (solvedToday > 0) {
       const list = pool.inProgress;
       const fn = list[messageIdx % list.length];
       return fn(name, solvedToday);
@@ -133,7 +170,7 @@ export function BuddyHomeMessage({ solvedToday, streak, userName }: { solvedToda
 
   const getInsight = () => {
     if (solvedToday >= 5) {
-      return { icon: Zap, text: 'Daily 5 target crushed! Keep going for bonus rank.' };
+      return { icon: Zap, text: 'Daily 5 crushed! 🔥 Ready for a quick 5-question revision round?' };
     }
     if (streak >= 3) {
       return { icon: Target, text: `${streak}-day streak! Consistency is your unfair advantage.` };
@@ -185,7 +222,7 @@ export function BuddyHomeMessage({ solvedToday, streak, userName }: { solvedToda
                 onClick={() => router.push('/QuestionViewer?mode=daily')}
                 className="h-9 rounded-control px-4 text-body-sm shadow-sm"
               >
-                Start daily practice <ArrowRight className="size-4" />
+                {solvedToday >= 5 ? 'Solve next 5 revision questions' : 'Start daily practice'} <ArrowRight className="size-4" />
               </Button>
             </div>
           </div>

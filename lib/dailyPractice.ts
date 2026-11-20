@@ -48,14 +48,25 @@ const SELECT_FIELDS = [
 export interface DailyPracticeSet {
   questions: (Question & { daily_type?: 'confidence' | 'revision' | 'high_frequency' })[]
   isNewUser: boolean
+  setIndex?: number
+}
+
+export interface DailyPracticeOptions {
+  setIndex?: number
+  excludeIds?: string[]
 }
 
 /**
  * Fetch daily practice questions personalized for the user.
  * Caches in sessionStorage per day so the daily set remains stable during practice.
+ * When setIndex > 1 is requested, fetches a fresh 5-question revision/quick practice set.
  */
-export async function getDailyPracticeQuestions(userId: string | null): Promise<DailyPracticeSet> {
-  const cacheKey = `rookie_daily_set_${new Date().toDateString()}_${userId ?? 'guest'}`
+export async function getDailyPracticeQuestions(
+  userId: string | null,
+  options: DailyPracticeOptions = {}
+): Promise<DailyPracticeSet> {
+  const setIndex = options.setIndex ?? 1
+  const cacheKey = `rookie_daily_set_${new Date().toDateString()}_${userId ?? 'guest'}_s${setIndex}`
   try {
     const cached = sessionStorage.getItem(cacheKey)
     if (cached) {
@@ -70,8 +81,10 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
   let isNewUser = true
 
   try {
+    const excludedSet = new Set(options.excludeIds ?? [])
+
     if (userId) {
-      // 1. Fetch user's previous attempts (most recent 25)
+      // 1. Fetch user's previous attempts (most recent 30)
       const { data: attempts } = await supabase
         .from('attempts')
         .select('question_id, correct, created_at')
@@ -82,6 +95,8 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
       if (attempts && attempts.length > 0) {
         isNewUser = false
         const attemptedIds = new Set(attempts.map((a: { question_id: string }) => a.question_id))
+        excludedSet.forEach(id => attemptedIds.add(id))
+
         const correctQids = attempts.filter((a: { correct: boolean }) => a.correct).map((a: { question_id: string }) => a.question_id)
         const incorrectQids = attempts.filter((a: { correct: boolean }) => !a.correct).map((a: { question_id: string }) => a.question_id)
 
@@ -110,6 +125,7 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
         }
 
         const pickedQuestionIds = new Set<string>()
+        excludedSet.forEach(id => pickedQuestionIds.add(id))
         let easyCount = 0
 
         // ── 2 Easy questions from previous CORRECT chapters (confidence booster) ──
@@ -193,14 +209,14 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
           .select(SELECT_FIELDS)
           .eq('subject', hf.subject)
           .eq('chapter', hf.chapter)
-          .limit(15)
+          .limit(20)
 
         const candRows = (cand as unknown as Question[]) || []
         if (candRows.length > 0) {
           const sorted = sortByDifficulty(candRows)
           for (const q of sorted) {
             if (questions.length >= 5) break
-            if (!questions.some(item => item.question_id === q.question_id)) {
+            if (!questions.some(item => item.question_id === q.question_id) && !options.excludeIds?.includes(q.question_id)) {
               questions.push({ ...q, daily_type: 'high_frequency' })
             }
           }
@@ -212,7 +228,7 @@ export async function getDailyPracticeQuestions(userId: string | null): Promise<
   }
 
   const finalQuestions = questions.slice(0, 5)
-  const result: DailyPracticeSet = { questions: finalQuestions, isNewUser }
+  const result: DailyPracticeSet = { questions: finalQuestions, isNewUser, setIndex }
   try {
     if (finalQuestions.length > 0) {
       sessionStorage.setItem(cacheKey, JSON.stringify(result))

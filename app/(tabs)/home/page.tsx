@@ -16,7 +16,7 @@ import { ContinueSection, MotivationHeadline } from './_parts/continue';
 import { BuddyHomeMessage } from './_parts/buddyMessage';
 import { RecommendedQuestionCard } from './_parts/recommended';
 import { RookiePassBanner } from './_parts/pass';
-import { HomeSurveyModal, ProfileModal } from './_parts/modals';
+import { HomeSurveyModal, ProfileModal, PhoneRequiredModal } from './_parts/modals';
 import { CommunityRow, HomeFooter } from './_parts/community';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -41,6 +41,8 @@ export default function HomePage() {
   // Weekly chapter survey
   const [showSurvey, setShowSurvey] = useState(false);
   const [surveyUserId, setSurveyUserId] = useState<string | null>(null);
+  // Phone number modal (required for users who have solved > 3 questions total)
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
 
   // Shared data for the header, metric row and resume card (logic moved from the old cards)
   const streakData = useStreak();
@@ -68,6 +70,45 @@ export default function HomePage() {
       setTimeout(() => setShowSurvey(true), 800);
     }
   }, []);
+
+  // Check whether phone number is required (only for users with > 3 total questions solved)
+  useEffect(() => {
+    if (!user?.id) return;
+    if (user.phone && user.phone.trim().length >= 10) {
+      setShowPhoneModal(false);
+      return;
+    }
+
+    let active = true;
+    const checkAttempts = async () => {
+      try {
+        const { count } = await supabase
+          .from('attempts')
+          .select('*', { count: 'exact', head: true })
+          .eq('student_id', user.id);
+
+        let total = count ?? 0;
+        if (total === 0) {
+          const { count: actCount } = await supabase
+            .from('user_activity')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+          total = actCount ?? 0;
+        }
+
+        // Only show modal if user has solved MORE than 3 questions total
+        // Users who have solved <= 3 questions (including new users) are never prompted.
+        if (active && total > 3) {
+          setShowPhoneModal(true);
+        }
+      } catch (e) {
+        console.warn('Error checking attempt count:', e);
+      }
+    };
+
+    checkAttempts();
+    return () => { active = false; };
+  }, [user?.id, user?.phone]);
 
   const saveProfile = async () => {
     if (!cl || !exam) { notify.error('Please select your class and exam'); return; }
@@ -124,14 +165,23 @@ export default function HomePage() {
     <Page className="pb-6">
       {/* ─── Modals ─── */}
       <HomeSurveyModal
-        open={showSurvey && !showProfileModal}
+        open={showSurvey && !showProfileModal && !showPhoneModal}
         userId={surveyUserId}
         onDone={() => setShowSurvey(false)}
       />
       <ProfileModal
-        open={showProfileModal}
+        open={showProfileModal && !showPhoneModal}
         cl={cl} setcl={setcl} exam={exam} setExam={setExam}
         saving={saving} onSave={saveProfile} onSkip={() => setShowProfileModal(false)}
+      />
+      <PhoneRequiredModal
+        open={showPhoneModal}
+        userId={user?.id || ''}
+        onSuccess={(savedPhone) => {
+          setShowPhoneModal(false);
+          setUser((prev) => (prev ? { ...prev, phone: savedPhone } : null));
+          notify.success('Phone number saved successfully!');
+        }}
       />
 
       <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>

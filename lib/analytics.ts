@@ -47,6 +47,8 @@ export type Feature =
   | 'recommendation'
   | 'similar'
   | 'home'
+  | 'website'
+  | 'landing'
 
 export interface TrackPayload {
   question_id?:  string
@@ -58,6 +60,19 @@ export interface TrackPayload {
   /** Milliseconds — e.g. time spent reading a solution */
   duration_ms?:  number
   metadata?:     Record<string, unknown>
+}
+
+// ─── Device Detection Helper ──────────────────────────────────────────────────
+export function getDeviceType(): 'mobile' | 'desktop' {
+  if (typeof window === 'undefined') return 'desktop'
+  const ua = navigator.userAgent || ''
+  if (/Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+    return 'mobile'
+  }
+  if (typeof window.innerWidth === 'number' && window.innerWidth <= 768) {
+    return 'mobile'
+  }
+  return 'desktop'
 }
 
 // ─── Session ID ───────────────────────────────────────────────────────────────
@@ -104,8 +119,14 @@ export async function track(event: EventName, payload: TrackPayload = {}): Promi
   try {
     const userId    = await getUserId()
     const sessionId = getSessionId()
+    const device    = getDeviceType()
 
     const { question_id, test_id, feature, subject, chapter, difficulty, duration_ms, metadata } = payload
+
+    const enrichedMetadata = {
+      device,
+      ...(metadata ?? {}),
+    }
 
     await supabase.from('analytics_events').insert({
       student_id:  userId,
@@ -118,11 +139,31 @@ export async function track(event: EventName, payload: TrackPayload = {}): Promi
       chapter:     chapter     ?? null,
       difficulty:  difficulty  ?? null,
       duration_ms: duration_ms ?? null,
-      metadata:    metadata    ?? null,
+      metadata:    enrichedMetadata,
     })
   } catch {
     // Silently swallow — analytics must never break the product
   }
+}
+
+/**
+ * Tracks a website page visit / view across any route in the application.
+ * Ensures users who don't enter the question viewer are also captured.
+ */
+export async function trackPageView(path?: string, feature = 'website'): Promise<void> {
+  if (typeof window === 'undefined') return
+  const currentPath = path || window.location.pathname || '/'
+  const device = getDeviceType()
+  await track('website_visit', {
+    feature,
+    metadata: {
+      path: currentPath,
+      device,
+      referrer: document.referrer || null,
+      screen_width: window.innerWidth,
+      screen_height: window.innerHeight,
+    },
+  })
 }
 
 // ─── Solution read timer ──────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 import './globals.css';
 import React, { useEffect } from 'react';
 import Script from 'next/script';
+import { AnalyticsTracker } from '@/components/AnalyticsTracker';
 
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <head />
       <body className="antialiased bg-[var(--background)] text-[var(--foreground)]">
+        <AnalyticsTracker />
         {children}
         {/* Razorpay checkout SDK — loaded once for the whole app */}
         <Script
