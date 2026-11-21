@@ -20,6 +20,7 @@ interface RookiePassModalProps {
   limit?: number
   title?: string
   description?: string
+  buttonText?: string
 }
 
 export default function RookiePassModal({
@@ -31,6 +32,7 @@ export default function RookiePassModal({
   limit = 3,
   title,
   description,
+  buttonText,
 }: RookiePassModalProps) {
   const [loading, setLoading] = useState(false)
   const pricing = useUserPricing()
@@ -132,7 +134,7 @@ export default function RookiePassModal({
               className="relative inline-flex h-11 w-full items-center justify-center gap-2 rounded-control bg-white text-body font-semibold text-[#14295f] transition hover:bg-white/90 active:translate-y-px disabled:opacity-80">
               {loading
                 ? <><Loader2 className="size-4 animate-spin" /> Connecting…</>
-                : <>Get 1 year · {saleMoney(pricing.price)} <ArrowRight className="size-4" /></>}
+                : <>{buttonText ?? `Unlock with Rookie Pass · ${saleMoney(pricing.price)}`} <ArrowRight className="size-4" /></>}
             </button>
           </div>
         </div>

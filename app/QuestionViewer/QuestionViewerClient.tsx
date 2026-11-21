@@ -52,6 +52,34 @@ function getStoredTodayAttempts(): number {
   }
 }
 
+function getPassModalShownKey(uid?: string | null): string {
+  let id = uid
+  if (!id && typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('@user')
+      if (raw) id = JSON.parse(raw)?.id
+    } catch {}
+  }
+  const prefix = id ? `${id}_` : ''
+  return `rookie_pass_modal_shown_${prefix}${new Date().toDateString()}`
+}
+
+function hasPassModalShownToday(uid?: string | null): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return localStorage.getItem(getPassModalShownKey(uid)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markPassModalShownToday(uid?: string | null): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(getPassModalShownKey(uid), '1')
+  } catch {}
+}
+
 // ─── AI Buddy Definitions ────────────────────────────────────────────────────
 export const AI_BUDDIES: Record<string, {
   name: string; columnKey: string; systemPrompt: string; color: string; image: string;
@@ -281,17 +309,34 @@ const optLetter = (v: string | null | undefined) =>
 
 /**
  * Compact locked row inside SimilarQuestionCard.
- * Pressing the button opens RookiePassModal (not Razorpay directly).
+ * Pressing the button opens Razorpay checkout directly.
  */
-function LockedSolutionRow({ onOpenPassModal }: { onOpenPassModal?: () => void }) {
+function LockedSolutionRow({
+  onUnlock,
+  onOpenPassModal,
+  loading,
+}: {
+  onUnlock?: () => void
+  onOpenPassModal?: () => void
+  loading?: boolean
+}) {
+  const handleUnlockClick = onUnlock || onOpenPassModal
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-control bg-muted p-4 ring-1 ring-border">
       <div className="flex items-center gap-2 text-body-sm text-foreground">
         <Lock className="size-4 shrink-0 text-muted-foreground" />
         <span>AI Solution locked — daily 5-question limit reached</span>
       </div>
-      <Button onClick={onOpenPassModal} className="h-8 shrink-0 rounded-control px-3 text-caption font-semibold">
-        <>Unlock with Pass <ArrowRight className="size-3.5" /></>
+      <Button
+        onClick={handleUnlockClick}
+        disabled={loading}
+        className="h-8 shrink-0 rounded-control px-3 text-caption font-semibold"
+      >
+        {loading ? (
+          <><Loader2 className="size-3.5 animate-spin" /> Opening…</>
+        ) : (
+          <>Unlock with Pass <ArrowRight className="size-3.5" /></>
+        )}
       </Button>
     </div>
   )
@@ -300,16 +345,17 @@ function LockedSolutionRow({ onOpenPassModal }: { onOpenPassModal?: () => void }
 /**
  * Full locked solution card in the main viewer.
  * Taller teaser so the lock icon isn't squished.
- * "Unlock with Rookie Pass" opens RookiePassModal — the modal's own buy
- * button then fires Razorpay directly.
+ * "Unlock with Rookie Pass" opens Razorpay checkout directly.
  */
 const LockedSolutionCard = React.forwardRef<HTMLDivElement, {
   buddyImage: string
   buddyName: string
-  onSuccess: () => void
-  onOpenPassModal: () => void
-}>(function LockedSolutionCard({ buddyImage, buddyName, onSuccess: _onSuccess, onOpenPassModal }, ref) {
-  // `onSuccess` is handled by the parent's RookiePassModal — nothing needed here.
+  onUnlock?: () => void
+  loading?: boolean
+  onSuccess?: () => void
+  onOpenPassModal?: () => void
+}>(function LockedSolutionCard({ buddyImage, buddyName, onUnlock, loading, onSuccess: _onSuccess, onOpenPassModal }, ref) {
+  const handleUnlockClick = onUnlock || onOpenPassModal
 
   return (
     <Card ref={ref} key="solution-locked-card" className="mt-4 overflow-hidden hover:shadow-none sm:p-8">
@@ -360,10 +406,15 @@ const LockedSolutionCard = React.forwardRef<HTMLDivElement, {
           </p>
           <div className="mt-5">
             <Button
-              onClick={onOpenPassModal}
+              onClick={handleUnlockClick}
+              disabled={loading}
               className="h-11 rounded-control px-6 font-semibold text-body-sm shadow-sm"
             >
-              <>Unlock with Rookie Pass <ArrowRight className="size-4" /></>
+              {loading ? (
+                <><Loader2 className="size-4 animate-spin" /> Opening checkout…</>
+              ) : (
+                <>Unlock with Rookie Pass <ArrowRight className="size-4" /></>
+              )}
             </Button>
           </div>
         </div>
@@ -381,13 +432,15 @@ const LockedSolutionCard = React.forwardRef<HTMLDivElement, {
 
 // ─── Similar Question Card (self-contained interactive mini question) ─────────
 function SimilarQuestionCard({
-  q, chapterTitle, subjectName, imageKey, isDark, addToast, dbTable, isRestricted = false, onOpenPassModal,
+  q, chapterTitle, subjectName, imageKey, isDark, addToast, dbTable, isRestricted = false, onOpenPassModal, onUnlock, loading,
 }: {
   q: Question; chapterTitle: string; subjectName: string; imageKey: string
   isDark: boolean; addToast: (msg: string, type: ToastType, ms?: number) => void
   dbTable: string
   isRestricted?: boolean
   onOpenPassModal?: () => void
+  onUnlock?: () => void
+  loading?: boolean
 }) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [pendingOption, setPendingOption]   = useState<string | null>(null) // clicked, not yet resolved
@@ -647,7 +700,7 @@ function SimilarQuestionCard({
       {solutionRequested && (
         <div className="space-y-3">
           {isRestricted ? (
-            <LockedSolutionRow onOpenPassModal={onOpenPassModal} />
+            <LockedSolutionRow onUnlock={onUnlock || onOpenPassModal} loading={loading} />
           ) : (
             <>
               <div className="flex items-center gap-2.5">
@@ -702,13 +755,15 @@ function SimilarQuestionCard({
 // ─── Similar Questions Panel ──────────────────────────────────────────────────
 function SimilarQuestionsPanel({
   mainQuestion, chapterTitle, subjectName, imageKey, isDark, addToast, dbTable,
-  isRestricted = false, onOpenPassModal,
+  isRestricted = false, onOpenPassModal, onUnlock, loading: checkoutLoading,
 }: {
   mainQuestion: Question; chapterTitle: string; subjectName: string; imageKey: string
   isDark: boolean; addToast: (msg: string, type: ToastType, ms?: number) => void
   dbTable: string
   isRestricted?: boolean
   onOpenPassModal?: () => void
+  onUnlock?: () => void
+  loading?: boolean
 }) {
   const [loading, setLoading]         = useState(false)
   const [questions, setQuestions]     = useState<Question[]>([])
@@ -828,10 +883,15 @@ function SimilarQuestionsPanel({
               </div>
             </div>
             <Button
-              onClick={onOpenPassModal}
+              onClick={onUnlock || onOpenPassModal}
+              disabled={checkoutLoading}
               className="h-10 shrink-0 w-full sm:w-auto rounded-control px-4 font-semibold text-body-sm shadow-sm"
             >
-              Unlock with Pass <ArrowRight className="size-4" />
+              {checkoutLoading ? (
+                <><Loader2 className="size-4 animate-spin" /> Opening checkout…</>
+              ) : (
+                <>Unlock with Pass <ArrowRight className="size-4" /></>
+              )}
             </Button>
           </div>
         </Card>
@@ -882,7 +942,10 @@ function SimilarQuestionsPanel({
               <SimilarQuestionCard
                 q={q} chapterTitle={chapterTitle} subjectName={subjectName}
                 imageKey={imageKey} isDark={isDark} addToast={addToast}
-                dbTable={dbTable} isRestricted={isRestricted} onOpenPassModal={onOpenPassModal}
+                dbTable={dbTable} isRestricted={isRestricted}
+                onOpenPassModal={onOpenPassModal}
+                onUnlock={onUnlock}
+                loading={checkoutLoading}
               />
             </motion.div>
           ))}
@@ -989,6 +1052,7 @@ export default function QuestionViewerClient() {
     }
     setHasPass(ok)
     setIsCurrentRestricted(false)
+    setShowPassModal(false)
     const q = questions[currentIndex]
     if (q && selectedOption !== null && !solution) {
       setSolutionRequested(true)
@@ -1004,12 +1068,23 @@ export default function QuestionViewerClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, questions, currentIndex, selectedOption, solution, solutionBuddyId, resolvedCorrectOption])
 
-  const { buy: openCheckout } = useBuyPass(handlePassSuccess)
+  const { buy: openCheckout, loading: checkoutLoading } = useBuyPass(handlePassSuccess)
 
-  // Auto-popup after the 5th question: show the pass modal once so the user
-  // understands what happened, then they click the button inside to pay.
-  const handleOpenPassModalForLimit    = useCallback(() => setShowPassModal(true), [])
-  const handleOpenPassModalAfterFive   = useCallback(() => setShowPassModal(true), [])
+  // Auto-popup after daily limit reaches: show the Rookie Pass modal once instead of
+  // opening checkout directly. Subsequent unlock button clicks trigger Razorpay checkout.
+  const handleOpenPassModalForLimit = useCallback(() => {
+    if (!hasPassModalShownToday(userId)) {
+      markPassModalShownToday(userId)
+      setShowPassModal(true)
+    }
+  }, [userId])
+
+  const handleOpenPassModalAfterFive = useCallback(() => {
+    if (!hasPassModalShownToday(userId)) {
+      markPassModalShownToday(userId)
+      setShowPassModal(true)
+    }
+  }, [userId])
 
   // Sync today's question attempts count with Supabase attempts table if logged in
   useEffect(() => {
@@ -1605,7 +1680,7 @@ export default function QuestionViewerClient() {
   // ── Regenerate solution ───────────────────────────────────────────────────
   const handleRegenerateSolution = async () => {
     if (isCurrentRestricted) {
-      handleOpenPassModalForLimit()
+      openCheckout()
       return
     }
     const q = questions[currentIndex]; if (!q) return
@@ -1860,7 +1935,7 @@ export default function QuestionViewerClient() {
   // ── AI Followup (Simpler Explanation) ─────────────────────────────────────
   const handleAIFollowup = async () => {
     if (isCurrentRestricted) {
-      handleOpenPassModalForLimit()
+      openCheckout()
       return
     }
     const q = questions[currentIndex]; if (!q) return
@@ -2131,7 +2206,8 @@ export default function QuestionViewerClient() {
                           ref={scrollRef}
                           buddyImage={solutionBuddy.image}
                           buddyName={solutionBuddy.name}
-                          onOpenPassModal={handleOpenPassModalForLimit}
+                          onUnlock={openCheckout}
+                          loading={checkoutLoading}
                           onSuccess={handlePassSuccess}
                         />
                       </motion.div>
@@ -2214,7 +2290,8 @@ export default function QuestionViewerClient() {
                           addToast={addToast}
                           dbTable={DB_TABLE}
                           isRestricted={isCurrentRestricted || (hasPass !== true && attemptsToday >= FREE_DAILY_ATTEMPTS_LIMIT)}
-                          onOpenPassModal={handleOpenPassModalForLimit}
+                          onUnlock={openCheckout}
+                          loading={checkoutLoading}
                         />
                       </motion.div>
                     )}
