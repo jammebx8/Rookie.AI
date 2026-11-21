@@ -281,18 +281,17 @@ const optLetter = (v: string | null | undefined) =>
 
 /**
  * Compact locked row inside SimilarQuestionCard.
- * Uses useBuyPass — pressing the button opens Razorpay directly.
+ * Pressing the button opens RookiePassModal (not Razorpay directly).
  */
 function LockedSolutionRow({ onOpenPassModal }: { onOpenPassModal?: () => void }) {
-  const { buy, loading } = useBuyPass(onOpenPassModal)
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-control bg-muted p-4 ring-1 ring-border">
       <div className="flex items-center gap-2 text-body-sm text-foreground">
         <Lock className="size-4 shrink-0 text-muted-foreground" />
         <span>AI Solution locked — daily 5-question limit reached</span>
       </div>
-      <Button onClick={buy} disabled={loading} className="h-8 shrink-0 rounded-control px-3 text-caption font-semibold">
-        {loading ? <><Loader2 className="size-3.5 animate-spin" /> Opening…</> : <>Unlock with Rookie Pass <ArrowRight className="size-3.5" /></>}
+      <Button onClick={onOpenPassModal} className="h-8 shrink-0 rounded-control px-3 text-caption font-semibold">
+        <>Unlock with Pass <ArrowRight className="size-3.5" /></>
       </Button>
     </div>
   )
@@ -301,14 +300,16 @@ function LockedSolutionRow({ onOpenPassModal }: { onOpenPassModal?: () => void }
 /**
  * Full locked solution card in the main viewer.
  * Taller teaser so the lock icon isn't squished.
- * "Unlock with Rookie Pass" opens Razorpay directly — no intermediate modal.
+ * "Unlock with Rookie Pass" opens RookiePassModal — the modal's own buy
+ * button then fires Razorpay directly.
  */
 const LockedSolutionCard = React.forwardRef<HTMLDivElement, {
   buddyImage: string
   buddyName: string
   onSuccess: () => void
-}>(function LockedSolutionCard({ buddyImage, buddyName, onSuccess }, ref) {
-  const { buy, loading } = useBuyPass(onSuccess)
+  onOpenPassModal: () => void
+}>(function LockedSolutionCard({ buddyImage, buddyName, onSuccess: _onSuccess, onOpenPassModal }, ref) {
+  // `onSuccess` is handled by the parent's RookiePassModal — nothing needed here.
 
   return (
     <Card ref={ref} key="solution-locked-card" className="mt-4 overflow-hidden hover:shadow-none sm:p-8">
@@ -359,13 +360,10 @@ const LockedSolutionCard = React.forwardRef<HTMLDivElement, {
           </p>
           <div className="mt-5">
             <Button
-              onClick={buy}
-              disabled={loading}
+              onClick={onOpenPassModal}
               className="h-11 rounded-control px-6 font-semibold text-body-sm shadow-sm"
             >
-              {loading
-                ? <><Loader2 className="size-4 animate-spin" /> Opening checkout…</>
-                : <>Unlock with Rookie Pass <ArrowRight className="size-4" /></>}
+              <>Unlock with Rookie Pass <ArrowRight className="size-4" /></>
             </Button>
           </div>
         </div>
@@ -971,6 +969,7 @@ export default function QuestionViewerClient() {
   const [buddyId, setBuddyId]                   = useState(DEFAULT_BUDDY_ID)
   const [solutionBuddyId, setSolutionBuddyId]   = useState(DEFAULT_BUDDY_ID)
   const [buddyModalOpen, setBuddyModalOpen]     = useState(false)
+  const [showPassModal, setShowPassModal]       = useState(false)
   const [userId, setUserId]                     = useState<string | null>(null)
   const [dailySetIndex, setDailySetIndex]       = useState(1)
   const [loadingNextSet, setLoadingNextSet]     = useState(false)
@@ -1007,10 +1006,10 @@ export default function QuestionViewerClient() {
 
   const { buy: openCheckout } = useBuyPass(handlePassSuccess)
 
-  // Keep these as thin wrappers so all existing call-sites (auto-popup after 5 Qs,
-  // redo button, followup button) go straight to checkout without an intermediate modal.
-  const handleOpenPassModalForLimit    = useCallback(() => openCheckout(), [openCheckout])
-  const handleOpenPassModalAfterFive   = useCallback(() => openCheckout(), [openCheckout])
+  // Auto-popup after the 5th question: show the pass modal once so the user
+  // understands what happened, then they click the button inside to pay.
+  const handleOpenPassModalForLimit    = useCallback(() => setShowPassModal(true), [])
+  const handleOpenPassModalAfterFive   = useCallback(() => setShowPassModal(true), [])
 
   // Sync today's question attempts count with Supabase attempts table if logged in
   useEffect(() => {
@@ -1945,6 +1944,18 @@ export default function QuestionViewerClient() {
         }}
       />
 
+      {/* ── Pass modal — shown once automatically when the 5-question limit
+           is hit. The buy button inside fires Razorpay directly. ── */}
+      <RookiePassModal
+        isOpen={showPassModal}
+        onClose={() => setShowPassModal(false)}
+        isDark={isDark}
+        addToast={addToast}
+        title="Daily free limit reached (5/5)"
+        description="You've used your 5 free AI solutions for today. Get Rookie Pass for unlimited explanations, hover-to-understand any equation, and full JEE Advanced access."
+        onSuccess={handlePassSuccess}
+      />
+
       {/* ── Focus header ───────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 bg-muted/85 backdrop-blur-md">
         <div className="mx-auto flex h-14 w-full max-w-focus items-center gap-2 px-4 sm:gap-3">
@@ -2120,27 +2131,8 @@ export default function QuestionViewerClient() {
                           ref={scrollRef}
                           buddyImage={solutionBuddy.image}
                           buddyName={solutionBuddy.name}
-                          onSuccess={async () => {
-                            let ok = true
-                            if (userId) {
-                              const { checkUserPaidDirectFromDB } = await import('../../lib/rookiePass')
-                              ok = await checkUserPaidDirectFromDB(userId)
-                            }
-                            setHasPass(ok)
-                            setIsCurrentRestricted(false)
-                            const q = questions[currentIndex]
-                            if (q && selectedOption !== null && !solution) {
-                              setSolutionRequested(true)
-                              setSolutionLoading(true)
-                              const activeBuddy = AI_BUDDIES[solutionBuddyId] ?? AI_BUDDIES[DEFAULT_BUDDY_ID]
-                              generateAISolution(q, solutionBuddyId, activeBuddy, resolvedCorrectOption || q.correct_option || '').then(aiSol => {
-                                const reconciled = reconcileAnswerLine(aiSol, resolvedCorrectOption)
-                                setSolution(reconciled)
-                                setSolutionLoading(false)
-                                saveSession({ solution: reconciled, solutionRequested: true, solutionBuddyId, isRestricted: false })
-                              })
-                            }
-                          }}
+                          onOpenPassModal={handleOpenPassModalForLimit}
+                          onSuccess={handlePassSuccess}
                         />
                       </motion.div>
                     ) : (

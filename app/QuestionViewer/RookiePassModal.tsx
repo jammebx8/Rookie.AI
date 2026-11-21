@@ -6,7 +6,7 @@ import { triggerCheckout, bustPassCache, checkUserPaidDirectFromDB } from '../..
 import { supabase } from '../../public/src/utils/supabase'
 import { saleMoney, useUserPricing } from '@/lib/sale'
 import { Define } from '@/components/rookie/define'
-import { FlipCountdown, OffTag, PASS_BG, STARS } from '@/components/rookie/sale'
+import { FlipCountdown, OffTag, PASS_BG, STARS, CHECKOUT_START } from '@/components/rookie/sale'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import type { ToastType } from './QuestionViewerClient'
@@ -48,6 +48,10 @@ export default function RookiePassModal({
 
       const raw = typeof window !== 'undefined' ? localStorage.getItem('@user') : null
       const user = raw ? JSON.parse(raw) : null
+
+      // Dispatch before triggerCheckout so the Dialog drops its focus trap
+      // before Razorpay's iframe tries to take focus.
+      window.dispatchEvent(new Event(CHECKOUT_START))
 
       await triggerCheckout({
         token: session.access_token,

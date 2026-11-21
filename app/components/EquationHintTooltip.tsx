@@ -131,7 +131,7 @@ export function EquationHintTooltip({
       <TooltipContent
         side="top"
         sideOffset={6}
-        className="hint-popup !block !items-start max-w-[320px] leading-relaxed whitespace-normal text-xs"
+        className="hint-popup !block !items-start max-w-[420px] leading-relaxed whitespace-normal text-sm p-3"
       >
         {hint.status === 'idle' && (
           <span className="opacity-60">Hover to explain this step…</span>
