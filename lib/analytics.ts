@@ -37,6 +37,13 @@ export type EventName =
   | 'daily_practice_started'
   | 'daily_practice_completed'
   | 'equation_hint_used'
+  | 'compete_button_clicked'
+  | 'compete_matchmaking_started'
+  | 'compete_match_made'
+  | 'compete_match_started'
+  | 'compete_question_answered'
+  | 'compete_match_completed'
+  | 'compete_rematch_clicked'
   // catch-all for future events
   | (string & Record<never, never>)
 
@@ -50,6 +57,7 @@ export type Feature =
   | 'home'
   | 'website'
   | 'landing'
+  | 'compete'
 
 export interface TrackPayload {
   question_id?:  string

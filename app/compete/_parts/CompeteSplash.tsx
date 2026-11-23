@@ -2,28 +2,29 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Swords, Trophy, Flame, Sparkles, ChevronRight } from 'lucide-react';
+import { Swords, Trophy, Flame, Coins, Sparkles, ChevronRight, UserRound } from 'lucide-react';
 import type { CompeteUserStats } from '@/lib/competeEngine';
-import { calculateIndiaRank, fetchOpponentsPool, REAL_USER_PROFILES } from '@/lib/competeEngine';
+import { fetchRealOpponentsPool, generateSvgAvatar } from '@/lib/competeEngine';
 
 interface CompeteSplashProps {
   stats: CompeteUserStats;
   userName?: string;
+  userCoins?: number;
   onStartMatch: () => void;
 }
 
-export function CompeteSplash({ stats, userName = 'Learner', onStartMatch }: CompeteSplashProps) {
-  const currentRank = calculateIndiaRank(stats.rating);
-  const [userPool, setUserPool] = useState<Array<{ name: string; avatar_url: string }>>(REAL_USER_PROFILES);
+export function CompeteSplash({ stats, userName = 'Learner', userCoins = 0, onStartMatch }: CompeteSplashProps) {
   const [displayAvatars, setDisplayAvatars] = useState<Array<{ id: number; name: string; avatar_url: string }>>([]);
 
   useEffect(() => {
-    fetchOpponentsPool().then((pool) => {
+    fetchRealOpponentsPool().then((pool) => {
       if (pool && pool.length > 0) {
-        setUserPool(pool);
-        // Initialize with first 5
         setDisplayAvatars(
-          pool.slice(0, 5).map((u, i) => ({ id: i, name: u.name, avatar_url: u.avatar_url }))
+          pool.slice(0, 5).map((u, i) => ({
+            id: i,
+            name: u.name,
+            avatar_url: u.avatar_url || generateSvgAvatar(u.name),
+          }))
         );
       }
     });
@@ -31,24 +32,25 @@ export function CompeteSplash({ stats, userName = 'Learner', onStartMatch }: Com
 
   // Constantly cycle active avatars: new image pops in and oldest leaves
   useEffect(() => {
-    if (userPool.length === 0) return;
-
     let counter = 5;
     const interval = setInterval(() => {
-      const nextUser = userPool[Math.floor(Math.random() * userPool.length)];
-      counter++;
-      setDisplayAvatars((prev) => {
-        const next = [...prev.slice(1), { id: counter, name: nextUser.name, avatar_url: nextUser.avatar_url }];
-        return next;
+      fetchRealOpponentsPool().then((pool) => {
+        if (!pool || pool.length === 0) return;
+        const nextUser = pool[Math.floor(Math.random() * pool.length)];
+        counter++;
+        setDisplayAvatars((prev) => [
+          ...prev.slice(1),
+          { id: counter, name: nextUser.name, avatar_url: nextUser.avatar_url || generateSvgAvatar(nextUser.name) },
+        ]);
       });
-    }, 2400);
+    }, 2500);
 
     return () => clearInterval(interval);
-  }, [userPool]);
+  }, []);
 
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center w-full max-w-4xl px-4 py-6 sm:py-10 select-none text-center">
-      {/* Sleek Dropper Gradient Background Glow (No atom animation) */}
+      {/* Sleek Dropper Gradient Background Glow */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
         <div className="h-[400px] w-[650px] rounded-full bg-gradient-to-r from-blue-700/15 via-sky-500/10 to-indigo-700/15 blur-[100px]" />
       </div>
@@ -61,7 +63,7 @@ export function CompeteSplash({ stats, userName = 'Learner', onStartMatch }: Com
         className="relative my-4 sm:my-6"
       >
         <div className="inline-block rounded-full bg-sky-500/10 border border-sky-400/20 px-3.5 py-1 text-xs font-bold uppercase tracking-widest text-sky-400 mb-3 backdrop-blur-sm">
-          1v1 Real-Time Academic Arena
+          Real-Time 1-vs-1 Academic Battle
         </div>
 
         <h1
@@ -81,11 +83,11 @@ export function CompeteSplash({ stats, userName = 'Learner', onStartMatch }: Com
         </h1>
 
         <p className="mt-3 max-w-md mx-auto text-xs sm:text-sm md:text-base text-slate-300 px-2 leading-relaxed font-normal">
-          Directly match against another student, solve under pressure, earn rating points, and climb national rankings.
+          Battle 1-on-1 with live learners. Solve 5 timed questions, earn Rookie Coins, climb the platform leaderboard, and test your speed.
         </p>
       </motion.div>
 
-      {/* Live Learner Activity Indicator with dynamically cycling real user images (No green dot) */}
+      {/* Live Learner Activity Indicator with real user images & SVG (No green dot) */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -112,41 +114,41 @@ export function CompeteSplash({ stats, userName = 'Learner', onStartMatch }: Com
           </AnimatePresence>
         </div>
 
-        {/* Counter text (Green dot removed as requested) */}
+        {/* Counter text (Green dot removed) */}
         <span className="text-xs sm:text-sm font-semibold text-sky-200 tracking-wide">
           634 learners competing online
         </span>
       </motion.div>
 
-      {/* User Stats Card Strip (Dropper Design System) */}
+      {/* User Stats Card Strip: Rookie Coins, Elo Rating, Streak */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.35, duration: 0.4 }}
         className="mt-6 sm:mt-8 grid grid-cols-3 gap-2.5 sm:gap-4 w-full max-w-lg"
       >
-        {/* Rating */}
+        {/* Rookie Coins */}
         <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 p-3 sm:p-4 backdrop-blur-sm transition hover:bg-white/[0.08]">
           <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            <Sparkles className="size-3.5 text-amber-400 shrink-0" />
-            <span>Rating</span>
+            <Coins className="size-3.5 text-amber-400 shrink-0" />
+            <span>Coins</span>
           </div>
           <div className="mt-1 text-xl sm:text-2xl font-black text-amber-400 tabular-nums">
-            {stats.rating}
+            {userCoins.toLocaleString('en-IN')}
           </div>
-          <div className="text-[10px] text-slate-400 hidden sm:block">Competitive Tier</div>
+          <div className="text-[10px] text-slate-400 hidden sm:block">Rookie Coins</div>
         </div>
 
-        {/* India Rank */}
+        {/* Elo Rating */}
         <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 p-3 sm:p-4 backdrop-blur-sm transition hover:bg-white/[0.08]">
           <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
             <Trophy className="size-3.5 text-sky-400 shrink-0" />
-            <span>India Rank</span>
+            <span>Elo Rating</span>
           </div>
           <div className="mt-1 text-xl sm:text-2xl font-black text-sky-300 tabular-nums">
-            #{currentRank.toLocaleString('en-IN')}
+            {stats.elo}
           </div>
-          <div className="text-[10px] text-slate-400 hidden sm:block">National Standings</div>
+          <div className="text-[10px] text-slate-400 hidden sm:block">Skill Tier</div>
         </div>
 
         {/* Streak */}
@@ -164,7 +166,7 @@ export function CompeteSplash({ stats, userName = 'Learner', onStartMatch }: Com
         </div>
       </motion.div>
 
-      {/* Big Action CTA */}
+      {/* Action Button without 1v1 tag and with slow shine */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -175,9 +177,9 @@ export function CompeteSplash({ stats, userName = 'Learner', onStartMatch }: Com
           onClick={onStartMatch}
           className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 px-6 py-4 text-base sm:text-lg font-bold text-white shadow-[0_0_30px_rgba(14,165,233,0.45)] transition duration-300 hover:shadow-[0_0_45px_rgba(14,165,233,0.65)] hover:scale-[1.02] active:scale-[0.98] border border-white/20"
         >
-          {/* Continuous subtle shine */}
+          {/* Slow Continuous Shine */}
           <span className="pointer-events-none absolute inset-0 -translate-x-full animate-comp-shine bg-gradient-to-r from-transparent via-white/30 to-transparent w-full h-full" />
-          <Swords className="size-5 transition group-hover:rotate-12" />
+          <Swords className="size-5" />
           <span>Find an Opponent</span>
           <ChevronRight className="size-5 transition group-hover:translate-x-1" />
         </button>

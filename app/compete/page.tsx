@@ -8,12 +8,12 @@ import { CompeteMatchmaking } from './_parts/CompeteMatchmaking';
 import { CompeteCountdown } from './_parts/CompeteCountdown';
 import { CompeteBattle } from './_parts/CompeteBattle';
 import { CompeteResult } from './_parts/CompeteResult';
+import { track } from '@/lib/analytics';
 import {
   getCompeteUserStats,
   computeMatchPlan,
-  pickOpponent,
   fetchCompeteQuestions,
-  recordMatchResult,
+  processMatchEloAndCoins,
   CURATED_COMPETE_QUESTIONS,
   type CompeteUserStats,
   type CompeteOpponent,
@@ -26,11 +26,13 @@ type CompeteStage = 'splash' | 'matchmaking' | 'countdown' | 'battle' | 'result'
 export default function CompetePage() {
   const router = useRouter();
 
-  // User state
-  const [userStats, setUserStats] = useState<CompeteUserStats>(() => getCompeteUserStats());
+  // User identity & economy state
+  const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>('You');
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [userCoins, setUserCoins] = useState<number>(0);
   const [userExam, setUserExam] = useState<string>('JEE Main and Advanced Preparation');
+  const [userStats, setUserStats] = useState<CompeteUserStats>(() => getCompeteUserStats());
 
   // Match progression state
   const [stage, setStage] = useState<CompeteStage>('splash');
@@ -38,23 +40,33 @@ export default function CompetePage() {
   const [questions, setQuestions] = useState<CompeteQuestion[]>(() => [...CURATED_COMPETE_QUESTIONS]);
   const [matchPlan, setMatchPlan] = useState<MatchRetentionPlan | null>(null);
 
-  // Result state
+  // Result & Elo / Coins outcome state
   const [userScore, setUserScore] = useState(0);
   const [opponentScore, setOpponentScore] = useState(0);
   const [userAnswers, setUserAnswers] = useState<boolean[]>([]);
   const [opponentAnswers, setOpponentAnswers] = useState<boolean[]>([]);
-  const [ratingDelta, setRatingDelta] = useState(0);
-  const [newRating, setNewRating] = useState(450);
-  const [newRank, setNewRank] = useState(1942);
+  const [eloDelta, setEloDelta] = useState(0);
+  const [newElo, setNewElo] = useState(1200);
+  const [coinsDelta, setCoinsDelta] = useState(0);
+  const [newCoins, setNewCoins] = useState(0);
 
-  // Load user data on mount
+  // Load user data & coins from cache on mount
   useEffect(() => {
     try {
       const cached = localStorage.getItem('@user');
       if (cached) {
         const u = JSON.parse(cached);
+        if (u.id) setUserId(u.id);
         if (u.name) setUserName(u.name.split(' ')[0]);
         if (u.avatar_url) setUserAvatar(u.avatar_url);
+        if (typeof u.rookieCoinsEarned === 'number') {
+          setUserCoins(u.rookieCoinsEarned);
+          setNewCoins(u.rookieCoinsEarned);
+        } else if (localStorage.getItem('rookie_coins')) {
+          const stored = parseInt(localStorage.getItem('rookie_coins') || '0', 10);
+          setUserCoins(stored);
+          setNewCoins(stored);
+        }
         if (u.exam) {
           setUserExam(
             u.exam.toLowerCase().includes('neet')
@@ -69,19 +81,35 @@ export default function CompetePage() {
 
     const freshStats = getCompeteUserStats();
     setUserStats(freshStats);
-    setNewRating(freshStats.rating);
+    setNewElo(freshStats.elo);
   }, []);
+
+  // Dynamic browser title per match stage
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (stage === 'battle') {
+      document.title = 'Compete — Battle in Progress | Rookie.AI';
+    } else if (stage === 'countdown') {
+      document.title = 'Compete — Get Ready! | Rookie.AI';
+    } else if (stage === 'result') {
+      document.title = 'Compete — Battle Result | Rookie.AI';
+    } else if (stage === 'matchmaking') {
+      document.title = 'Compete — Finding Match... | Rookie.AI';
+    } else {
+      document.title = 'Compete — 1v1 Academic Battle | Rookie.AI';
+    }
+  }, [stage]);
 
   // ── Step 0 -> Step 1: Start Matchmaking ──
   const handleStartMatchmaking = useCallback(async () => {
     const currentStats = getCompeteUserStats();
     setUserStats(currentStats);
 
-    // Compute retention plan (determines win bias, bot mistakes, timing)
+    // Compute retention plan (determines win bias, bot mistakes, realistic timing)
     const plan = computeMatchPlan(currentStats);
     setMatchPlan(plan);
 
-    // Fetch questions in parallel so they are ready by countdown
+    // Fetch questions in parallel so they are instantly ready by countdown
     fetchCompeteQuestions().then((qs) => {
       if (qs && qs.length >= 5) setQuestions(qs);
     });
@@ -102,7 +130,7 @@ export default function CompetePage() {
 
   // ── Step 3 -> Step 4/5: Battle Finished -> Calculate Result ──
   const handleBattleFinished = useCallback(
-    (
+    async (
       uScore: number,
       oScore: number,
       uAnswers: boolean[],
@@ -111,24 +139,54 @@ export default function CompetePage() {
     ) => {
       if (!opponent) return;
 
-      const res = recordMatchResult(uScore, oScore, opponent, avgTimeSec);
+      const res = await processMatchEloAndCoins(
+        uScore,
+        oScore,
+        opponent,
+        userCoins,
+        userId,
+        avgTimeSec
+      );
+
       setUserScore(uScore);
       setOpponentScore(oScore);
       setUserAnswers(uAnswers);
       setOpponentAnswers(oAnswers);
       setUserStats(res.stats);
-      setRatingDelta(res.ratingDelta);
-      setNewRating(res.newRating);
-      setNewRank(res.newRank);
+      setEloDelta(res.eloDelta);
+      setNewElo(res.newElo);
+      setCoinsDelta(res.coinsDelta);
+      setNewCoins(res.newCoins);
+      setUserCoins(res.newCoins);
+
+      track('compete_match_completed', {
+        feature: 'compete',
+        metadata: {
+          won: uScore > oScore,
+          tied: uScore === oScore,
+          userScore: uScore,
+          opponentScore: oScore,
+          eloDelta: res.eloDelta,
+          coinsDelta: res.coinsDelta,
+        },
+      });
 
       setStage('result');
     },
-    [opponent]
+    [opponent, userCoins, userId]
   );
 
   // ── Rematch (Same opponent, round 2) ──
   const handleRematch = useCallback(async () => {
     if (!opponent) return;
+
+    track('compete_rematch_clicked', {
+      feature: 'compete',
+      metadata: {
+        opponentId: opponent.id,
+        opponentName: opponent.name,
+      },
+    });
 
     const currentStats = getCompeteUserStats();
     setUserStats(currentStats);
@@ -140,7 +198,7 @@ export default function CompetePage() {
       setQuestions(freshQuestions);
     }
 
-    // Jump straight to 3-2-1 countdown for rematch!
+    // Jump straight to 3-2-1 countdown for rematch
     setStage('countdown');
   }, [opponent]);
 
@@ -168,13 +226,15 @@ export default function CompetePage() {
           <CompeteSplash
             stats={userStats}
             userName={userName}
+            userCoins={userCoins}
             onStartMatch={handleStartMatchmaking}
           />
         )}
 
         {stage === 'matchmaking' && (
           <CompeteMatchmaking
-            userRating={userStats.rating}
+            userCoins={userCoins}
+            userElo={userStats.elo}
             userName={userName}
             userAvatar={userAvatar}
             onMatchFound={handleMatchFound}
@@ -183,7 +243,8 @@ export default function CompetePage() {
 
         {stage === 'countdown' && opponent && (
           <CompeteCountdown
-            userRating={userStats.rating}
+            userCoins={userCoins}
+            userElo={userStats.elo}
             userName={userName}
             userAvatar={userAvatar}
             opponent={opponent}
@@ -198,6 +259,7 @@ export default function CompetePage() {
             matchPlan={matchPlan}
             userName={userName}
             userAvatar={userAvatar}
+            userCoins={userCoins}
             onBattleFinished={handleBattleFinished}
           />
         )}
@@ -211,9 +273,11 @@ export default function CompetePage() {
             questions={questions}
             opponent={opponent}
             stats={userStats}
-            ratingDelta={ratingDelta}
-            newRating={newRating}
-            newRank={newRank}
+            eloDelta={eloDelta}
+            newElo={newElo}
+            coinsDelta={coinsDelta}
+            newCoins={newCoins}
+            userId={userId}
             userName={userName}
             userAvatar={userAvatar}
             onRematch={handleRematch}

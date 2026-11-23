@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Crown, Clock, Check, X, Loader2 } from 'lucide-react';
+import { Crown, Clock, Check, X, Loader2, Coins } from 'lucide-react';
 import { competeAudio } from '@/lib/competeAudio';
+import { track } from '@/lib/analytics';
 import { renderContent } from '@/app/components/renderContent';
 import type { CompeteQuestion, CompeteOpponent, MatchRetentionPlan } from '@/lib/competeEngine';
 import { CURATED_COMPETE_QUESTIONS } from '@/lib/competeEngine';
@@ -14,6 +15,7 @@ interface CompeteBattleProps {
   matchPlan: MatchRetentionPlan;
   userName?: string;
   userAvatar?: string | null;
+  userCoins?: number;
   onBattleFinished: (
     userScore: number,
     opponentScore: number,
@@ -29,51 +31,66 @@ export function CompeteBattle({
   matchPlan,
   userName = 'You',
   userAvatar,
+  userCoins = 0,
   onBattleFinished,
 }: CompeteBattleProps) {
-  // Ensure non-empty questions
   const safeQuestions = questions && questions.length > 0 ? questions : CURATED_COMPETE_QUESTIONS;
 
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userScore, setUserScore] = useState(0);
   const [opponentScore, setOpponentScore] = useState(0);
 
-  // 5 question answer tracking
+  // 5 question tracking
   const [userAnswers, setUserAnswers] = useState<(boolean | null)[]>([null, null, null, null, null]);
   const [opponentAnswers, setOpponentAnswers] = useState<(boolean | null)[]>([null, null, null, null, null]);
   const [userTimes, setUserTimes] = useState<number[]>([]);
 
-  // Current question player lock states
+  // Current question states
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [userLocked, setUserLocked] = useState(false);
   const [opponentLocked, setOpponentLocked] = useState(false);
-  const [opponentLockedTime, setOpponentLockedTime] = useState<number | null>(null);
-
-  // Big Reveal state (question card slides down off-screen, big check & cross shown)
+  const [opponentTimeSec, setOpponentTimeSec] = useState<number | null>(null);
   const [isRevealing, setIsRevealing] = useState(false);
 
-  // Question countdown timer (45s)
+  // Timer
   const [timer, setTimer] = useState(45);
-  const questionStartTimeRef = useRef<number>(Date.now());
+  const questionStartRef = useRef<number>(Date.now());
   const timerIntervalRef = useRef<any>(null);
-  const botTimerRef = useRef<any>(null);
+  const botTimeoutRef = useRef<any>(null);
+  const userLockedRef = useRef(false);
+  const opponentLockedRef = useRef(false);
+  const selectedOptRef = useRef<string | null>(null);
 
   const currentQ = safeQuestions[currentIdx] || CURATED_COMPETE_QUESTIONS[currentIdx % CURATED_COMPETE_QUESTIONS.length];
-  const questionText = currentQ?.question_text || (currentQ as any)?.question || 'Identify the correct statement';
+  const questionText = currentQ?.question_text || (currentQ as any)?.question || 'Identify the correct option';
 
-  // Helper to check if bot should be correct for this question
+  // Check if bot should be correct
   const willBotGetCorrect = useCallback(
     (qIdx: number) => !matchPlan.botMistakeIndices.includes(qIdx),
     [matchPlan]
   );
 
-  // Trigger the reveal when BOTH players have locked in their answers
-  const triggerReveal = useCallback(
-    (uOpt: string | null, botCorrect: boolean, uTimeSec: number) => {
+  // Transition to reveal state
+  const startReveal = useCallback(
+    (uOpt: string | null, uTime: number) => {
       clearInterval(timerIntervalRef.current);
-      clearTimeout(botTimerRef.current);
+      clearTimeout(botTimeoutRef.current);
 
       const isUserCorrect = !!uOpt && uOpt.toLowerCase() === currentQ.correct_option.toLowerCase();
+      const botCorrect = willBotGetCorrect(currentIdx);
+
+      // Track analytics
+      track('compete_question_answered', {
+        feature: 'compete',
+        question_id: currentQ.id || currentQ.question_id,
+        difficulty: currentIdx + 1,
+        duration_ms: uTime * 1000,
+        metadata: {
+          correct: isUserCorrect,
+          botCorrect,
+          questionIndex: currentIdx + 1,
+        },
+      });
 
       // Audio
       if (isUserCorrect) {
@@ -82,7 +99,7 @@ export function CompeteBattle({
         competeAudio.playWrong();
       }
 
-      // Update state
+      // Update round records
       setUserAnswers((prev) => {
         const next = [...prev];
         next[currentIdx] = isUserCorrect;
@@ -98,57 +115,77 @@ export function CompeteBattle({
       if (isUserCorrect) setUserScore((s) => s + 1);
       if (botCorrect) setOpponentScore((s) => s + 1);
 
-      setUserTimes((prev) => [...prev, uTimeSec]);
-
-      // Slide down question card and show big Checkmark/Cross (matching Image 9)
+      setUserTimes((prev) => [...prev, uTime]);
       setIsRevealing(true);
 
-      // After 2.0s reveal, advance or finish
+      // 2.2 second reveal, then advance to next question or finish
       setTimeout(() => {
         if (currentIdx + 1 < safeQuestions.length) {
+          // Reset all question states simultaneously
+          userLockedRef.current = false;
+          opponentLockedRef.current = false;
+          selectedOptRef.current = null;
+
+          setSelectedOption(null);
+          setUserLocked(false);
+          setOpponentLocked(false);
+          setOpponentTimeSec(null);
           setIsRevealing(false);
-          setCurrentIdx((idx) => idx + 1);
+          setTimer(45);
+
+          setCurrentIdx((i) => i + 1);
         } else {
-          // Finished all 5 questions
+          // All 5 questions completed
           const finalU = userScore + (isUserCorrect ? 1 : 0);
           const finalO = opponentScore + (botCorrect ? 1 : 0);
-          const finalUserAnswers = [...userAnswers];
-          finalUserAnswers[currentIdx] = isUserCorrect;
-          const finalOppAnswers = [...opponentAnswers];
-          finalOppAnswers[currentIdx] = botCorrect;
+          const finalUAnswers = [...userAnswers];
+          finalUAnswers[currentIdx] = isUserCorrect;
+          const finalOAnswers = [...opponentAnswers];
+          finalOAnswers[currentIdx] = botCorrect;
 
-          const totalTime = [...userTimes, uTimeSec].reduce((a, b) => a + b, 0);
+          const totalTime = [...userTimes, uTime].reduce((a, b) => a + b, 0);
           const avgTime = Math.round(totalTime / safeQuestions.length);
 
           onBattleFinished(
             finalU,
             finalO,
-            finalUserAnswers.map((a) => !!a),
-            finalOppAnswers.map((a) => !!a),
+            finalUAnswers.map((a) => !!a),
+            finalOAnswers.map((a) => !!a),
             avgTime
           );
         }
-      }, 2100);
+      }, 2200);
     },
-    [currentIdx, currentQ, safeQuestions.length, userScore, opponentScore, userAnswers, opponentAnswers, userTimes, onBattleFinished]
+    [currentIdx, currentQ, safeQuestions.length, userScore, opponentScore, userAnswers, opponentAnswers, userTimes, willBotGetCorrect, onBattleFinished]
   );
 
-  // Initialize question state & bot solve schedule
+  // Initialize timers when question changes
   useEffect(() => {
-    questionStartTimeRef.current = Date.now();
-    setTimer(45);
+    questionStartRef.current = Date.now();
+    userLockedRef.current = false;
+    opponentLockedRef.current = false;
+    selectedOptRef.current = null;
+
     setSelectedOption(null);
     setUserLocked(false);
     setOpponentLocked(false);
-    setOpponentLockedTime(null);
+    setOpponentTimeSec(null);
     setIsRevealing(false);
+    setTimer(45);
 
-    // Bot schedule: bot chooses an independent realistic solve time (between 7s and 18s)
     const plannedBotTime = matchPlan.botResponseTimesSec[currentIdx] || 11;
 
-    botTimerRef.current = setTimeout(() => {
+    // Bot solve timer
+    botTimeoutRef.current = setTimeout(() => {
+      opponentLockedRef.current = true;
       setOpponentLocked(true);
-      setOpponentLockedTime(plannedBotTime);
+      setOpponentTimeSec(plannedBotTime);
+
+      // If user has already answered, trigger reveal!
+      if (userLockedRef.current) {
+        const uTime = Math.max(1, Math.round((Date.now() - questionStartRef.current) / 1000));
+        startReveal(selectedOptRef.current, uTime);
+      }
     }, plannedBotTime * 1000);
 
     // 45s countdown timer
@@ -168,54 +205,45 @@ export function CompeteBattle({
 
     return () => {
       clearInterval(timerIntervalRef.current);
-      clearTimeout(botTimerRef.current);
+      clearTimeout(botTimeoutRef.current);
     };
   }, [currentIdx, matchPlan]);
 
-  // When opponent locks in, if user has already locked in, trigger the reveal!
-  useEffect(() => {
-    if (opponentLocked && userLocked && !isRevealing) {
-      const uTime = Math.max(1, Math.round((Date.now() - questionStartTimeRef.current) / 1000));
-      const botCorrect = willBotGetCorrect(currentIdx);
-      triggerReveal(selectedOption, botCorrect, uTime);
-    }
-  }, [opponentLocked, userLocked, isRevealing, selectedOption, currentIdx, willBotGetCorrect, triggerReveal]);
-
-  // User chooses an option
+  // User selects an option
   const handleSelectOption = (optKey: string) => {
-    if (userLocked || isRevealing) return;
+    if (userLockedRef.current || isRevealing) return;
 
-    competeAudio.playSelect();
+    userLockedRef.current = true;
+    selectedOptRef.current = optKey;
     setSelectedOption(optKey);
     setUserLocked(true);
+    competeAudio.playSelect();
 
-    const timeSpentSec = Math.max(1, Math.round((Date.now() - questionStartTimeRef.current) / 1000));
+    const timeSpentSec = Math.max(1, Math.round((Date.now() - questionStartRef.current) / 1000));
 
     // If opponent already locked in earlier: trigger reveal immediately!
-    if (opponentLocked) {
-      const botCorrect = willBotGetCorrect(currentIdx);
-      triggerReveal(optKey, botCorrect, timeSpentSec);
+    if (opponentLockedRef.current) {
+      startReveal(optKey, timeSpentSec);
     } else {
       // User answered BEFORE opponent!
-      // Opponent will finish in a few seconds, creating realistic suspense
-      const remainingBotWait = Math.max(1500, Math.min(4500, 3000 + Math.random() * 1500));
-      clearTimeout(botTimerRef.current);
-      botTimerRef.current = setTimeout(() => {
+      // Schedule opponent to lock in after a short suspenseful delay (1.8s - 3s)
+      clearTimeout(botTimeoutRef.current);
+      const remainingDelay = Math.max(1800, Math.min(3200, 2000 + Math.random() * 1000));
+      botTimeoutRef.current = setTimeout(() => {
+        opponentLockedRef.current = true;
         setOpponentLocked(true);
-        setOpponentLockedTime(timeSpentSec + Math.round(remainingBotWait / 1000));
-        const botCorrect = willBotGetCorrect(currentIdx);
-        triggerReveal(optKey, botCorrect, timeSpentSec);
-      }, remainingBotWait);
+        setOpponentTimeSec(timeSpentSec + Math.round(remainingDelay / 1000));
+        startReveal(optKey, timeSpentSec);
+      }, remainingDelay);
     }
   };
 
-  // Time expired without user selecting
+  // Time expired
   const handleTimeExpired = () => {
-    if (isRevealing) return;
-    setUserLocked(true);
-    setOpponentLocked(true);
-    const botCorrect = willBotGetCorrect(currentIdx);
-    triggerReveal(null, botCorrect, 45);
+    if (userLockedRef.current || isRevealing) return;
+    userLockedRef.current = true;
+    opponentLockedRef.current = true;
+    startReveal(null, 45);
   };
 
   // Keyboard shortcut listener for 1, 2, 3, 4
@@ -237,20 +265,17 @@ export function CompeteBattle({
 
   return (
     <div className="relative flex flex-1 flex-col items-center justify-between w-full max-w-4xl px-3 sm:px-6 py-2 select-none min-h-[580px]">
-      {/* ── TOP BATTLE HUD (Unacademy Style with Crowns and 5 Capsules) ── */}
+      {/* ── TOP BATTLE HUD (Dropper Design System + SVG Icons, strictly no text emojis) ── */}
       <div className="w-full rounded-2xl bg-[#091024]/90 border border-white/10 p-3 sm:p-4 shadow-xl backdrop-blur-md z-30">
         <div className="flex items-center justify-between">
           {/* Left Player: You */}
           <div className="flex items-center gap-2.5 sm:gap-3">
             <div className="relative">
               {userIsLeading && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-amber-400 drop-shadow-[0_0_8px_#fbbf24] z-10">
-                  <Crown className="size-4 fill-amber-400" />
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
+                  <Crown className="size-4 fill-amber-400 text-amber-400 drop-shadow-[0_0_8px_#fbbf24]" />
                 </div>
               )}
-              <div className="absolute -top-1 -right-1 text-[10px] text-amber-400 font-bold z-10">
-                ◆
-              </div>
               <div className="size-10 sm:size-12 rounded-full border-2 border-amber-400 bg-slate-900 p-0.5 overflow-hidden shadow-md">
                 {userAvatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -305,7 +330,7 @@ export function CompeteBattle({
               <span>{timer}s</span>
             </div>
             <span className="text-[9px] sm:text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider font-semibold">
-              Q{currentIdx + 1} of 5
+              Question {currentIdx + 1} of 5
             </span>
           </div>
 
@@ -341,13 +366,10 @@ export function CompeteBattle({
 
             <div className="relative">
               {oppIsLeading && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-amber-400 drop-shadow-[0_0_8px_#fbbf24] z-10">
-                  <Crown className="size-4 fill-amber-400" />
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
+                  <Crown className="size-4 fill-amber-400 text-amber-400 drop-shadow-[0_0_8px_#fbbf24]" />
                 </div>
               )}
-              <div className="absolute -top-1 -right-1 text-[10px] text-amber-400 font-bold z-10">
-                ◆
-              </div>
               <div className="size-10 sm:size-12 rounded-full border-2 border-amber-400 bg-slate-900 p-0.5 overflow-hidden shadow-md">
                 {opponent.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -377,7 +399,7 @@ export function CompeteBattle({
             )}
             {opponentLocked && !userLocked && (
               <span className="text-amber-300 font-semibold flex items-center gap-1">
-                <Check className="size-3" /> {opponent.name} locked in ({opponentLockedTime}s)! Pick your answer!
+                <Check className="size-3" /> {opponent.name} locked in ({opponentTimeSec}s)! Pick your answer!
               </span>
             )}
             {!userLocked && !opponentLocked && (
@@ -392,7 +414,7 @@ export function CompeteBattle({
         </div>
       </div>
 
-      {/* ── QUESTION CARD WITH SMOOTH SLIDE-DOWN ANIMATION (User Request) ── */}
+      {/* ── QUESTION CARD WITH SMOOTH SLIDE-DOWN ANIMATION ── */}
       <motion.div
         animate={{
           y: isRevealing ? 600 : 0,
@@ -412,7 +434,7 @@ export function CompeteBattle({
           </span>
         </div>
 
-        {/* Question Text (Reliable rendering with fallback) */}
+        {/* Question Text */}
         <div className="text-base sm:text-lg md:text-xl font-bold leading-relaxed text-slate-900 dark:text-white mb-6">
           {renderContent(questionText, false) || questionText}
         </div>
@@ -491,7 +513,7 @@ export function CompeteBattle({
         </div>
       </motion.div>
 
-      {/* ── BIG 3D REVEAL OVERLAY (Matches user screenshot media_1795432608197_7208daec.png) ── */}
+      {/* ── BIG 3D REVEAL OVERLAY ── */}
       <AnimatePresence>
         {isRevealing && (
           <motion.div
@@ -501,7 +523,7 @@ export function CompeteBattle({
             transition={{ duration: 0.3 }}
             className="absolute inset-0 flex items-center justify-between px-8 sm:px-20 md:px-28 z-10 pointer-events-none"
           >
-            {/* Left Result for You (Big Green Check or Red Cross) */}
+            {/* Left Result for You */}
             <div className="flex flex-col items-center">
               {userAnswers[currentIdx] ? (
                 <motion.div
@@ -527,7 +549,7 @@ export function CompeteBattle({
               </span>
             </div>
 
-            {/* Right Result for Opponent (Big Green Check or Red Cross) */}
+            {/* Right Result for Opponent */}
             <div className="flex flex-col items-center">
               {opponentAnswers[currentIdx] ? (
                 <motion.div

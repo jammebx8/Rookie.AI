@@ -5,14 +5,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
   Trophy, RotateCcw, Swords, ChevronDown, ChevronUp, Check, X,
-  TrendingUp, Users, ArrowRight, ShieldCheck, Sparkles, BookOpen
+  TrendingUp, TrendingDown, Coins, Flame, Sparkles, BookOpen, Crown
 } from 'lucide-react';
 import { competeAudio } from '@/lib/competeAudio';
 import { renderContent } from '@/app/components/renderContent';
 import type {
-  CompeteQuestion, CompeteOpponent, CompeteUserStats, LeaderboardRival
+  CompeteQuestion, CompeteOpponent, CompeteUserStats, PlatformLeaderboardEntry
 } from '@/lib/competeEngine';
-import { generateLeaderboardSlice } from '@/lib/competeEngine';
+import { fetchPlatformLeaderboard, generateSvgAvatar } from '@/lib/competeEngine';
 
 interface CompeteResultProps {
   userScore: number;
@@ -22,9 +22,11 @@ interface CompeteResultProps {
   questions: CompeteQuestion[];
   opponent: CompeteOpponent;
   stats: CompeteUserStats;
-  ratingDelta: number;
-  newRating: number;
-  newRank: number;
+  eloDelta: number;
+  newElo: number;
+  coinsDelta: number;
+  newCoins: number;
+  userId?: string | null;
   userName?: string;
   userAvatar?: string | null;
   onRematch: () => void;
@@ -39,44 +41,62 @@ export function CompeteResult({
   questions,
   opponent,
   stats,
-  ratingDelta,
-  newRating,
-  newRank,
+  eloDelta,
+  newElo,
+  coinsDelta,
+  newCoins,
+  userId,
   userName = 'You',
   userAvatar,
   onRematch,
   onCompeteAgain,
 }: CompeteResultProps) {
-  const [viewTab, setViewTab] = useState<'summary' | 'leaderboard'>('summary');
   const [showReview, setShowReview] = useState(false);
   const [expandedQIdx, setExpandedQIdx] = useState<number | null>(null);
+  const [leaderboard, setLeaderboard] = useState<PlatformLeaderboardEntry[]>([]);
+  const [userRank, setUserRank] = useState<number>(1);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(true);
 
   const won = userScore > opponentScore;
   const tied = userScore === opponentScore;
 
-  // Fire confetti if won!
+  // Load real platform leaderboard
+  useEffect(() => {
+    let isMounted = true;
+    fetchPlatformLeaderboard(userId, newCoins, userName, userAvatar).then((res) => {
+      if (isMounted) {
+        setLeaderboard(res.leaderboard);
+        setUserRank(res.userRank);
+        setLoadingLeaderboard(false);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, newCoins, userName, userAvatar]);
+
+  // Fire celebratory audio & confetti on victory
   useEffect(() => {
     if (won) {
       competeAudio.playVictory();
       confetti({
-        particleCount: 80,
-        spread: 70,
+        particleCount: 85,
+        spread: 75,
         origin: { y: 0.6 },
         colors: ['#38bdf8', '#3b82f6', '#fbbf24', '#10b981', '#f43f5e'],
       });
     }
   }, [won]);
 
-  const rivals: LeaderboardRival[] = generateLeaderboardSlice(
-    newRank,
-    newRating,
-    userName,
-    userAvatar
-  );
+  const activeLearnerAvatars = [
+    generateSvgAvatar('Ritik'),
+    generateSvgAvatar('Krishna'),
+    generateSvgAvatar('Anshuman'),
+  ];
 
   return (
     <div className="relative flex flex-1 flex-col items-center w-full max-w-4xl px-4 py-4 select-none">
-      {/* ── TOP RESULT BANNER (Image 2 & 3) ── */}
+      {/* ── TOP RESULT BANNER ── */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -88,14 +108,14 @@ export function CompeteResult({
         </h1>
         <p className="mt-1 text-xs sm:text-sm text-slate-300">
           {won
-            ? `Outstanding accuracy and speed! You defeated ${opponent.name}.`
+            ? `Outstanding speed and accuracy! You defeated ${opponent.name}.`
             : tied
             ? `Both answered equally well. Rematch to settle the tie!`
             : `${opponent.name} edged ahead this round. Challenge them to a rematch!`}
         </p>
       </motion.div>
 
-      {/* ── WINNER & OPPONENT AVATARS + BLUE AURA BEAM (Image 2) ── */}
+      {/* ── WINNER & OPPONENT AVATARS + BLUE AURA BEAM ── */}
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -104,7 +124,6 @@ export function CompeteResult({
       >
         {/* Left: You */}
         <div className="relative flex flex-col items-center">
-          {/* Winner Glowing Blue Aura (Image 2) */}
           {won && (
             <div className="pointer-events-none absolute -inset-8 flex items-center justify-center">
               <div className="h-44 w-44 rounded-full bg-sky-500/35 blur-2xl animate-pulse" />
@@ -116,33 +135,48 @@ export function CompeteResult({
             className={`relative size-24 sm:size-32 rounded-full p-1 bg-slate-900 shadow-2xl transition-all ${
               won
                 ? 'border-4 border-sky-400 ring-4 ring-sky-400/40 shadow-[0_0_35px_rgba(56,189,248,0.6)]'
-                : 'border-3 border-amber-400'
+                : 'border-3 border-amber-400/70'
             }`}
           >
             {userAvatar ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={userAvatar} alt={userName} className="size-full rounded-full object-cover" />
             ) : (
-              <div className="flex size-full items-center justify-center rounded-full bg-sky-600 text-3xl font-black text-white">
-                {userName.charAt(0).toUpperCase()}
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={generateSvgAvatar(userName)} alt={userName} className="size-full rounded-full object-cover" />
+            )}
+            {won && (
+              <div className="absolute -top-2.5 right-1 flex size-7 items-center justify-center rounded-full bg-amber-400 text-slate-950 shadow-md ring-2 ring-slate-900">
+                <Crown className="size-4 fill-slate-950" />
               </div>
             )}
           </div>
 
           <span className="mt-3 text-base sm:text-lg font-bold text-white">{userName}</span>
-          <div className="flex items-center gap-1.5 text-amber-400 font-extrabold text-sm sm:text-base">
-            <span>◆</span>
-            <span className="tabular-nums">{newRating}</span>
-            <span className="text-xs text-emerald-400 font-semibold ml-0.5">
-              (+{ratingDelta})
+          
+          {/* Elo & Score */}
+          <div className="flex items-center gap-1.5 font-bold text-sm sm:text-base">
+            <span className="text-sky-400 font-mono tabular-nums">{newElo} Elo</span>
+            <span className={`text-xs font-semibold ${eloDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              ({eloDelta >= 0 ? `+${eloDelta}` : eloDelta})
             </span>
           </div>
-          <span className="text-xs font-semibold text-slate-400 mt-0.5">
+
+          {/* Rookie Coins Delta */}
+          <div className="flex items-center gap-1 mt-0.5 text-xs font-bold">
+            <Coins className="size-3.5 text-amber-400" />
+            <span className="text-amber-300 font-mono tabular-nums">{newCoins}</span>
+            <span className={`text-[11px] font-semibold ${coinsDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              ({coinsDelta >= 0 ? `+${coinsDelta}` : coinsDelta} Coins)
+            </span>
+          </div>
+
+          <span className="text-xs font-medium text-slate-400 mt-0.5">
             Score: {userScore}/5
           </span>
         </div>
 
-        {/* VS / Middle indicator */}
+        {/* VS indicator */}
         <div className="flex flex-col items-center justify-center z-10">
           <span className="text-2xl sm:text-3xl font-black italic text-slate-500">VS</span>
         </div>
@@ -159,31 +193,41 @@ export function CompeteResult({
             className={`relative size-24 sm:size-32 rounded-full p-1 bg-slate-900 shadow-2xl ${
               !won && !tied
                 ? 'border-4 border-amber-400 ring-4 ring-amber-400/40'
-                : 'border-3 border-amber-400/80'
+                : 'border-3 border-amber-400/70'
             }`}
           >
             {opponent.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={opponent.avatar_url} alt={opponent.name} className="size-full rounded-full object-cover" />
             ) : (
-              <div className="flex size-full items-center justify-center rounded-full bg-amber-600 text-3xl font-black text-white">
-                {opponent.name.charAt(0).toUpperCase()}
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={generateSvgAvatar(opponent.name)} alt={opponent.name} className="size-full rounded-full object-cover" />
+            )}
+            {!won && !tied && (
+              <div className="absolute -top-2.5 right-1 flex size-7 items-center justify-center rounded-full bg-amber-400 text-slate-950 shadow-md ring-2 ring-slate-900">
+                <Crown className="size-4 fill-slate-950" />
               </div>
             )}
           </div>
 
           <span className="mt-3 text-base sm:text-lg font-bold text-white">{opponent.name}</span>
-          <div className="flex items-center gap-1.5 text-amber-400 font-extrabold text-sm sm:text-base">
-            <span>◆</span>
-            <span className="tabular-nums">{opponent.rating}</span>
+          
+          <div className="flex items-center gap-1.5 font-bold text-sm sm:text-base text-slate-300">
+            <span className="font-mono tabular-nums">{opponent.elo} Elo</span>
           </div>
-          <span className="text-xs font-semibold text-slate-400 mt-0.5">
+
+          <div className="flex items-center gap-1 mt-0.5 text-xs font-bold text-amber-400">
+            <Coins className="size-3.5 text-amber-400" />
+            <span className="font-mono tabular-nums">{opponent.coins} Coins</span>
+          </div>
+
+          <span className="text-xs font-medium text-slate-400 mt-0.5">
             Score: {opponentScore}/5
           </span>
         </div>
       </motion.div>
 
-      {/* ── ACTION BUTTONS: REMATCH & COMPETE AGAIN (Image 2 & 3) ── */}
+      {/* ── ACTION BUTTONS: REMATCH & COMPETE AGAIN ── */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
@@ -208,72 +252,94 @@ export function CompeteResult({
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 px-6 py-3 text-sm font-semibold text-white transition active:scale-[0.98]"
         >
           <Swords className="size-4 text-sky-400" />
-          <span>Compete against next player</span>
+          <span>Compete against next student</span>
         </button>
 
-        {/* Live Active Learners Badge (Image 3) */}
+        {/* Live Active Learners Badge */}
         <div className="flex items-center gap-2 text-xs text-sky-300/90 font-medium mt-1">
           <div className="flex -space-x-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="size-5 rounded-full ring-1 ring-black object-cover" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=60&auto=format&fit=crop&q=80" alt="" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="size-5 rounded-full ring-1 ring-black object-cover" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=60&auto=format&fit=crop&q=80" alt="" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="size-5 rounded-full ring-1 ring-black object-cover" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=60&auto=format&fit=crop&q=80" alt="" />
+            {activeLearnerAvatars.map((src, idx) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={idx}
+                className="size-5 rounded-full ring-1 ring-slate-950 object-cover"
+                src={src}
+                alt=""
+              />
+            ))}
           </div>
-          <span>634 learners competing online</span>
+          <span>634 learners active in Compete</span>
         </div>
       </motion.div>
 
-      {/* ── TWO CARDS: RATING & INDIA RANK (Image 3) ── */}
+      {/* ── TWO CARDS: ELO RATING & REAL PLATFORM LEADERBOARD ── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.4 }}
         className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 w-full"
       >
-        {/* Card 1: RATING (Image 3) */}
+        {/* Card 1: ELO RATING & COINS SUMMARY */}
         <div className="flex flex-col rounded-3xl bg-[#091024]/80 border border-white/10 p-5 sm:p-6 backdrop-blur-md shadow-xl">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              RATING
+              BATTLE RATING
             </span>
-            <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-xs font-bold text-emerald-400">
-              <TrendingUp className="size-3" /> +{ratingDelta} pts
+            <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+              eloDelta >= 0
+                ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                : 'bg-rose-500/20 border border-rose-500/30 text-rose-400'
+            }`}>
+              {eloDelta >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+              {eloDelta >= 0 ? `+${eloDelta}` : eloDelta} Elo
             </span>
           </div>
 
-          <div className="mt-2 text-4xl sm:text-5xl font-black text-amber-400 tabular-nums">
-            {newRating}
+          <div className="mt-2 flex items-baseline gap-3">
+            <div className="text-4xl sm:text-5xl font-black text-sky-400 tabular-nums">
+              {newElo}
+            </div>
+            <div className="flex items-center gap-1.5 text-sm font-bold text-amber-400">
+              <Coins className="size-4" />
+              <span>{newCoins} Rookie Coins</span>
+              <span className={`text-xs ${coinsDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                ({coinsDelta >= 0 ? `+${coinsDelta}` : coinsDelta})
+              </span>
+            </div>
           </div>
 
           {/* Sparkline / Rating history display */}
-          <div className="mt-4 flex-1 flex flex-col justify-center items-center rounded-2xl bg-white/[0.03] border border-white/5 p-6 text-center">
+          <div className="mt-4 flex-1 flex flex-col justify-center items-center rounded-2xl bg-white/[0.03] border border-white/5 p-4 sm:p-6 text-center">
             {stats.history.length >= 2 ? (
               <div className="w-full">
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-                  <span>Past Matches</span>
-                  <span className="text-emerald-400 font-semibold">{stats.streak} Streak 🔥</span>
+                  <span>Match History</span>
+                  <span className="flex items-center gap-1 text-amber-400 font-bold">
+                    <Flame className="size-3.5 fill-amber-500 text-amber-500" />
+                    {stats.streak} Win Streak
+                  </span>
                 </div>
                 {/* Visual SVG Sparkline */}
                 <svg className="w-full h-16 overflow-visible" viewBox="0 0 200 40">
                   <defs>
-                    <linearGradient id="ratingGradient" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="compRatingGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4" />
                       <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
                     </linearGradient>
                   </defs>
                   {(() => {
                     const recent = stats.history.slice(-6);
-                    const minR = Math.min(...recent.map(h => h.newRating)) - 20;
-                    const maxR = Math.max(...recent.map(h => h.newRating)) + 20;
-                    const range = Math.max(1, maxR - minR);
+                    const minElo = Math.min(...recent.map((h) => h.newElo)) - 25;
+                    const maxElo = Math.max(...recent.map((h) => h.newElo)) + 25;
+                    const range = Math.max(1, maxElo - minElo);
 
-                    const points = recent.map((h, i) => {
-                      const x = (i / Math.max(1, recent.length - 1)) * 190 + 5;
-                      const y = 35 - ((h.newRating - minR) / range) * 30;
-                      return `${x},${y}`;
-                    }).join(' ');
+                    const points = recent
+                      .map((h, i) => {
+                        const x = (i / Math.max(1, recent.length - 1)) * 190 + 5;
+                        const y = 35 - ((h.newElo - minElo) / range) * 30;
+                        return `${x},${y}`;
+                      })
+                      .join(' ');
 
                     return (
                       <>
@@ -286,7 +352,7 @@ export function CompeteResult({
                         />
                         {recent.map((h, i) => {
                           const x = (i / Math.max(1, recent.length - 1)) * 190 + 5;
-                          const y = 35 - ((h.newRating - minR) / range) * 30;
+                          const y = 35 - ((h.newElo - minElo) / range) * 30;
                           return (
                             <circle
                               key={i}
@@ -306,66 +372,72 @@ export function CompeteResult({
               <div className="flex flex-col items-center gap-1.5 py-2">
                 <Sparkles className="size-6 text-sky-400/80 mb-1" />
                 <span className="text-xs sm:text-sm font-semibold text-slate-300">
-                  Play more Compete matches to view detailed trend graph
+                  Play more Compete matches to unlock trend graph
                 </span>
                 <span className="text-[11px] text-slate-500">
-                  Rating dynamically recalibrates after every 1v1 battle
+                  Elo rating & Rookie Coins update after every 1v1 battle
                 </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Card 2: INDIA RANK (Image 3) */}
+        {/* Card 2: REAL PLATFORM LEADERBOARD */}
         <div className="flex flex-col rounded-3xl bg-[#091024]/80 border border-white/10 p-5 sm:p-6 backdrop-blur-md shadow-xl">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              INDIA RANK
+              PLATFORM LEADERBOARD
             </span>
-            <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
-              <Trophy className="size-4" /> National Rank
+            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+              <Trophy className="size-4" /> Your Rank #{userRank}
             </div>
           </div>
 
-          <div className="mt-2 text-4xl sm:text-5xl font-black text-white tabular-nums">
-            #{newRank.toLocaleString('en-IN')}
+          <div className="mt-2 text-sm text-slate-400">
+            Ranked by real-time <span className="font-semibold text-amber-400">Rookie Coins</span>
           </div>
 
-          {/* Leaderboard slice list (Image 3) */}
-          <div className="mt-4 flex flex-col gap-1.5">
-            {rivals.map((rival) => {
-              return (
-                <div
-                  key={rival.rank}
-                  className={`flex items-center justify-between rounded-xl px-3.5 py-2 transition-all ${
-                    rival.isUser
-                      ? 'bg-blue-600/30 border border-blue-400/40 text-white font-bold shadow-md'
-                      : 'bg-white/[0.03] text-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-10 text-xs font-mono text-slate-400 tabular-nums">
-                      {rival.rank}
-                    </span>
-                    <div className="size-6 rounded-full bg-slate-800 border border-white/10 overflow-hidden flex items-center justify-center text-[10px] font-bold">
-                      {rival.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={rival.avatar_url} alt={rival.name} className="size-full object-cover" />
-                      ) : (
-                        rival.name.charAt(0)
-                      )}
+          {/* Leaderboard slice */}
+          <div className="mt-3 flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
+            {loadingLeaderboard ? (
+              <div className="py-8 text-center text-xs text-slate-500">Loading platform rankings...</div>
+            ) : (
+              leaderboard.slice(0, 6).map((item) => {
+                return (
+                  <div
+                    key={`${item.id}_${item.rank}`}
+                    className={`flex items-center justify-between rounded-xl px-3.5 py-2 transition-all ${
+                      item.isUser
+                        ? 'bg-blue-600/30 border border-blue-400/40 text-white font-bold shadow-md ring-1 ring-blue-500/30'
+                        : 'bg-white/[0.03] text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 text-xs font-mono text-slate-400 tabular-nums">
+                        #{item.rank}
+                      </span>
+                      <div className="size-6 rounded-full bg-slate-800 border border-white/10 overflow-hidden flex items-center justify-center text-[10px] font-bold">
+                        {item.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.avatar_url} alt={item.name} className="size-full object-cover" />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={generateSvgAvatar(item.name)} alt={item.name} className="size-full object-cover" />
+                        )}
+                      </div>
+                      <span className="text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[150px]">
+                        {item.name}
+                      </span>
                     </div>
-                    <span className="text-xs sm:text-sm">
-                      {rival.isUser ? 'You' : rival.name}
-                    </span>
-                  </div>
 
-                  <span className="text-xs sm:text-sm font-semibold tabular-nums text-amber-400">
-                    {rival.rating}
-                  </span>
-                </div>
-              );
-            })}
+                    <div className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold tabular-nums text-amber-400">
+                      <Coins className="size-3.5 text-amber-400" />
+                      <span>{item.rookieCoinsEarned}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </motion.div>
@@ -419,9 +491,15 @@ export function CompeteResult({
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <span className="text-[11px] text-slate-400 hidden sm:inline">
-                          You: {userGot ? '✓' : '✗'} · {opponent.name}: {oppGot ? '✓' : '✗'}
-                        </span>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-400 hidden sm:flex">
+                          <span className="flex items-center gap-1">
+                            You: {userGot ? <Check className="size-3 text-emerald-400 inline" /> : <X className="size-3 text-rose-400 inline" />}
+                          </span>
+                          <span>·</span>
+                          <span className="flex items-center gap-1">
+                            {opponent.name}: {oppGot ? <Check className="size-3 text-emerald-400 inline" /> : <X className="size-3 text-rose-400 inline" />}
+                          </span>
+                        </div>
                         {isExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
                       </div>
                     </div>
