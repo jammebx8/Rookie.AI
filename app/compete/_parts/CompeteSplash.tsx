@@ -120,52 +120,7 @@ export function CompeteSplash({ stats, userName = 'Learner', userCoins = 0, onSt
         </span>
       </motion.div>
 
-      {/* User Stats Card Strip: Rookie Coins, Elo Rating, Streak */}
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.35, duration: 0.4 }}
-        className="mt-6 sm:mt-8 grid grid-cols-3 gap-2.5 sm:gap-4 w-full max-w-lg"
-      >
-        {/* Rookie Coins */}
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 p-3 sm:p-4 backdrop-blur-sm transition hover:bg-white/[0.08]">
-          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            <Coins className="size-3.5 text-amber-400 shrink-0" />
-            <span>Coins</span>
-          </div>
-          <div className="mt-1 text-xl sm:text-2xl font-black text-amber-400 tabular-nums">
-            {userCoins.toLocaleString('en-IN')}
-          </div>
-          <div className="text-[10px] text-slate-400 hidden sm:block">Rookie Coins</div>
-        </div>
-
-        {/* Elo Rating */}
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 p-3 sm:p-4 backdrop-blur-sm transition hover:bg-white/[0.08]">
-          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            <Trophy className="size-3.5 text-sky-400 shrink-0" />
-            <span>Elo Rating</span>
-          </div>
-          <div className="mt-1 text-xl sm:text-2xl font-black text-sky-300 tabular-nums">
-            {stats.elo}
-          </div>
-          <div className="text-[10px] text-slate-400 hidden sm:block">Skill Tier</div>
-        </div>
-
-        {/* Streak */}
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 p-3 sm:p-4 backdrop-blur-sm transition hover:bg-white/[0.08]">
-          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            <Flame className="size-3.5 text-orange-400 shrink-0" />
-            <span>Streak</span>
-          </div>
-          <div className="mt-1 text-xl sm:text-2xl font-black text-orange-400 tabular-nums">
-            {stats.streak} {stats.streak === 1 ? 'Win' : 'Wins'}
-          </div>
-          <div className="text-[10px] text-slate-400 hidden sm:block">
-            {stats.wins}W · {stats.losses}L
-          </div>
-        </div>
-      </motion.div>
-
+   
       {/* Action Button without 1v1 tag and with slow shine */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}

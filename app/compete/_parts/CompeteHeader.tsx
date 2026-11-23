@@ -61,7 +61,7 @@ export function CompeteHeader({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/rookie-owl.png" alt="Rookie" className="size-8 rounded-lg shadow-sm" />
           <div className="flex items-center gap-1.5 font-bold tracking-tight text-white text-base sm:text-lg">
-            <span>rookie</span>
+            <span>Rookie</span>
             <span className="rounded-md bg-blue-500/20 px-1.5 py-0.5 text-[11px] font-extrabold uppercase tracking-widest text-sky-400 border border-sky-400/30">
               Compete
             </span>
