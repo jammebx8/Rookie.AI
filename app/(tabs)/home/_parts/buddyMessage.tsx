@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowRight, HeartHandshake, Zap, Target } from 'lucide-react';
+import { ArrowRight, HeartHandshake, Zap, Target, Swords } from 'lucide-react';
 import { Card } from '@/components/rookie/ui';
 import { Button } from '@/components/ui/button';
 import { AI_BUDDIES } from '@/app/QuestionViewer/QuestionViewerClient';
@@ -219,10 +219,11 @@ export function BuddyHomeMessage({ solvedToday, streak, userName }: { solvedToda
               </div>
 
               <Button
-                onClick={() => router.push('/QuestionViewer?mode=daily')}
-                className="h-9 rounded-control px-4 text-body-sm shadow-sm"
+                onClick={() => router.push('/compete')}
+                className="h-9 rounded-control px-4 text-body-sm shadow-sm gap-1.5"
               >
-                {solvedToday >= 5 ? 'Solve next 5 revision questions' : 'Start daily practice'} <ArrowRight className="size-4" />
+                <Swords className="size-4 text-sky-400" />
+                {solvedToday >= 5 ? 'Play 1v1 Compete battle' : 'Enter Compete 1v1'} <ArrowRight className="size-4" />
               </Button>
             </div>
           </div>

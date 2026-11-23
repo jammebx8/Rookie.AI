@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Swords } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Meta, Page, PageHeader, Row, Section } from '@/components/rookie/ui';
 import { notify } from '@/components/rookie/toast';
@@ -190,8 +190,12 @@ export default function HomePage() {
           title={<>{getGreeting()}{firstName ? `, ${firstName}` : ', learner'}</>}
           sub={targetLine}
           action={
-            <Button size="lg" className="h-11 rounded-control px-5 text-body" onClick={() => router.push('/QuestionViewer?mode=daily')}>
-              Daily practice <ArrowRight />
+            <Button
+              size="lg"
+              className="h-11 rounded-control px-5 text-body font-semibold gap-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white shadow-md transition-all active:scale-95"
+              onClick={() => router.push('/compete')}
+            >
+              <Swords className="size-4.5" /> Compete
             </Button>
           }
         />
