@@ -26,7 +26,6 @@ export type ShellUser = { name?: string | null; email?: string | null; avatar_ur
 
 const NAV = [
   { label: 'Home', href: '/home', icon: House, match: ['/home'] },
-  { label: 'Compete', href: '/compete', icon: Swords, match: ['/compete'] },
   { label: 'Practice', href: '/explore', icon: BookOpen, match: ['/explore', '/chapterpage'] },
   { label: 'Tests', href: '/tests', icon: ClipboardCheck, match: ['/tests'] },
   { label: 'Bookmarks', href: '/bookmark', icon: Bookmark, match: ['/bookmark'] },

@@ -1,10 +1,10 @@
 'use client';
 
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Swords, Trophy, Flame, Users, Sparkles, ChevronRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Swords, Trophy, Flame, Sparkles, ChevronRight } from 'lucide-react';
 import type { CompeteUserStats } from '@/lib/competeEngine';
-import { calculateIndiaRank } from '@/lib/competeEngine';
+import { calculateIndiaRank, fetchOpponentsPool, REAL_USER_PROFILES } from '@/lib/competeEngine';
 
 interface CompeteSplashProps {
   stats: CompeteUserStats;
@@ -14,164 +14,169 @@ interface CompeteSplashProps {
 
 export function CompeteSplash({ stats, userName = 'Learner', onStartMatch }: CompeteSplashProps) {
   const currentRank = calculateIndiaRank(stats.rating);
+  const [userPool, setUserPool] = useState<Array<{ name: string; avatar_url: string }>>(REAL_USER_PROFILES);
+  const [displayAvatars, setDisplayAvatars] = useState<Array<{ id: number; name: string; avatar_url: string }>>([]);
+
+  useEffect(() => {
+    fetchOpponentsPool().then((pool) => {
+      if (pool && pool.length > 0) {
+        setUserPool(pool);
+        // Initialize with first 5
+        setDisplayAvatars(
+          pool.slice(0, 5).map((u, i) => ({ id: i, name: u.name, avatar_url: u.avatar_url }))
+        );
+      }
+    });
+  }, []);
+
+  // Constantly cycle active avatars: new image pops in and oldest leaves
+  useEffect(() => {
+    if (userPool.length === 0) return;
+
+    let counter = 5;
+    const interval = setInterval(() => {
+      const nextUser = userPool[Math.floor(Math.random() * userPool.length)];
+      counter++;
+      setDisplayAvatars((prev) => {
+        const next = [...prev.slice(1), { id: counter, name: nextUser.name, avatar_url: nextUser.avatar_url }];
+        return next;
+      });
+    }, 2400);
+
+    return () => clearInterval(interval);
+  }, [userPool]);
 
   return (
-    <div className="relative flex flex-1 flex-col items-center justify-center px-4 py-8 select-none text-center">
-      {/* Background radial spotlight */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="h-[460px] w-[540px] rounded-full bg-blue-600/15 blur-[120px]" />
-        <div className="absolute h-[320px] w-[320px] rounded-full bg-sky-400/10 blur-[80px]" />
+    <div className="relative flex flex-1 flex-col items-center justify-center w-full max-w-4xl px-4 py-6 sm:py-10 select-none text-center">
+      {/* Sleek Dropper Gradient Background Glow (No atom animation) */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
+        <div className="h-[400px] w-[650px] rounded-full bg-gradient-to-r from-blue-700/15 via-sky-500/10 to-indigo-700/15 blur-[100px]" />
       </div>
 
-      {/* Main 3D Compete Emblem (Image 1) */}
+      {/* Main 3D Compete Title with Dropper Styling */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.85 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        className="relative my-6 flex items-center justify-center"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="relative my-4 sm:my-6"
       >
-        {/* Orbital Ellipse Rings (Atom model like Image 1) */}
-        <div className="relative flex items-center justify-center">
-          {/* Outer ring 1 */}
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
-            className="absolute h-[160px] w-[380px] sm:h-[190px] sm:w-[480px] rounded-[50%] border border-sky-400/40 shadow-[0_0_15px_rgba(56,189,248,0.25)] pointer-events-none"
-            style={{ transform: 'rotate(-20deg)' }}
-          >
-            {/* Orbiting electron 1 */}
-            <div className="absolute -top-1.5 left-1/4 size-3.5 rounded-full bg-sky-300 shadow-[0_0_10px_#38bdf8]" />
-          </motion.div>
-
-          {/* Outer ring 2 */}
-          <motion.div
-            animate={{ rotate: -360 }}
-            transition={{ duration: 24, repeat: Infinity, ease: 'linear' }}
-            className="absolute h-[160px] w-[380px] sm:h-[190px] sm:w-[480px] rounded-[50%] border border-sky-500/30 shadow-[0_0_20px_rgba(14,165,233,0.2)] pointer-events-none"
-            style={{ transform: 'rotate(20deg)' }}
-          >
-            {/* Orbiting electron 2 */}
-            <div className="absolute -bottom-1.5 right-1/4 size-3 rounded-full bg-blue-300 shadow-[0_0_10px_#60a5fa]" />
-          </motion.div>
-
-          {/* 3D Extruded COMPETE Typography */}
-          <div className="relative z-10 px-6 py-4">
-            <h1
-              className="text-5xl sm:text-7xl md:text-8xl font-black tracking-widest text-[#e0f2fe] uppercase"
-              style={{
-                fontFamily: 'system-ui, -apple-system, sans-serif',
-                textShadow: `
-                  0 1px 0 #0284c7,
-                  0 2px 0 #0369a1,
-                  0 3px 0 #075985,
-                  0 4px 0 #0c4a6e,
-                  0 5px 0 #082f49,
-                  0 6px 1px rgba(0,0,0,0.5),
-                  0 0 25px rgba(56, 189, 248, 0.7),
-                  0 0 50px rgba(14, 165, 233, 0.4)
-                `,
-                WebkitTextStroke: '2px #38bdf8',
-              }}
-            >
-              COMPETE
-            </h1>
-          </div>
+        <div className="inline-block rounded-full bg-sky-500/10 border border-sky-400/20 px-3.5 py-1 text-xs font-bold uppercase tracking-widest text-sky-400 mb-3 backdrop-blur-sm">
+          1v1 Real-Time Academic Arena
         </div>
+
+        <h1
+          className="text-5xl sm:text-7xl md:text-8xl font-black tracking-widest text-white uppercase drop-shadow-2xl"
+          style={{
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            textShadow: `
+              0 2px 0 #0284c7,
+              0 4px 0 #075985,
+              0 6px 1px rgba(0,0,0,0.4),
+              0 0 35px rgba(56, 189, 248, 0.6)
+            `,
+            WebkitTextStroke: '1.5px rgba(56, 189, 248, 0.8)',
+          }}
+        >
+          COMPETE
+        </h1>
+
+        <p className="mt-3 max-w-md mx-auto text-xs sm:text-sm md:text-base text-slate-300 px-2 leading-relaxed font-normal">
+          Directly match against another student, solve under pressure, earn rating points, and climb national rankings.
+        </p>
       </motion.div>
 
-      {/* Subtitle / Battle Pitch */}
-      <motion.p
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25, duration: 0.5 }}
-        className="mt-3 max-w-md text-sm sm:text-base text-slate-300"
-      >
-        Real-time 1-vs-1 academic battle. Solve 5 rapid questions, outspeed your opponent, earn rating points, and climb national ranks!
-      </motion.p>
-
-      {/* Live Learner Activity Indicator */}
+      {/* Live Learner Activity Indicator with dynamically cycling real user images (No green dot) */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.35, duration: 0.4 }}
-        className="mt-6 flex items-center gap-2.5 rounded-full bg-white/5 border border-white/10 px-4 py-1.5 backdrop-blur-md"
+        transition={{ delay: 0.25, duration: 0.4 }}
+        className="mt-3 sm:mt-5 flex items-center gap-3 rounded-full bg-white/[0.06] border border-white/10 px-4 py-2 backdrop-blur-md shadow-lg"
       >
-        <div className="flex -space-x-1.5 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="inline-block size-5 rounded-full ring-1 ring-black object-cover" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=50&auto=format&fit=crop&q=80" alt="" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="inline-block size-5 rounded-full ring-1 ring-black object-cover" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50&auto=format&fit=crop&q=80" alt="" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="inline-block size-5 rounded-full ring-1 ring-black object-cover" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=50&auto=format&fit=crop&q=80" alt="" />
+        {/* Animated Real User Avatars popping in and out */}
+        <div className="flex -space-x-2 overflow-visible items-center">
+          <AnimatePresence mode="popLayout">
+            {displayAvatars.map((u) => (
+              <motion.div
+                key={u.id}
+                layout
+                initial={{ scale: 0, opacity: 0, x: 10 }}
+                animate={{ scale: 1, opacity: 1, x: 0 }}
+                exit={{ scale: 0.5, opacity: 0, x: -10 }}
+                transition={{ duration: 0.45, ease: 'easeOut' }}
+                className="relative size-6 sm:size-7 rounded-full border-2 border-slate-900 overflow-hidden shadow-sm shrink-0"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={u.avatar_url} alt={u.name} className="size-full object-cover" />
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-sky-300">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-          </span>
-          634 learners competing right now
+
+        {/* Counter text (Green dot removed as requested) */}
+        <span className="text-xs sm:text-sm font-semibold text-sky-200 tracking-wide">
+          634 learners competing online
         </span>
       </motion.div>
 
-      {/* User Stats Card Strip */}
+      {/* User Stats Card Strip (Dropper Design System) */}
       <motion.div
-        initial={{ opacity: 0, y: 14 }}
+        initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.45, duration: 0.5 }}
-        className="mt-8 grid grid-cols-3 gap-3 w-full max-w-lg"
+        transition={{ delay: 0.35, duration: 0.4 }}
+        className="mt-6 sm:mt-8 grid grid-cols-3 gap-2.5 sm:gap-4 w-full max-w-lg"
       >
         {/* Rating */}
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.06] border border-white/10 p-3.5 backdrop-blur-sm">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-            <Sparkles className="size-3.5 text-amber-400" />
-            Rating
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 p-3 sm:p-4 backdrop-blur-sm transition hover:bg-white/[0.08]">
+          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <Sparkles className="size-3.5 text-amber-400 shrink-0" />
+            <span>Rating</span>
           </div>
-          <div className="mt-1 text-2xl font-black text-amber-400 tabular-nums">
+          <div className="mt-1 text-xl sm:text-2xl font-black text-amber-400 tabular-nums">
             {stats.rating}
           </div>
-          <div className="text-[10px] text-slate-400">Competitive Tier</div>
+          <div className="text-[10px] text-slate-400 hidden sm:block">Competitive Tier</div>
         </div>
 
         {/* India Rank */}
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.06] border border-white/10 p-3.5 backdrop-blur-sm">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-            <Trophy className="size-3.5 text-sky-400" />
-            India Rank
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 p-3 sm:p-4 backdrop-blur-sm transition hover:bg-white/[0.08]">
+          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <Trophy className="size-3.5 text-sky-400 shrink-0" />
+            <span>India Rank</span>
           </div>
-          <div className="mt-1 text-2xl font-black text-sky-300 tabular-nums">
+          <div className="mt-1 text-xl sm:text-2xl font-black text-sky-300 tabular-nums">
             #{currentRank.toLocaleString('en-IN')}
           </div>
-          <div className="text-[10px] text-slate-400">National Standings</div>
+          <div className="text-[10px] text-slate-400 hidden sm:block">National Standings</div>
         </div>
 
-        {/* Win Streak */}
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.06] border border-white/10 p-3.5 backdrop-blur-sm">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-            <Flame className="size-3.5 text-orange-400" />
-            Streak
+        {/* Streak */}
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 p-3 sm:p-4 backdrop-blur-sm transition hover:bg-white/[0.08]">
+          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <Flame className="size-3.5 text-orange-400 shrink-0" />
+            <span>Streak</span>
           </div>
-          <div className="mt-1 text-2xl font-black text-orange-400 tabular-nums">
+          <div className="mt-1 text-xl sm:text-2xl font-black text-orange-400 tabular-nums">
             {stats.streak} {stats.streak === 1 ? 'Win' : 'Wins'}
           </div>
-          <div className="text-[10px] text-slate-400">
-            {stats.wins}W / {stats.losses}L
+          <div className="text-[10px] text-slate-400 hidden sm:block">
+            {stats.wins}W · {stats.losses}L
           </div>
         </div>
       </motion.div>
 
-      {/* Main Big CTA Button */}
+      {/* Big Action CTA */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.92 }}
+        initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.55, duration: 0.4 }}
-        className="mt-8 w-full max-w-sm"
+        transition={{ delay: 0.45, duration: 0.4 }}
+        className="mt-6 sm:mt-8 w-full max-w-sm"
       >
         <button
           onClick={onStartMatch}
-          className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 px-8 py-4 text-base sm:text-lg font-bold text-white shadow-[0_0_35px_rgba(14,165,233,0.5)] transition duration-300 hover:shadow-[0_0_50px_rgba(14,165,233,0.7)] hover:scale-[1.02] active:scale-[0.98]"
+          className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 px-6 py-4 text-base sm:text-lg font-bold text-white shadow-[0_0_30px_rgba(14,165,233,0.45)] transition duration-300 hover:shadow-[0_0_45px_rgba(14,165,233,0.65)] hover:scale-[1.02] active:scale-[0.98] border border-white/20"
         >
-          {/* Shimmer sweep */}
-          <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
+          {/* Continuous subtle shine */}
+          <span className="pointer-events-none absolute inset-0 -translate-x-full animate-comp-shine bg-gradient-to-r from-transparent via-white/30 to-transparent w-full h-full" />
           <Swords className="size-5 transition group-hover:rotate-12" />
           <span>Find an Opponent</span>
           <ChevronRight className="size-5 transition group-hover:translate-x-1" />

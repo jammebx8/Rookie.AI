@@ -219,11 +219,10 @@ export function BuddyHomeMessage({ solvedToday, streak, userName }: { solvedToda
               </div>
 
               <Button
-                onClick={() => router.push('/compete')}
-                className="h-9 rounded-control px-4 text-body-sm shadow-sm gap-1.5"
+                onClick={() => router.push('/QuestionViewer?mode=daily')}
+                className="h-9 rounded-control px-4 text-body-sm shadow-sm"
               >
-                <Swords className="size-4 text-sky-400" />
-                {solvedToday >= 5 ? 'Play 1v1 Compete battle' : 'Enter Compete 1v1'} <ArrowRight className="size-4" />
+                {solvedToday >= 5 ? 'Solve next 5 revision questions' : 'Start daily practice'} <ArrowRight className="size-4" />
               </Button>
             </div>
           </div>

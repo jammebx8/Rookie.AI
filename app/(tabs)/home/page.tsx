@@ -192,10 +192,16 @@ export default function HomePage() {
           action={
             <Button
               size="lg"
-              className="h-11 rounded-control px-5 text-body font-semibold gap-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white shadow-md transition-all active:scale-95"
+              className="relative overflow-hidden h-11 rounded-control px-6 text-body font-bold gap-2 bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.35)] hover:shadow-[0_0_25px_rgba(37,99,235,0.55)] transition-all hover:scale-[1.03] active:scale-95 border border-white/20 group"
               onClick={() => router.push('/compete')}
             >
-              <Swords className="size-4.5" /> Compete
+              {/* Animated Continuous Shine Beam */}
+              <span className="pointer-events-none absolute inset-0 -translate-x-full animate-comp-shine bg-gradient-to-r from-transparent via-white/40 to-transparent w-full h-full" />
+              <Swords className="size-4.5 text-amber-300 drop-shadow-[0_0_6px_rgba(252,211,77,0.7)] transition-transform group-hover:rotate-12" />
+              <span className="tracking-wide">Compete</span>
+              <span className="rounded-full bg-amber-400/20 border border-amber-300/40 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-amber-300">
+                1v1
+              </span>
             </Button>
           }
         />

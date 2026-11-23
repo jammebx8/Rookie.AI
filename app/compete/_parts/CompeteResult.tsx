@@ -213,13 +213,15 @@ export function CompeteResult({
 
         {/* Live Active Learners Badge (Image 3) */}
         <div className="flex items-center gap-2 text-xs text-sky-300/90 font-medium mt-1">
-          <div className="flex -space-x-1">
+          <div className="flex -space-x-1.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="size-4 rounded-full ring-1 ring-black" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=50&auto=format&fit=crop&q=80" alt="" />
+            <img className="size-5 rounded-full ring-1 ring-black object-cover" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=60&auto=format&fit=crop&q=80" alt="" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="size-4 rounded-full ring-1 ring-black" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50&auto=format&fit=crop&q=80" alt="" />
+            <img className="size-5 rounded-full ring-1 ring-black object-cover" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=60&auto=format&fit=crop&q=80" alt="" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="size-5 rounded-full ring-1 ring-black object-cover" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=60&auto=format&fit=crop&q=80" alt="" />
           </div>
-          <span>634 learners competing</span>
+          <span>634 learners competing online</span>
         </div>
       </motion.div>
 
@@ -427,7 +429,7 @@ export function CompeteResult({
                     {isExpanded && (
                       <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-slate-300">
                         <div className="font-medium text-white">
-                          {renderContent(q.question_text, false)}
+                          {renderContent(q.question_text || (q as any).question || '', false)}
                         </div>
                         <div className="text-xs text-emerald-400 font-semibold mt-2">
                           Correct Option: {q.correct_option.toUpperCase()}

@@ -14,6 +14,7 @@ import {
   pickOpponent,
   fetchCompeteQuestions,
   recordMatchResult,
+  CURATED_COMPETE_QUESTIONS,
   type CompeteUserStats,
   type CompeteOpponent,
   type CompeteQuestion,
@@ -34,7 +35,7 @@ export default function CompetePage() {
   // Match progression state
   const [stage, setStage] = useState<CompeteStage>('splash');
   const [opponent, setOpponent] = useState<CompeteOpponent | null>(null);
-  const [questions, setQuestions] = useState<CompeteQuestion[]>([]);
+  const [questions, setQuestions] = useState<CompeteQuestion[]>(() => [...CURATED_COMPETE_QUESTIONS]);
   const [matchPlan, setMatchPlan] = useState<MatchRetentionPlan | null>(null);
 
   // Result state
@@ -82,7 +83,7 @@ export default function CompetePage() {
 
     // Fetch questions in parallel so they are ready by countdown
     fetchCompeteQuestions().then((qs) => {
-      setQuestions(qs);
+      if (qs && qs.length >= 5) setQuestions(qs);
     });
 
     setStage('matchmaking');
@@ -135,7 +136,9 @@ export default function CompetePage() {
     setMatchPlan(plan);
 
     const freshQuestions = await fetchCompeteQuestions();
-    setQuestions(freshQuestions);
+    if (freshQuestions && freshQuestions.length >= 5) {
+      setQuestions(freshQuestions);
+    }
 
     // Jump straight to 3-2-1 countdown for rematch!
     setStage('countdown');

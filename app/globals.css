@@ -145,3 +145,14 @@
 .hint-popup .katex-html {
   display: inline !important;
 }
+
+/* Compete Button Shine Animation */
+@keyframes comp-shine {
+  0% { transform: translateX(-160%) skewX(-20deg); }
+  35%, 100% { transform: translateX(260%) skewX(-20deg); }
+}
+
+.animate-comp-shine {
+  animation: comp-shine 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
