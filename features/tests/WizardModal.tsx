@@ -13,6 +13,7 @@ import { TestPreview } from './TestPreview'
 import type { WizardStep } from './types'
 import { supabase } from '../../public/src/utils/supabase'
 import { track } from '../../lib/analytics'
+import RookiePassModal from '@/components/rookie/RookiePassModal'
 
 import { Step1Exam }     from './steps/Step1Exam'
 import { Step2Years }    from './steps/Step2Years'
@@ -93,6 +94,7 @@ export function WizardModal({ onClose, onTestCreated }: Props) {
   const [showDiscard, setShowDiscard] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [creating, setCreating]       = useState(false)
+  const [showPassModal, setShowPassModal] = useState(false)
 
   // Mount: open the wizard store
   useEffect(() => { _open() }, [_open])
@@ -144,7 +146,14 @@ export function WizardModal({ onClose, onTestCreated }: Props) {
         },
         body: JSON.stringify({ config, title }),
       })
-      if (!res.ok) throw new Error('Failed to create test')
+      if (!res.ok) {
+        if (res.status === 403) {
+          setShowPassModal(true)
+          setCreating(false)
+          return
+        }
+        throw new Error('Failed to create test')
+      }
       const data = await res.json()
       // Track test created
       track('test_created', {
@@ -236,6 +245,17 @@ export function WizardModal({ onClose, onTestCreated }: Props) {
           <DiscardDialog open={showDiscard} onConfirm={handleConfirmDiscard} onCancel={() => setShowDiscard(false)} />
         </DialogContent>
       </Dialog>
+
+      <RookiePassModal
+        isOpen={showPassModal}
+        onClose={() => setShowPassModal(false)}
+        onSuccess={() => {
+          setShowPassModal(false)
+          handleStart()
+        }}
+        title="Daily Free Limit Reached"
+        description="Without Rookie Pass, you can create 1 custom test a day. Unlock unlimited custom test papers across all years and chapters."
+      />
     </>
   )
 }

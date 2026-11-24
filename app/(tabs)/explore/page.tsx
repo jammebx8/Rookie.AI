@@ -10,6 +10,7 @@ import { Define } from '@/components/rookie/define';
 import { PassPitch, useCloseOnCheckout, useBuyPass } from '@/components/rookie/sale';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import RookiePassModal from '@/components/rookie/RookiePassModal';
 
 type Subject = {
   name: string;
@@ -69,6 +70,7 @@ export default function ExplorePage() {
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [hasPass,      setHasPass]      = useState<boolean | null>(null);
   const [pendingExam,  setPendingExam]  = useState<string>(EXAMS[0].name);
+  const [showPassModal, setShowPassModal] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router   = useRouter();
 
@@ -115,7 +117,7 @@ export default function ExplorePage() {
       const pass = await hasRookiePass(undefined, true);
       setHasPass(pass);
       if (!pass) {
-        buyPass();
+        setShowPassModal(true);
         return;
       }
     }
@@ -173,8 +175,8 @@ export default function ExplorePage() {
               <Meta>Every Advanced PYQ, all years and chapters. Paid yearly.</Meta>
             </div>
           </div>
-          <Button variant="secondary" className="h-9 rounded-control px-4" onClick={buyPass} disabled={buyLoading}>
-            {buyLoading ? 'Opening checkout…' : 'Unlock with Rookie Pass'}
+          <Button variant="secondary" className="h-9 rounded-control px-4" onClick={() => setShowPassModal(true)}>
+            Unlock with Rookie Pass
           </Button>
         </motion.div>
       )}
@@ -238,7 +240,7 @@ export default function ExplorePage() {
                       <Button
                         variant="secondary"
                         className="h-9 w-full rounded-control"
-                        onClick={(e) => { e.stopPropagation(); buyPass(); }}
+                        onClick={(e) => { e.stopPropagation(); setShowPassModal(true); }}
                       >
                         <Lock className="size-4" /> Unlock with Rookie Pass
                       </Button>
@@ -255,6 +257,16 @@ export default function ExplorePage() {
         )}
       </div>
 
+      <RookiePassModal
+        isOpen={showPassModal}
+        onClose={() => setShowPassModal(false)}
+        onSuccess={() => {
+          setHasPass(true);
+          bustPassCache();
+        }}
+        title="Unlock JEE Advanced with Rookie Pass"
+        description="Access all JEE Advanced past year questions across Physics, Chemistry, and Mathematics with step-by-step verified AI solutions."
+      />
     </Page>
   );
 }

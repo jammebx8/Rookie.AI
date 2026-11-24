@@ -1,0 +1,52 @@
+name: rookie_ai
+description: "Rookie.AI — JEE practice app for Android"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Supabase
+  supabase_flutter: ^2.5.6
+
+  # HTTP
+  http: ^1.2.2
+  dio: ^5.6.0
+
+  # State management
+  provider: ^6.1.2
+  shared_preferences: ^2.3.2
+
+  # Navigation
+  go_router: ^14.2.7
+
+  # UI
+  google_fonts: ^6.2.1
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  flutter_animate: ^4.5.0
+  lottie: ^3.1.2
+
+  # Math / LaTeX
+  flutter_math_fork: ^0.7.2
+
+  # Utils
+  intl: ^0.19.0
+  url_launcher: ^6.3.0
+  share_plus: ^10.0.2
+  collection: ^1.18.0
+  crypto: ^3.0.5
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

@@ -17,6 +17,7 @@ import type { TestAttemptRow } from '../../../features/tests/types'
 import { WizardModal } from '../../../features/tests/WizardModal'
 import { bustPassCache, hasRookiePass } from '../../../lib/rookiePass'
 import { notify } from '@/components/rookie/toast'
+import RookiePassModal from '@/components/rookie/RookiePassModal'
 
 // ─── PYQ mock test data ───────────────────────────────────────────────────────
 interface PYQShift {
@@ -168,6 +169,7 @@ function PYQMockSection({ attempts, onStarted }: { attempts: TestAttemptRow[]; o
   const [filterExam,  setFilterExam]  = useState<ExamFilter>('JEE Main')
   const [starting,    setStarting]    = useState<string | null>(null)
   const [hasPass,     setHasPass]     = useState<boolean | null>(null)
+  const [showPassModal, setShowPassModal] = useState(false)
   const { buy: buyPass, loading: buyPassLoading } = useBuyPass(() => { bustPassCache(); setHasPass(true) })
 
   // Check Rookie Pass on mount + listen for updates
@@ -210,7 +212,7 @@ function PYQMockSection({ attempts, onStarted }: { attempts: TestAttemptRow[]; o
     }
 
     if (!unlocked) {
-      buyPass()
+      setShowPassModal(true)
       return
     }
 
@@ -247,9 +249,13 @@ function PYQMockSection({ attempts, onStarted }: { attempts: TestAttemptRow[]; o
       </div>
 
       {!hasPass && filterExam === 'JEE Advanced' && (
-        <p className="mt-3 flex items-center gap-1.5 text-meta text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => setShowPassModal(true)}
+          className="mt-3 flex items-center gap-1.5 text-meta text-muted-foreground hover:text-foreground transition text-left"
+        >
           <Lock className="size-3.5" /> Advanced mocks need Rookie Pass · {saleMoney(sale.price)}/year
-        </p>
+        </button>
       )}
 
       <div className="mt-4 flex flex-col gap-1.5">
@@ -300,6 +306,16 @@ function PYQMockSection({ attempts, onStarted }: { attempts: TestAttemptRow[]; o
         </Button>
       )}
 
+      <RookiePassModal
+        isOpen={showPassModal}
+        onClose={() => setShowPassModal(false)}
+        onSuccess={() => {
+          setHasPass(true)
+          bustPassCache()
+        }}
+        title="Unlock all PYQ Mock Papers"
+        description="Access all full-length JEE Main & Advanced official shifts with authentic test simulation, real marking, and AI solutions."
+      />
     </Card>
   )
 }
@@ -313,6 +329,7 @@ const CUSTOM_STEPS = [
 
 function HeroCard({ onNew, attempts }: { onNew: () => void; attempts: TestAttemptRow[] }) {
   const [hasPass,    setHasPass]    = useState<boolean | null>(null)
+  const [showPassModal, setShowPassModal] = useState(false)
   const { buy: buyPass, loading: buyPassLoading } = useBuyPass(() => { bustPassCache(); setHasPass(true) })
   const customToday = countCustomTestsToday(attempts)
   const FREE_LIMIT  = 1
@@ -342,8 +359,12 @@ function HeroCard({ onNew, attempts }: { onNew: () => void; attempts: TestAttemp
         const { checkUserPaidDirectFromDB } = await import('../../../lib/rookiePass')
         const directPass = await checkUserPaidDirectFromDB()
         setHasPass(directPass)
-        if (!directPass) return
+        if (!directPass) {
+          setShowPassModal(true)
+          return
+        }
       } catch {
+        setShowPassModal(true)
         return
       }
     }
@@ -388,11 +409,11 @@ function HeroCard({ onNew, attempts }: { onNew: () => void; attempts: TestAttemp
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-6">
         {limitReached ? (
           <>
-            <Button disabled className="h-11 rounded-control px-5 text-body">
+            <Button onClick={() => setShowPassModal(true)} className="h-11 rounded-control px-5 text-body">
               <Plus /> Create test
             </Button>
-            <Button variant="secondary" onClick={buyPass} disabled={buyPassLoading} className="h-11 rounded-control px-4">
-              {buyPassLoading ? <><Loader2 className="size-4 animate-spin" /> Opening…</> : <><Sparkles /> Go unlimited</>}
+            <Button variant="secondary" onClick={() => setShowPassModal(true)} className="h-11 rounded-control px-4">
+              <Sparkles /> Go unlimited
             </Button>
             <Meta className="basis-full pt-1">You&apos;ve used today&apos;s free test. Come back tomorrow, or get Rookie Pass.</Meta>
           </>
@@ -402,6 +423,17 @@ function HeroCard({ onNew, attempts }: { onNew: () => void; attempts: TestAttemp
           </Button>
         )}
       </div>
+
+      <RookiePassModal
+        isOpen={showPassModal}
+        onClose={() => setShowPassModal(false)}
+        onSuccess={() => {
+          setHasPass(true)
+          bustPassCache()
+        }}
+        title="Unlock Unlimited Custom Tests"
+        description="Without Rookie Pass you can create 1 custom test a day. Unlock unlimited custom test papers across all years and chapters."
+      />
     </Card>
   )
 }
