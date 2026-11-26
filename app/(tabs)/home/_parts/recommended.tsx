@@ -11,6 +11,7 @@ import { supabase } from '../../../../public/src/utils/supabase';
 import 'katex/dist/katex.min.css';
 import { renderContent } from '../../../components/renderContent';
 import { fetchRecommended as fetchRecommendedQ, updateAbilityVector } from '../../../../lib/recommendation';
+import { notifyAttemptRecorded } from '@/components/rookie/GlobalPhoneGate';
 
 function renderLatex(text: string | null | undefined, isDark = true) {
   return renderContent(text, isDark);
@@ -95,7 +96,7 @@ export function RecommendedQuestionCard() {
         supabase.from('attempts').insert({
           student_id: user.id, question_id: question.question_id,
           correct, time_taken_sec: 0,
-        }).then(() => {});
+        }).then(() => { notifyAttemptRecorded(); });
         updateAbilityVector(user.id, question.question_id, correct);
       }
     } catch {}

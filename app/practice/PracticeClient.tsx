@@ -33,6 +33,7 @@ import {
   type XPState,
 } from '../../lib/adaptivePractice'
 import { Button } from '@/components/ui/button'
+import { notifyAttemptRecorded } from '@/components/rookie/GlobalPhoneGate'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Bar, Card, Chip, EmptyState, Meta, OmrOption, Skeleton, Tag } from '@/components/rookie/ui'
@@ -405,6 +406,7 @@ export default function PracticeClient() {
         correct,
         time_taken_sec: timeSec,
       })
+      notifyAttemptRecorded()
 
       // ── Update the embedding-based ability vector (fire-and-forget) ──────
       // This is what drives the recommendation algorithm for future sessions.

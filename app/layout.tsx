@@ -4,6 +4,7 @@ import React from 'react';
 import Script from 'next/script';
 import { AnalyticsTracker } from '@/components/AnalyticsTracker';
 import { FirebaseClientInit } from '@/components/FirebaseClientInit';
+import { GlobalPhoneGate } from '@/components/rookie/GlobalPhoneGate';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://rookie.ai'),
@@ -89,6 +90,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <FirebaseClientInit />
         <AnalyticsTracker />
         {children}
+        <GlobalPhoneGate />
         {/* Razorpay checkout SDK — loaded once for the whole app */}
         <Script
           src="https://checkout.razorpay.com/v1/checkout.js"

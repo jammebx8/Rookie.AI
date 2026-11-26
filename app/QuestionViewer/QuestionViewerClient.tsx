@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import RookiePassModal from './RookiePassModal'
 import { useBuyPass } from '@/components/rookie/sale'
+import { notifyAttemptRecorded } from '@/components/rookie/GlobalPhoneGate'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const FREE_DAILY_ATTEMPTS_LIMIT = 5
@@ -1557,6 +1558,7 @@ export default function QuestionViewerClient() {
         time_taken_sec: timeSpent,
       }).then(({ error }) => {
         if (error) console.warn('attempts insert:', error.message)
+        notifyAttemptRecorded()
       })
 
       // Update the embedding-based ability vector (fire-and-forget) — this is

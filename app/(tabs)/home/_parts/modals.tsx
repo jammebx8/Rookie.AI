@@ -1,11 +1,13 @@
 'use client';
 import React, { useState } from 'react';
-import { ArrowRight, BookOpen, Check, Loader2, UserRound, Smartphone, ShieldCheck } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, Loader2, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Chip, Meta } from '@/components/rookie/ui';
 import { saveSurvey, ALL_SURVEY_CHAPTERS } from '../../../../lib/adaptivePractice';
 import { CLASS_OPTIONS, EXAM_OPTIONS } from './constants';
+
+export { PhoneRequiredModal } from '@/components/rookie/PhoneRequiredModal';
 
 const dialogCls = 'gap-0 rounded-card bg-card p-0 sm:max-w-md';
 const labelCls = 'mb-2 block text-meta font-semibold uppercase tracking-[0.06em] text-muted-foreground';
@@ -120,136 +122,4 @@ export function HomeSurveyModal({ open, userId, onDone }: {
       </DialogContent>
     </Dialog>
   )
-}
-
-/* ── Required Phone Number Modal (Dropper design system) ── */
-export function PhoneRequiredModal({
-  open,
-  userId,
-  onSuccess,
-}: {
-  open: boolean;
-  userId: string;
-  onSuccess: (phone: string) => void;
-}) {
-  const [phone, setPhone] = useState('');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const cleanPhone = phone.replace(/\D/g, '');
-
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
-      setError('Please enter a valid 10-digit Indian mobile number');
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-
-    try {
-      const { supabase } = await import('../../../../public/src/utils/supabase');
-      const { error: dbError } = await supabase
-        .from('users')
-        .update({ phone: cleanPhone })
-        .eq('id', userId);
-
-      if (dbError) {
-        // If column error or schema error, log and continue safely
-        console.warn('Phone update warning:', dbError.message);
-      }
-
-      // Update local cache
-      try {
-        const cached = localStorage.getItem('@user');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          localStorage.setItem('@user', JSON.stringify({ ...parsed, phone: cleanPhone }));
-        }
-      } catch {}
-
-      onSuccess(cleanPhone);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to save phone number. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={() => {/* mandatory modal: cannot dismiss without submitting */}} disablePointerDismissal>
-      <DialogContent className={dialogCls} showCloseButton={false}>
-        <form onSubmit={handleSubmit} className="flex flex-col">
-          <div className="p-6">
-            <DialogHeader className="gap-1.5">
-              <div className="flex size-10 items-center justify-center rounded-control bg-primary/10 text-primary">
-                <Smartphone className="size-5" />
-              </div>
-              <DialogTitle className="mt-2 text-heading font-bold tracking-[-0.02em] text-foreground">
-                Enter your mobile number
-              </DialogTitle>
-              <DialogDescription className="text-body-sm leading-relaxed text-muted-foreground">
-                You’ve completed your first practice questions! Add your mobile number to keep your progress, streak, and rank safe.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="mt-6">
-              <label className={labelCls} htmlFor="rookie-phone-input">
-                Mobile Number
-              </label>
-              <div className="flex rounded-control border border-input bg-card shadow-sm transition-all focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary">
-                <span className="flex items-center border-r border-input bg-muted/50 px-3.5 text-body-sm font-medium text-foreground">
-                  +91
-                </span>
-                <input
-                  id="rookie-phone-input"
-                  type="tel"
-                  maxLength={10}
-                  value={phone}
-                  onChange={(e) => {
-                    const digits = e.target.value.replace(/\D/g, '');
-                    setPhone(digits);
-                    if (error) setError('');
-                  }}
-                  placeholder="98765 43210"
-                  className="w-full bg-transparent px-3 py-2 text-body text-foreground outline-none placeholder:text-muted-foreground/50"
-                  autoFocus
-                />
-              </div>
-
-              {error && (
-                <p className="mt-1.5 text-meta text-destructive font-medium">
-                  {error}
-                </p>
-              )}
-
-              <div className="mt-4 flex items-center gap-1.5 text-meta text-muted-foreground">
-                <ShieldCheck className="size-4 shrink-0 text-primary" />
-                <span>No OTP required. We will never spam or share your number.</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 rounded-b-[16px] bg-muted px-6 py-4">
-            <Button
-              type="submit"
-              className="h-10 w-full rounded-control px-5 font-semibold shadow-sm sm:w-auto"
-              disabled={saving || cleanPhone.length !== 10}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="animate-spin" /> Saving…
-                </>
-              ) : (
-                <>
-                  Continue to Rookie <ArrowRight />
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
 }
