@@ -23,7 +23,7 @@ export const DEFS = {
   bookmarks: 'Questions you saved, plus ones you got wrong. Solving them again is the fastest way to improve.',
   pass: 'Rookie Pass unlocks every PYQ, unlimited AI solutions and unlimited tests.',
   yearly: 'One payment, valid for 12 months (365 days) from the day you buy.',
-  timer: 'When this hits zero, the festive price ends and the Pass goes back to ₹999 a year.',
+  timer: 'When this hits zero, the special offer ends and the Pass goes back to ₹399 a year.',
   xp: 'Experience points from practice. Harder questions and quicker answers earn more.',
   level: 'Goes up as you earn XP in practice.',
   difficulty: 'How hard this question is, based on how students have done on it.',

@@ -52,6 +52,7 @@ export type Feature =
   | 'question_viewer'
   | 'daily_practice'
   | 'custom_test'
+  | 'mock_test'
   | 'recommendation'
   | 'similar'
   | 'home'

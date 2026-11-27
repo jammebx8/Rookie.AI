@@ -3,18 +3,16 @@
 -- Run this in the Supabase SQL editor.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- 1. Update the base price of the annual plan to ₹999 (99900 paise)
---    The 60% discount (₹399) is applied dynamically during the 48h welcome
---    window or via custom admin sales.
+-- 1. Ensure the base price of the annual plan is ₹399 (39900 paise)
 UPDATE public.plans
-   SET price_paise = 99900,
+   SET price_paise = 39900,
        display_name = 'Rookie pass yearly'
  WHERE id = 'rookie_pass_yearly';
 
--- Ensure the row exists with ₹999 base price if not already present
+-- Ensure the row exists with ₹399 base price if not already present
 INSERT INTO public.plans (id, display_name, price_paise, duration_days, currency, active)
-VALUES ('rookie_pass_yearly', 'Rookie pass yearly', 99900, 365, 'INR', true)
-ON CONFLICT (id) DO UPDATE SET price_paise = 99900, display_name = 'Rookie pass yearly';
+VALUES ('rookie_pass_yearly', 'Rookie pass yearly', 39900, 365, 'INR', true)
+ON CONFLICT (id) DO UPDATE SET price_paise = 39900, display_name = 'Rookie pass yearly';
 
 -- 2. Create the user_custom_sales table for individual user discounts
 CREATE TABLE IF NOT EXISTS public.user_custom_sales (

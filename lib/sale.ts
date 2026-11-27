@@ -3,20 +3,19 @@
  * -----------------------------------
  * Resolves pricing dynamically per user:
  * 1. Active custom sale in public.user_custom_sales (set by admin in rookie-dash)
- * 2. 48-hour welcome sale (60% off = ₹399) from user signup timestamp
- * 3. Base annual price: ₹999 once the 48-hour timer hits zero
+ * 2. Standard annual price: ₹399 / year
  */
 
 import * as React from 'react';
 import { supabase } from '@/public/src/utils/supabase';
 
-export const BASE_PASS_PRICE = 999;
+export const BASE_PASS_PRICE = 399;
 export const WELCOME_PASS_PRICE = 399;
 
 export const sale = {
-  name: 'Welcome Offer',
+  name: 'Rookie Pass',
   currency: '₹',
-  original: 999,
+  original: 399,
   price: 399,
   per: 'year',
   endsAt: '2026-11-17T23:59:59+05:30',
@@ -41,69 +40,13 @@ export interface UserSaleConfig {
   perks: string[];
 }
 
-export function computeLocalUserSale(userCreatedAt?: string | null): UserSaleConfig {
+export function computeLocalUserSale(_userCreatedAt?: string | null): UserSaleConfig {
   const original = BASE_PASS_PRICE;
   const currency = '₹';
   const per = 'year';
   const perks = sale.perks;
 
-  if (!userCreatedAt) {
-    // Default welcome preview for visitors
-    let endsAt: string | null = null;
-    try {
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('rookie_visitor_seen_at');
-        const firstSeen = stored ? parseInt(stored, 10) : Date.now();
-        if (!stored) {
-          localStorage.setItem('rookie_visitor_seen_at', String(firstSeen));
-        }
-        const welcomeEndMs = firstSeen + 48 * 3600 * 1000;
-        if (Date.now() < welcomeEndMs) {
-          endsAt = new Date(welcomeEndMs).toISOString();
-        }
-      }
-    } catch {}
-
-    if (!endsAt) {
-      endsAt = sale.endsAt || new Date(Date.now() + 48 * 3600 * 1000).toISOString();
-    }
-
-    return {
-      price: WELCOME_PASS_PRICE,
-      original,
-      currency,
-      per,
-      isSaleLive: true,
-      endsAt,
-      saleType: 'welcome',
-      discountPct: 60,
-      label: 'Welcome Offer (60% OFF)',
-      perMonth: Math.round(WELCOME_PASS_PRICE / 12),
-      perks,
-    };
-  }
-
-  const signupMs = new Date(userCreatedAt).getTime();
-  const welcomeEndMs = signupMs + 48 * 3600 * 1000; // 48 hours from signup
-  const now = Date.now();
-
-  if (now < welcomeEndMs) {
-    return {
-      price: WELCOME_PASS_PRICE,
-      original,
-      currency,
-      per,
-      isSaleLive: true,
-      endsAt: new Date(welcomeEndMs).toISOString(),
-      saleType: 'welcome',
-      discountPct: 60,
-      label: 'Welcome Offer (60% OFF)',
-      perMonth: Math.round(WELCOME_PASS_PRICE / 12),
-      perks,
-    };
-  }
-
-  // Timer reached zero -> Base Price ₹999
+  // Standard annual base price: ₹399
   return {
     price: BASE_PASS_PRICE,
     original,
@@ -288,7 +231,7 @@ export function useUserPricing(): UserSaleConfig {
     };
   }, []);
 
-  // Timer expiry check: flips to ₹999 when countdown ends
+  // Timer expiry check: flips to ₹399 when countdown ends
   React.useEffect(() => {
     if (!config.isSaleLive || !config.endsAt) return;
     const endMs = new Date(config.endsAt).getTime();

@@ -227,6 +227,17 @@ function PYQMockSection({ attempts, onStarted }: { attempts: TestAttemptRow[]; o
       })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? 'Failed') }
       const { attemptId } = await res.json()
+      const { track } = await import('../../../lib/analytics')
+      track('test_created', {
+        feature: 'mock_test',
+        test_id: attemptId,
+        metadata: {
+          exam: shift.dbTable === 'jee_adv' ? 'jee_advanced' : 'jee_main',
+          exam_shift: shift.exam_shift,
+          duration_seconds: shift.durationSeconds,
+          question_count: shift.total,
+        },
+      })
       onStarted()
       router.push(`/tests/${attemptId}`)
     } catch (err) {

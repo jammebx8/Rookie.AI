@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     }
 
     const now = new Date();
-    const basePrice = 999;
+    const basePrice = 399;
 
     // 1. If user is logged in, check for active custom sale
     if (user) {
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
           isSaleLive: true,
           endsAt: appMetaSale.expires_at,
           saleType: 'custom',
-          discountPct: Math.round((1 - customPrice / basePrice) * 100),
+          discountPct: customPrice < basePrice ? Math.round((1 - customPrice / basePrice) * 100) : 0,
           label: appMetaSale.reason || 'Special Personal Offer',
         });
       }
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
             isSaleLive: true,
             endsAt: sales[0].expires_at,
             saleType: 'custom',
-            discountPct: Math.round((1 - customPrice / basePrice) * 100),
+            discountPct: customPrice < basePrice ? Math.round((1 - customPrice / basePrice) * 100) : 0,
             label: sales[0].reason || 'Special Personal Offer',
           });
         }
@@ -72,27 +72,10 @@ export async function GET(req: NextRequest) {
         // user_custom_sales table might not be created yet
       }
 
-      // 2. Check 48h welcome sale for new signups
-      const signupMs = new Date(user.created_at).getTime();
-      const welcomeEndMs = signupMs + 48 * 3600 * 1000; // 48 hours = 2 days
-      const isWelcomeLive = now.getTime() < welcomeEndMs;
-
-      if (isWelcomeLive) {
-        return NextResponse.json({
-          basePrice,
-          price: 399,
-          isSaleLive: true,
-          endsAt: new Date(welcomeEndMs).toISOString(),
-          saleType: 'welcome',
-          discountPct: 60,
-          label: 'Welcome Offer (60% OFF)',
-        });
-      }
-
-      // 3. Past 48 hours and no custom sale -> Standard ₹999 Base Price
+      // 2. No custom sale -> Standard ₹399 Base Price
       return NextResponse.json({
         basePrice,
-        price: 999,
+        price: basePrice,
         isSaleLive: false,
         endsAt: null,
         saleType: 'none',
@@ -101,27 +84,27 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Anonymous visitor: default 60% off preview
+    // Anonymous visitor: standard ₹399 annual price
     return NextResponse.json({
       basePrice,
-      price: 399,
-      isSaleLive: true,
-      endsAt: new Date(now.getTime() + 48 * 3600 * 1000).toISOString(),
-      saleType: 'welcome',
-      discountPct: 60,
-      label: 'Welcome Offer (60% OFF)',
+      price: basePrice,
+      isSaleLive: false,
+      endsAt: null,
+      saleType: 'none',
+      discountPct: 0,
+      label: 'Standard Annual Pass',
     });
   } catch (err) {
     console.error('[pricing] error:', err);
     return NextResponse.json(
       {
-        basePrice: 999,
+        basePrice: 399,
         price: 399,
-        isSaleLive: true,
+        isSaleLive: false,
         endsAt: null,
-        saleType: 'welcome',
-        discountPct: 60,
-        label: 'Welcome Offer',
+        saleType: 'none',
+        discountPct: 0,
+        label: 'Standard Annual Pass',
       },
       { status: 500 }
     );

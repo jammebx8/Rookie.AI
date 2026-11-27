@@ -649,7 +649,7 @@ export default function OnboardingPage() {
               </article>
               <article className="rk-price is-pass" data-reveal>
                 <p className="rk-price-name">Rookie Pass <span className="rk-price-badge">Best value</span></p>
-                <p className="rk-price-amt"><strong>₹{PASS_PRICE}</strong><s className="rk-price-per">₹{sale.original}</s><span className="rk-price-per">/ year</span></p>
+                <p className="rk-price-amt"><strong>₹{PASS_PRICE}</strong>{sale.original > PASS_PRICE && <s className="rk-price-per">₹{sale.original}</s>}<span className="rk-price-per">/ year</span></p>
                 <ul>{PLAN_PASS.map(x => <li key={x}>{I.check}{x}</li>)}</ul>
                 <a href="#start" onClick={goToSignup} className="rk-btn rk-btn-primary rk-btn-block">Start free, upgrade anytime</a>
               </article>

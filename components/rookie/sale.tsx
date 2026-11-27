@@ -227,8 +227,10 @@ export function SaleBar() {
       <div className="relative mx-auto flex h-12 w-full max-w-content items-center gap-3">
         <p className="min-w-0 truncate text-body-sm">
           <span className="font-semibold">Rookie Pass</span>
-          <span className="mx-1.5 text-white/50 line-through">{money(pricing.original)}</span>
-          <span className="font-bold">{money(pricing.price)}</span>
+          {pricing.original > pricing.price && (
+            <span className="mx-1.5 text-white/50 line-through">{money(pricing.original)}</span>
+          )}
+          <span className="ml-1.5 font-bold">{money(pricing.price)}</span>
           <span className="text-white/70">/{pricing.per}</span>
         </p>
         <OffTag className="hidden sm:inline-flex" pct={pricing.discountPct} />
@@ -256,7 +258,7 @@ export function PassCard({ className, onSuccess }: { className?: string; onSucce
       </div>
       <div className="relative mt-7 flex items-baseline gap-2">
         <span className="text-price font-bold leading-none tracking-[-0.05em]">{money(pricing.price)}</span>
-        {pricing.isSaleLive && (
+        {pricing.isSaleLive && pricing.original > pricing.price && (
           <span className="text-body font-medium text-white/50 line-through decoration-2">{money(pricing.original)}</span>
         )}
         <span className="text-label text-white/60">/ {pricing.per}</span>
@@ -294,7 +296,7 @@ export function PassMini({ className }: { className?: string }) {
       </div>
       <p className="relative mt-2 flex items-baseline gap-1.5">
         <span className="text-heading font-bold leading-none tracking-tight">{money(pricing.price)}</span>
-        {pricing.isSaleLive && (
+        {pricing.isSaleLive && pricing.original > pricing.price && (
           <span className="text-meta text-white/55 line-through">{money(pricing.original)}</span>
         )}
       </p>

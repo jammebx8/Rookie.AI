@@ -82,7 +82,9 @@ export function CompeteBattle({
       // Track analytics
       track('compete_question_answered', {
         feature: 'compete',
-        question_id: currentQ.id || currentQ.question_id,
+        question_id: currentQ.question_id || currentQ.id,
+        subject: currentQ.subject ?? undefined,
+        chapter: currentQ.chapter ?? undefined,
         difficulty: currentIdx + 1,
         duration_ms: uTime * 1000,
         metadata: {

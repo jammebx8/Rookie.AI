@@ -86,17 +86,9 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 3. Check 48h welcome sale for new signups (< 48 hours old)
+      // 3. Standard price ₹399 (39900 paise)
       if (!custom_price_paise) {
-        const signupMs = new Date(user.created_at).getTime()
-        const elapsedMs = now.getTime() - signupMs
-        if (elapsedMs >= 0 && elapsedMs < 48 * 3600 * 1000) {
-          // Within 2 days of signup -> 60% off (₹399 = 39900 paise)
-          custom_price_paise = 39900
-        } else {
-          // Past 48 hours -> standard ₹999 (99900 paise)
-          custom_price_paise = 99900
-        }
+        custom_price_paise = 39900
       }
     }
 

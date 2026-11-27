@@ -58,6 +58,7 @@ export default function TestEnginePage() {
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const answersRef    = useRef<AnswerMap>(answers)
   answersRef.current  = answers
+  const testFeatureRef = useRef<'custom_test' | 'mock_test'>('custom_test')
 
   // ── Load attempt + questions ──────────────────────────────────────────────────
   useEffect(() => {
@@ -82,6 +83,9 @@ export default function TestEnginePage() {
         }
 
         setAttempt(att as TestAttemptRow)
+        const testFeature: 'custom_test' | 'mock_test' =
+          (att.config as Record<string, unknown> | undefined)?.isPyq ? 'mock_test' : 'custom_test'
+        testFeatureRef.current = testFeature
 
         // Mark as in_progress + set started_at (only on first open)
         const updates: Record<string, string> = { status: 'in_progress' }
@@ -92,7 +96,7 @@ export default function TestEnginePage() {
           updates.expires_at = expiresAt
           // Track test started (first open only)
           track('test_started', {
-            feature: 'custom_test',
+            feature: testFeature,
             test_id: attemptId,
             metadata: { duration_seconds: att.duration_seconds },
           })
@@ -207,7 +211,7 @@ export default function TestEnginePage() {
     const q = questions[currentIndex]
     if (q) {
       track('question_answered', {
-        feature:     'custom_test',
+        feature:     testFeatureRef.current,
         question_id: currentQid,
         test_id:     attemptId,
         subject:     q.subject   ?? undefined,
@@ -254,7 +258,7 @@ export default function TestEnginePage() {
       e.preventDefault()
       e.returnValue = ''
       track('test_abandoned', {
-        feature: 'custom_test',
+        feature: testFeatureRef.current,
         test_id: attemptId,
         metadata: { answered: Object.values(answersRef.current).filter(a => a.q_status === 'answered' || a.q_status === 'marked_answered').length },
       })
@@ -280,7 +284,7 @@ export default function TestEnginePage() {
       if (!res.ok) throw new Error('Submit failed')
       // Track test completed
       track('test_completed', {
-        feature: 'custom_test',
+        feature: testFeatureRef.current,
         test_id: attemptId,
         metadata: {
           answered:   paletteStats.answered,

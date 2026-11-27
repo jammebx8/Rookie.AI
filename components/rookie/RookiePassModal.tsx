@@ -119,7 +119,7 @@ export default function RookiePassModal({
             </div>
             <div className="relative mt-6 flex items-baseline gap-2">
               <span className="text-display font-bold leading-none tracking-[-0.05em]">{saleMoney(pricing.price)}</span>
-              {pricing.isSaleLive && (
+              {pricing.isSaleLive && pricing.original > pricing.price && (
                 <span className="text-body font-medium text-white/50 line-through decoration-2">{saleMoney(pricing.original)}</span>
               )}
               <span className="text-label text-white/60">/ {pricing.per}</span>
